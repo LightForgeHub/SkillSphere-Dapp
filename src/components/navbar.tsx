@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import Logo from './ui/Logo';
 
 interface NavItem {
   name: string;
@@ -23,20 +24,17 @@ export default function Navbar() {
 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50 mt-11">
-      <div className="flex justify-between h-16">
+      <div className="flex justify-between h-16 ml-5">
         {/* Logo */}
+
         <div className="flex items-center ml-15 ">
-          <Link
-            href="/"
-            className="text-xl font-bold text-gray-900">
-            MiSitio
-          </Link>
+          <Logo />
         </div>
         {/* search */}
         <div className=" flex items-center">
           <div className="relative flex items-center ">
             {/* Icon */}
-            <div className="absolute left-2 text-gray-400">
+            <div className="absolute left-2  text-gray-400">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-5 w-5"
@@ -54,12 +52,12 @@ export default function Navbar() {
             <input
               type="text"
               placeholder="Want to learn..."
-              className="w-full py-3 pl-12 pr-28 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#20B486] focus:border-transparent"
+              className="w-full py-3 pl-12 pr-68 border border-gray-300 rounded-md text-[#667085]"
             />
 
             <button
               type="button"
-              className="absolute right-2 flex items-center gap-1 p-1 pl-4 pr-3 font-inter bg-[#F2FFFB] text-[#20B486] rounded-full hover:bg-[#E0F5EF] transition-colors">
+              className="absolute right-2 flex items-center gap-1 p-1 pl-4 pr-3 font-inter  bg-[#F2FFFB] text-[#20B486] rounded-full hover:bg-[#E0F5EF] transition-colors">
               Explore
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -79,23 +77,31 @@ export default function Navbar() {
         </div>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-8">
+        <nav className="hidden md:flex items-center space-x-8 ">
           {navItems.map((item) => (
             <Link
               key={item.path}
               href={item.path}
-              className={`px-1 py-2 text-sm font-medium ${
+              className={`px-1 py-2 text-md font-medium font-inter ${
                 pathname === item.path
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-[#1A906B]' // Solo color verde para la página activa (sin borde)
+                  : 'text-[#101828] hover:text-gray-700' // Color gris para inactivos
               } transition-colors`}>
               {item.name}
             </Link>
           ))}
         </nav>
-        <div className="flex ">
-          <button>Sign in</button>
-          <button className="text-green-300">Create an account</button>
+
+        {/* Sign in Button */}
+
+        <div className="flex gap-4 m-0 mr-10 mt-2 mb-2">
+          <button className="px-2 py-1 font-inter text-black font-medium">
+            Sign in
+          </button>{' '}
+          {/* Relleno horizontal 2, vertical 1 */}
+          <button className="px-5 py-1 font-inter border rounded-xl bg-[#20B486] text-white ">
+            Create an account
+          </button>
         </div>
 
         {/* Mobile menu button */}
