@@ -3,6 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import Head from "next/head";
+import Footer from "./footer";
+import Navbar from "./navbar";
 
 export default function Custom404() {
   return (
@@ -13,74 +15,7 @@ export default function Custom404() {
       </Head>
 
       {/* Navigation Bar */}
-      {/* Navigation Bar */}
-      <nav className="bg-transparent px-4 md:px-6 py-3 flex justify-center items-center">
-        <div className="flex items-center space-x-1">
-          <div className="flex items-center space-x-2 mr-2">
-            <div className="h-4 w-4 bg-teal-500 rounded-full"></div>
-            <span className="text-teal-600 text-xs font-medium">Logo</span>
-          </div>
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search to search"
-              className="bg-white text-xs rounded-full pl-3 pr-6 py-1 w-28 focus:outline-none border border-gray-200"
-            />
-            <svg
-              className="h-3 w-3 absolute right-2 top-1.5 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </div>
-          <div className="flex items-center ml-1">
-            <span className="text-gray-600 text-xs">English</span>
-            <svg
-              className="h-3 w-3 ml-1 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </div>
-          <div className="flex space-x-2 text-xs ml-2">
-            <Link href="#" className="text-gray-600 hover:text-teal-600">
-              Home
-            </Link>
-            <Link href="#" className="text-gray-600 hover:text-teal-600">
-              About us
-            </Link>
-            <Link href="#" className="text-gray-600 hover:text-teal-600">
-              Courses
-            </Link>
-            <Link href="#" className="text-gray-600 hover:text-teal-600">
-              Contact us
-            </Link>
-            <Link href="#" className="text-gray-600 hover:text-teal-600">
-              FAQs
-            </Link>
-            <Link href="#" className="text-gray-600 hover:text-teal-600">
-              Sign in
-            </Link>
-          </div>
-          <button className="bg-teal-500 text-white text-xs px-3 py-1 rounded-full hover:bg-teal-600 transition-colors ml-1">
-            Get into account
-          </button>
-        </div>
-      </nav>
+     <Navbar/>
 
       <main className="flex-grow flex flex-col items-center text-center px-4 py-6 md:py-12 relative overflow-hidden">
         {/* Background grid pattern */}
@@ -223,117 +158,7 @@ export default function Custom404() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-8 text-xs">
-        <div className="container mx-auto px-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-          <div>
-            <div className="mb-4">
-              <div className="h-8 w-8 bg-gray-800 rounded-full flex items-center justify-center">
-                <div className="h-4 w-4 bg-teal-500 rounded-full"></div>
-              </div>
-            </div>
-            <p className="text-gray-500 text-xs mb-2">
-              Our learning system ensures that experts know
-            </p>
-            <p className="text-gray-500 text-xs">what not to forget.</p>
-          </div>
-
-          <div>
-            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-500">
-              Product
-            </h3>
-            <ul className="space-y-2">
-              {[
-                "Overview",
-                "Features",
-                "Solutions",
-                "Tutorials",
-                "Pricing",
-              ].map((text, j) => (
-                <li key={j}>
-                  <Link href="#" className="hover:text-white text-xs">
-                    {text}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-500">
-              Company
-            </h3>
-            <ul className="space-y-2">
-              {["About us", "Careers", "Press", "News", "Media"].map(
-                (text, j) => (
-                  <li key={j}>
-                    <Link href="#" className="hover:text-white text-xs">
-                      {text}
-                    </Link>
-                  </li>
-                )
-              )}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-500">
-              Social
-            </h3>
-            <ul className="space-y-2">
-              {["Twitter", "LinkedIn", "Facebook", "GitHub", "Dribbble"].map(
-                (text, j) => (
-                  <li key={j}>
-                    <Link href="#" className="hover:text-white text-xs">
-                      {text}
-                    </Link>
-                  </li>
-                )
-              )}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-500">
-              Legal
-            </h3>
-            <ul className="space-y-2">
-              {["Terms", "Privacy", "Cookies", "Settings", "Contact"].map(
-                (text, j) => (
-                  <li key={j}>
-                    <Link href="#" className="hover:text-white text-xs">
-                      {text}
-                    </Link>
-                  </li>
-                )
-              )}
-            </ul>
-          </div>
-        </div>
-
-        <div className="mt-8 pt-4 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center max-w-6xl mx-auto px-8">
-          <p className="text-xs text-gray-500">
-            © 2023 DAppName. All rights reserved.
-          </p>
-          <div className="flex space-x-3 mt-4 md:mt-0">
-            {["Twitter", "GitHub", "LinkedIn", "Discord"].map((platform, i) => (
-              <a
-                key={i}
-                href="#"
-                className="text-gray-600 hover:text-white"
-                aria-label={platform}
-              >
-                <svg
-                  className="h-4 w-4"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8z" />
-                </svg>
-              </a>
-            ))}
-          </div>
-        </div>
-      </footer>
+     <Footer/>
     </div>
   );
 }
