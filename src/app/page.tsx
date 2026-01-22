@@ -1,7 +1,9 @@
+import { HeroSection } from "@/components/home/HeroSection";
+
 export default function Home() {
   return (
     <>
-      <div className="bg-amber-900"></div>
+    <HeroSection />
     </>
   );
 }
