@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+/* @import "tailwindcss/preflight"; */
+@tailwind utilities;
+
 
 :root {
   --background: #ffffff;
@@ -9,6 +12,9 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
+  --font-geist: var(--font-geist-sans);
+  --font-work: var(--font-work-sans);
+  --font-jersey-10: var(--font-jersey-10);
   --font-mono: var(--font-geist-mono);
   --font-inter: var(--font-inter);
 }
