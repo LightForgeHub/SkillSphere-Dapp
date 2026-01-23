@@ -3,8 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import Head from "next/head";
-import Footer from "./footer";
-import Navbar from "./navbar";
+import Footer from "./home/layout/footer";
+import Navbar from "./home/layout/navbar";
 
 export default function Custom404() {
   return (
@@ -15,7 +15,7 @@ export default function Custom404() {
       </Head>
 
       {/* Navigation Bar */}
-     <Navbar/>
+      <Navbar />
 
       <main className="flex-grow flex flex-col items-center text-center px-4 py-6 md:py-12 relative overflow-hidden">
         {/* Background grid pattern */}
@@ -158,7 +158,7 @@ export default function Custom404() {
       </main>
 
       {/* Footer */}
-     <Footer/>
+      <Footer />
     </div>
   );
 }
