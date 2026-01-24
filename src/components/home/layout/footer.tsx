@@ -1,30 +1,24 @@
-"use client";
-
 import Link from "next/link";
-import { Twitter, Linkedin, Facebook, Send } from "lucide-react";
+import { Twitter, Linkedin, Facebook, Send } from "lucide-react"; // or wherever your icons are imported from
 
 export default function Footer() {
   return (
-    <>
-      {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-8 text-xs">
-        <div className="container mx-auto px-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-          <div>
+    <footer className="bg-gray-900 text-gray-400 py-12">
+      <div className="max-w-7xl mx-auto px-6 sm:px-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 lg:gap-12">
+          <div className="col-span-1 sm:col-span-2 md:col-span-1">
             <div className="mb-4">
-              <div className="flex items-center">
-                <span className="text-3xl font-jersey-10 tracking-[3px] font-bold">
-                  SkillSphere
-                </span>
-              </div>
+              <span className="text-3xl font-jersey-10 tracking-[3px] font-bold text-white">
+                SkillSphere
+              </span>
             </div>
-            <p className="text-gray-500 text-xs mb-2">
-              Our learning system ensures that experts know
+            <p className="text-gray-500 text-xs leading-relaxed">
+              Our learning system ensures that experts know what not to forget.
             </p>
-            <p className="text-gray-500 text-xs">what not to forget.</p>
           </div>
 
           <div>
-            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-500">
+            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-400">
               Product
             </h3>
             <ul className="space-y-2">
@@ -36,7 +30,10 @@ export default function Footer() {
                 "Pricing",
               ].map((text, j) => (
                 <li key={j}>
-                  <Link href="#" className="hover:text-white text-xs">
+                  <Link
+                    href="#"
+                    className="text-xs text-gray-500 hover:text-white transition-colors"
+                  >
                     {text}
                   </Link>
                 </li>
@@ -45,14 +42,17 @@ export default function Footer() {
           </div>
 
           <div>
-            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-500">
+            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-400">
               Company
             </h3>
             <ul className="space-y-2">
               {["About us", "Careers", "Press", "News", "Media"].map(
                 (text, j) => (
                   <li key={j}>
-                    <Link href="#" className="hover:text-white text-xs">
+                    <Link
+                      href="#"
+                      className="text-xs text-gray-500 hover:text-white transition-colors"
+                    >
                       {text}
                     </Link>
                   </li>
@@ -62,13 +62,16 @@ export default function Footer() {
           </div>
 
           <div>
-            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-500">
+            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-400">
               Social
             </h3>
             <ul className="space-y-2">
-              {["Twitter", "LinkedIn", "Facebook", "GitHub"].map((text, j) => (
+              {["X", "LinkedIn", "Facebook", "Telegram"].map((text, j) => (
                 <li key={j}>
-                  <Link href="#" className="hover:text-white text-xs">
+                  <Link
+                    href="#"
+                    className="text-xs text-gray-500 hover:text-white transition-colors"
+                  >
                     {text}
                   </Link>
                 </li>
@@ -77,14 +80,17 @@ export default function Footer() {
           </div>
 
           <div>
-            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-500">
+            <h3 className="uppercase text-xs font-semibold mb-4 text-gray-400">
               Legal
             </h3>
             <ul className="space-y-2">
               {["Terms", "Privacy", "Cookies", "Settings", "Contact"].map(
                 (text, j) => (
                   <li key={j}>
-                    <Link href="#" className="hover:text-white text-xs">
+                    <Link
+                      href="#"
+                      className="text-xs text-gray-500 hover:text-white transition-colors"
+                    >
                       {text}
                     </Link>
                   </li>
@@ -94,18 +100,17 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-8 pt-4 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center max-w-6xl mx-auto px-8">
+        <div className="mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-xs text-gray-500">
-            &copy; 2026 SkillSphere. All rights reserved.
+            © 2026 SkillSphere. All rights reserved.
           </p>
 
-          {/* Social icons with lucide-react */}
-          <div className="flex space-x-6 mt-4 md:mt-0">
+          <div className="flex space-x-6 px-40">
             <a
               href="#"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-600 hover:text-white transition-colors"
+              className="text-gray-500 hover:text-white transition-colors"
               aria-label="Twitter"
             >
               <Twitter className="h-5 w-5" />
@@ -115,7 +120,7 @@ export default function Footer() {
               href="#"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-600 hover:text-white transition-colors"
+              className="text-gray-500 hover:text-white transition-colors"
               aria-label="LinkedIn"
             >
               <Linkedin className="h-5 w-5" />
@@ -125,7 +130,7 @@ export default function Footer() {
               href="#"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-600 hover:text-white transition-colors"
+              className="text-gray-500 hover:text-white transition-colors"
               aria-label="Facebook"
             >
               <Facebook className="h-5 w-5" />
@@ -135,14 +140,14 @@ export default function Footer() {
               href="#"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-600 hover:text-white transition-colors"
+              className="text-gray-500 hover:text-white transition-colors"
               aria-label="Telegram"
             >
               <Send className="h-5 w-5" />
             </a>
           </div>
         </div>
-      </footer>
-    </>
+      </div>
+    </footer>
   );
 }
