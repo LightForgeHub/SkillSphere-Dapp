@@ -1,6 +1,3 @@
-// components/LeftPanel.tsx
-import glassImg from "../../../../public/Sphere glass.svg";
-
 const LeftPanel = () => {
   return (
     <div className="hidden lg:flex lg:w-1/2 xl:w-[51%] items-center justify-center p-8">
@@ -16,7 +13,7 @@ const LeftPanel = () => {
 
         <div className="flex items-center justify-center mb-32">
           <div className="relative w-[508px] h-[508px]">
-            <img src={glassImg.src} alt="glassImg" />
+            <img src={"/sphere-glass.svg"} alt="glassImg" />
           </div>
         </div>
 

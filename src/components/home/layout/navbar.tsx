@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Menu, X, Search } from 'lucide-react';
+import Link from 'next/link';
 
 export default function NavBar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -34,7 +35,9 @@ export default function NavBar() {
           <div className="flex justify-between h-full items-center self-center my-auto h-16">
             {/* Logo */}
             <div className="flex items-center">
-              <span className="text-3xl font-jersey-10 tracking-[3px] font-bold">SkillSphere</span>
+              <Link href="/">
+                <span className="text-3xl font-jersey-10 tracking-[3px] font-bold cursor-pointer">SkillSphere</span>
+              </Link>
             </div>
 
             {/* Desktop Search Bar */}
@@ -59,12 +62,16 @@ export default function NavBar() {
 
             {/* Desktop Auth Buttons */}
             <div className="hidden md:flex items-center space-x-3 ml-6">
-              <button className="px-4 h-8 text-sm border border-gray-700 rounded-lg hover:border-purple-500 transition-colors">
-                Sign in
-              </button>
-              <button className="px-4 h-8 text-sm bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors">
-                Get Started
-              </button>
+              <Link href="/login">
+                <button className="px-4 h-8 text-sm border border-gray-700 rounded-lg hover:border-purple-500 transition-colors cursor-pointer">
+                  Sign in
+                </button>
+              </Link>
+              <Link href="/sign-up">
+                <button className="px-4 h-8 text-sm bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors cursor-pointer">
+                  Get Started
+                </button>
+              </Link>
             </div>
 
             {/* Mobile Menu Button */}
@@ -92,12 +99,16 @@ export default function NavBar() {
                 <a href="#" className="text-sm hover:text-purple-400 transition-colors">Community</a>
                 <a href="#" className="text-sm hover:text-purple-400 transition-colors">Contact us</a>
                 <a href="#" className="text-sm hover:text-purple-400 transition-colors">FAQ&apos;s</a>
-                <button className="px-4 py-2 text-sm border border-gray-700 rounded-lg hover:border-purple-500 transition-colors">
-                  Sign in
-                </button>
-                <button className="px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors">
-                  Get Started
-                </button>
+                <Link href="/login" className="w-full">
+                  <button className="w-full px-4 py-2 text-sm border border-gray-700 rounded-lg hover:border-purple-500 transition-colors cursor-pointer">
+                    Sign in
+                  </button>
+                </Link>
+                <Link href="/sign-up" className="w-full">
+                  <button className="w-full px-4 py-2 text-sm bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors cursor-pointer">
+                    Get Started
+                  </button>
+                </Link>
               </div>
             </div>
           )}
