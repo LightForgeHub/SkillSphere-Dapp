@@ -13,6 +13,8 @@
   --font-sans: var(--font-geist-sans);
   --font-geist: var(--font-geist-sans);
   --font-work: var(--font-work-sans);
+  --font-space-mono: var(--font-space-mono);
+  --font-space-grotesk: var(--font-space-grotesk);
   --font-jersey-10: var(--font-jersey-10);
   --font-mono: var(--font-geist-mono);
   --font-inter: var(--font-inter);
@@ -29,4 +31,8 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+button {
+  cursor: pointer;
 }
