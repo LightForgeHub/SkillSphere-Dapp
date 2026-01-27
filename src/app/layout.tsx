@@ -4,7 +4,7 @@ import {
   Geist_Mono,
   Inter,
   Work_Sans,
-  Jersey_10,
+  Jersey_10, Space_Grotesk, Space_Mono
 } from "next/font/google";
 import "./globals.css";
 import NavBar from "@/components/home/layout/navbar";
@@ -23,6 +23,19 @@ const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
 });
+
+const spaceMono = Space_Mono({
+  variable: "--font-space-mono",
+  subsets: ["latin"],
+  weight: "400"
+})
+
+const SpaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+  weight: "400"
+})
+
 
 const workSans = Work_Sans({
   variable: "--font-work-sans",
@@ -50,7 +63,7 @@ export default function RootLayout({
       <head></head>
       <body
         suppressHydrationWarning
-        className={`${geistSans.variable} ${workSans.variable} ${inter.variable} ${Jeysey10.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${SpaceGrotesk.variable} ${spaceMono.variable} ${workSans.variable} ${inter.variable} ${Jeysey10.variable} ${geistMono.variable} antialiased`}
       >
         <NavBar />
         {children}
