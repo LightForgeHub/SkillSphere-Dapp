@@ -43,7 +43,7 @@ const collections: Collection[] = [
 
 const CollectionRow = ({ collection }: { collection: Collection }) => {
     return (
-        <div className="group hover:bg-white/50 transition-all duration-200 md:max-h-[220px] border border-gray-600/20 rounded-2xl">
+        <div className="group hover:bg-white/10 transition-all duration-200 md:max-h-[220px] border border-gray-600/20 rounded-2xl">
             <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-6 md:gap-8 p-6 items-center">
                 {/* Collection Info */}
                 <div className="flex flex-wrap md:flex-nowrap items-center gap-4">
