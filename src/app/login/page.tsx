@@ -15,16 +15,14 @@ const LoginPage = () => {
 
   return (
     <div
-      className="min-h-screen w-full flex items-center justify-center p-6 relative overflow-hidden"
-      style={{
-        background: "linear-gradient(210.99deg, #1E0333 13.06%, #06010A 59.44%)",
-      }}
+      className="min-h-screen bg-background w-full flex items-center justify-center p-6 relative overflow-hidden"
+     
     >
       {/* Background Sphere */}
       <img 
         src="/Sphere.svg" 
         alt="background" 
-        className="absolute top-1/2 left-1/2 right-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[1200px] h-auto opacity-100 pointer-events-none"
+        className="absolute top-1/2 left-1/2 right-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[1200px] h-auto opacity-0 dark:opacity-100 pointer-events-none"
       />
       
       <LoginCard onSignIn={handleSignIn} onGoogleSignIn={handleGoogleSignIn} />

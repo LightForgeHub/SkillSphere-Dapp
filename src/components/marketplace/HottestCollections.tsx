@@ -66,22 +66,22 @@ const CollectionRow = ({ collection }: { collection: Collection }) => {
                                 className="w-10 h-10 object-contain"
                             />
                         </div>
-                        <span className="text-white font-medium font-mono text-lg">{collection.name}</span>
+                        <span className="dark:text-white font-medium font-mono text-lg">{collection.name}</span>
                     </div>
                 </div>
 
                 {/* Number of Items */}
                 <div className="flex md:justify-end">
-                    <span className="text-white text-base md:min-w-[120px] md:text-center">
-                        <span className="md:hidden font-mono text-gray-400 mr-2">Items:</span>
+                    <span className="dark:text-white text-base md:min-w-[120px] md:text-center">
+                        <span className="md:hidden font-mono dark:text-gray-400 mr-2">Items:</span>
                         {collection.items}
                     </span>
                 </div>
 
                 {/* Starting Price */}
                 <div className="flex md:justify-end">
-                    <span className="text-white text-base md:min-w-[120px] md:text-right">
-                        <span className="md:hidden font-mono text-gray-400 mr-2">Starting price:</span>
+                    <span className="dark:text-white text-base md:min-w-[120px] md:text-right">
+                        <span className="md:hidden font-mono dark:text-gray-400 mr-2">Starting price:</span>
                         <span className='font-space-grotesk'>{collection.price} ETH</span>
                     </span>
                 </div>
@@ -137,7 +137,7 @@ export default function HottestCollections() {
                         <div className="w-10 h-10 bg-[#9B59FF1F] rounded-xl flex items-center justify-center flex-shrink-0">
                             <Flame color='#9B59FF' />
                         </div>
-                        <h1 className="text-3xl font-space-grotesk md:text-4xl font-bold text-white">
+                        <h1 className="text-3xl font-space-grotesk md:text-4xl font-bold">
                             Hottest Collections {/* Fixed typo: "Hotest" to "Hottest" */}
                         </h1>
                     </div>
@@ -163,7 +163,7 @@ export default function HottestCollections() {
                 </div>
 
                 {/* Table Header - Desktop Only */}
-                <div className="hidden md:grid font-inter md:grid-cols-[1fr_auto_auto] gap-8 px-6 py-4 text-sm text-[#F5F3FF]/60 border-b-2 border-[#222122] mb-0">
+                <div className="hidden md:grid font-inter md:grid-cols-[1fr_auto_auto] gap-8 px-6 py-4 text-sm dark:text-[#F5F3FF]/60 border-b-2 border-[#222122] mb-0">
                     <div>Collections</div>
                     <div className="text-center min-w-[120px]">Number of items</div>
                     <div className="text-right min-w-[120px]">Starting price</div>

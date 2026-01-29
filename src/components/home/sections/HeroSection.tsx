@@ -25,31 +25,19 @@ export function HeroSection() {
     ];
 
     return (
-        <div className="relative w-full min-h-screen bg-[#0B0113] overflow-hidden">
+        <div className="relative w-full min-h-screen bg-background overflow-hidden">
             {/* Background Container */}
             <div className="relative w-full min-h-screen"
                 style={{
-                    backgroundColor: "#0B0113",
-                    backgroundImage: `
-                        url(/effect.png),
-                        linear-gradient(
-                          213.91deg,
-                         rgba(23, 22, 22, 0) 61.67%,
-                         rgba(44, 9, 74, 0.71) 116.1%
-                        ),
-                        linear-gradient(
-                          144.95deg,
-                          rgba(19, 19, 19, 0) 50.66%,
-                          rgba(142, 56, 217, 0.15) 84.18%
-                        )
-                    `,
+                    backgroundColor: "var(--background)",
+                    backgroundImage: "var(--bg-full-pattern)",
                     backgroundSize: "cover, cover, cover",
                     backgroundPosition: "center, center, center",
                     backgroundRepeat: "no-repeat",
                 }}>
 
                 {/* Background Images */}
-                <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
+               {/* <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
                     <Image
                         src="/frame-92.svg"
                         width={1920}
@@ -82,7 +70,7 @@ export function HeroSection() {
                         alt=""
                         className="absolute w-auto h-auto max-w-[1000px] max-h-[820px] bottom-0 right-0 opacity-60 sm:bottom-20 sm:right-16"
                     />
-                </div>
+                </div>  */}
 
                 {/* Main Content */}
                 <div className="max-w-[1840px] mx-auto relative px-4 sm:px-6 lg:px-8 xl:px-16 sm:pt-12 lg:pt-16">
@@ -111,7 +99,7 @@ export function HeroSection() {
                                     />
                                 </div>
                                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-8 sm:mb-12">
-                                    <button className="px-6 py-3 border border-white font-bold rounded-lg hover:bg-purple-500/10 transition-colors w-full sm:w-auto sm:max-w-[177px]">
+                                    <button className="px-6 py-3 border border-foreground font-bold rounded-lg hover:bg-purple-500/10 transition-colors w-full sm:w-auto sm:max-w-[177px]">
                                         Join as Expert
                                     </button>
                                     <button className="px-6 py-3 font-bold bg-[#613485] rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors w-full sm:w-auto sm:max-w-[177px]">

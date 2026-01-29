@@ -1,10 +1,14 @@
 @import 'tailwindcss';
 /* @import "tailwindcss/preflight"; */
+@variant dark (&:where(.dark, .dark *));
+
 @tailwind utilities;
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0B0113;
+  --bg-full-pattern: none;
+  --bg-gradient-pattern: none;
 }
 
 @theme inline {
@@ -20,11 +24,11 @@
   --font-inter: var(--font-inter);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0B0113;
+  --foreground: #ffffff;
+  --bg-full-pattern: url(/effect.png), linear-gradient(213.91deg, rgba(23, 22, 22, 0) 61.67%, rgba(44, 9, 74, 0.71) 116.1%), linear-gradient(144.95deg, rgba(19, 19, 19, 0) 50.66%, rgba(142, 56, 217, 0.15) 84.18%);
+  --bg-gradient-pattern: linear-gradient(213.91deg, rgba(23, 22, 22, 0) 61.67%, rgba(44, 9, 74, 0.71) 116.1%), linear-gradient(144.95deg, rgba(19, 19, 19, 0) 50.66%, rgba(142, 56, 217, 0.15) 84.18%);
 }
 
 body {
