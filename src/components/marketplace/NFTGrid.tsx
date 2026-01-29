@@ -204,7 +204,7 @@ export default function NFTGrid() {
             <div className="max-w-[1400px] mx-auto">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-10 gap-6">
-                    <h1 className="text-3xl md:text-4xl font-space-grotesk font-bold text-white">NFTS</h1>
+                    <h1 className="text-3xl md:text-4xl font-space-grotesk font-bold dark:text-white">NFTS</h1>
 
                     {/* Filters */}
                     <div className="flex flex-wrap items-center gap-3">

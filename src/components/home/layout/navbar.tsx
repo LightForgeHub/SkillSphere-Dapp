@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Menu, X, Search, Bell, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export default function NavBar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -18,22 +19,10 @@ export default function NavBar() {
   const isLandingPage = pathname === '/';
 
   return (
-    <div className="w-full h-[78px] flex items-center text-white overflow-x-hidden"
+    <div className="w-full h-[78px] flex items-center text-foreground overflow-x-hidden"
       style={{
-        backgroundColor: "#0B0113",
-        backgroundImage: `
-          url(/effect.png),
-          linear-gradient(
-          213.91deg,
-          rgba(23, 22, 22, 0) 61.67%,
-          rgba(44, 9, 74, 0.71) 116.1%
-          ),
-          linear-gradient(
-          144.95deg,
-          rgba(19, 19, 19, 0) 50.66%,
-          rgba(142, 56, 217, 0.15) 84.18%
-          )
-           `,
+        backgroundColor: "var(--background)",
+        backgroundImage: "var(--bg-full-pattern)",
         backgroundSize: "cover, cover, cover",
         backgroundPosition: "center, center, center",
         backgroundRepeat: "no-repeat",
@@ -77,6 +66,7 @@ export default function NavBar() {
 
             {/* Desktop Auth/Signed-in Buttons */}
             <div className="hidden md:flex items-center space-x-4 ml-6">
+              <ThemeToggle />
               {isLandingPage ? (
                 <>
                   <Link href="/login">
@@ -125,7 +115,11 @@ export default function NavBar() {
 
           {/* Mobile Menu */}
           {mobileMenuOpen && (
-            <div className="md:hidden py-4 space-y-4 border-t border-gray-800 bg-[#0B0113]">
+            <div className="md:hidden py-4 space-y-4 border-t border-gray-800 bg-background">
+              <div className="flex items-center justify-between px-2">
+                 <span className="text-sm font-medium text-gray-400">Theme</span>
+                 <ThemeToggle />
+              </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
