@@ -71,7 +71,7 @@ export default function TrendingExpert() {
   const [activeSlide, setActiveSlide] = useState(0);
 
   return (
-    <section className="py-12 bg-black text-white px-4 md:px-8 lg:px-16 overflow-hidden">
+    <section className="py-12 bg-background dark:text-white px-4 md:px-8 lg:px-16 overflow-hidden">
       <div className="max-w-[1440px] mx-auto">
         {/* Header */}
         <div className="mb-10">
@@ -109,7 +109,7 @@ export default function TrendingExpert() {
                 
                 {/* Card Content */}
                 <div className="absolute inset-0 p-8 flex flex-col justify-end">
-                  <h3 className="text-4xl font-bold mb-4">{collection.title}</h3>
+                  <h3 className="text-4xl font-bold mb-4 text-white">{collection.title}</h3>
                   
                   <div className="flex items-center space-x-3 mb-4">
                     <img 
@@ -117,7 +117,7 @@ export default function TrendingExpert() {
                       alt={collection.creator.name}
                       className="w-8 h-8 rounded-full border border-gray-600"
                     />
-                    <span className="text-sm font-medium">{collection.creator.name}</span>
+                    <span className="text-sm font-medium text-white">{collection.creator.name}</span>
                   </div>
                   
                   <p className="text-gray-300 text-sm mb-6 line-clamp-2 max-w-sm">
@@ -125,18 +125,18 @@ export default function TrendingExpert() {
                   </p>
                   
                   <div className="flex items-center justify-between">
-                    <button className="px-6 py-2.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-sm font-medium hover:bg-white/20 transition-colors">
+                    <button className="px-6 py-2.5 text-white bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-sm font-medium hover:bg-white/20 transition-colors">
                       Buy now
                     </button>
                     
                     <div className="flex space-x-6">
                       <div className="flex flex-col">
                         <span className="text-[10px] text-gray-500 uppercase tracking-wider">Price</span>
-                        <span className="text-sm font-bold">{collection.price}</span>
+                        <span className="text-sm text-white font-bold">{collection.price}</span>
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[10px] text-gray-500 uppercase tracking-wider">Highest Bid</span>
-                        <span className="text-sm font-bold">{collection.highestBid}</span>
+                        <span className="text-sm text-white font-bold">{collection.highestBid}</span>
                       </div>
                     </div>
                   </div>

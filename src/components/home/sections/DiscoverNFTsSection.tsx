@@ -33,22 +33,22 @@ const nftData = [
 
 export function DiscoverNFTsSection() {
   return (
-    <section className="bg-[#0e0516] w-full py-[60px] md:py-[80px] px-4 md:px-8 lg:px-[60px]">
+    <section className="bg-background w-full py-[60px] md:py-[80px] px-4 md:px-8 lg:px-[60px]">
       <div className="max-w-[1320px] mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 md:gap-[100px] mb-[60px]">
           <div className="flex flex-col gap-[10px] flex-1 min-w-0">
-            <h2 className="font-semibold text-[32px] md:text-[38px] leading-[1.2] text-white capitalize">
+            <h2 className="font-semibold text-[32px] md:text-[38px] leading-[1.2] text-foreground capitalize">
               Discover More NFTs
             </h2>
-            <p className="font-normal text-[18px] md:text-[22px] leading-[1.6] text-white">
+            <p className="font-normal text-[18px] md:text-[22px] leading-[1.6] text-foreground">
               Explore new trending NFTs
             </p>
           </div>
 
           <button className="flex items-center group justify-center gap-[12px] h-[60px] px-[50px] rounded-[20px] hover:cursor-pointer border-2 border-[#9b59ff] hover:bg-[#9b59ff] transition-colors duration-300 shrink-0">
             <Eye className="w-5 h-5 text-[#9b59ff] group-hover:text-white" />
-            <span className="font-semibold text-[16px] leading-[1.4] text-white">
+            <span className="font-semibold text-[16px] leading-[1.4] text-foreground group-hover:text-white">
               See All
             </span>
           </button>

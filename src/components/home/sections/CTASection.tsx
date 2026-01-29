@@ -2,23 +2,12 @@ import Image from "next/image";
 
 export function CTASection() {
   return (
-    <div className="relative w-full bg-[#0B0113] overflow-hidden">
+    <div className="relative w-full bg-background overflow-hidden">
       <div
         className="relative w-full"
         style={{
-          backgroundColor: "#0B0113",
-          backgroundImage: `
-            linear-gradient(
-              213.91deg,
-              rgba(23, 22, 22, 0) 61.67%,
-              rgba(44, 9, 74, 0.71) 116.1%
-            ),
-            linear-gradient(
-              144.95deg,
-              rgba(19, 19, 19, 0) 50.66%,
-              rgba(142, 56, 217, 0.15) 84.18%
-            )
-          `,
+          backgroundColor: "var(--background)",
+          backgroundImage: "var(--bg-gradient-pattern)",
           backgroundSize: "cover, cover",
           backgroundPosition: "center, center",
           backgroundRepeat: "no-repeat",
@@ -47,7 +36,7 @@ export function CTASection() {
                   Ready To Tokenize Your Time Or Book The Best?
                 </p>
 
-                <h2 className="text-3xl sm:text-4xl lg:text-4xl font-work font-bold leading-tight mb-8 text-white">
+                <h2 className="text-3xl sm:text-4xl lg:text-4xl font-work font-bold leading-tight mb-8 text-foreground">
                   Join As Expert/Seeker
                   <br />
                   Today

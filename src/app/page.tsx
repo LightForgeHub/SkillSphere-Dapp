@@ -2,7 +2,6 @@ import { HeroSection } from "@/components/home/sections/HeroSection";
 import { CTASection } from "@/components/home/sections/CTASection";
 import { DiscoverNFTsSection } from "@/components/home/sections/DiscoverNFTsSection";
 import { TopRatedArtist } from "@/components/home/sections/TopRatedArtist";
-import Footer from "@/components/home/layout/footer";
 
 export default function Home() {
   return (
@@ -11,7 +10,6 @@ export default function Home() {
       <DiscoverNFTsSection />
       <TopRatedArtist />
       <CTASection />
-      <Footer />
     </>
   );
 }
