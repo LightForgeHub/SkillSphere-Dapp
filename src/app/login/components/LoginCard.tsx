@@ -1,6 +1,7 @@
 "use client";
 
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 interface LoginCardProps {
@@ -96,20 +97,20 @@ const LoginCard = ({ onSignIn, onGoogleSignIn }: LoginCardProps) => {
               Forgot Password
             </a>
           </div>
-
-          <button
+      <Link href="/marketplace">          <button
             type="submit"
             className="w-full cursor-pointer bg-[#613485] hover:bg-[#723e9c] text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-purple-900/20 mt-4 active:scale-[0.98]"
           >
             Sign In
-          </button>
+          </button> </Link>
+ 
 
           <div className="text-center pt-6 pb-2">
             <span className="text-gray-400 text-sm">or Sign in with</span>
           </div>
 
           <div className="flex justify-center">
-            <button
+             <Link href="/marketplace">   <button
               type="button"
               onClick={onGoogleSignIn}
               className="w-12 h-12 flex items-center justify-center bg-[#1a0b2e] rounded-xl border border-white/10 hover:border-white/20 transition-all active:scale-95"
@@ -132,7 +133,8 @@ const LoginCard = ({ onSignIn, onGoogleSignIn }: LoginCardProps) => {
                   fill="#EA4335"
                 />
               </svg>
-            </button>
+            </button></Link>
+          
           </div>
         </form>
       </div>
