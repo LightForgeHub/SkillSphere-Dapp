@@ -3,34 +3,102 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #020202;
+  --foreground: #FFFFFF;
+
+  --card: #0F0F12;
+  --card-foreground: #FFFFFF;
+
+  --popover: #0F0F12;
+  --popover-foreground: #FFFFFF;
+
+  --primary: #9D50FF;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #1C1C1F;
+  --secondary-foreground: #FFFFFF;
+
+  --muted: #252529;
+  --muted-foreground: #94949E;
+
+  --accent: #252529;
+  --accent-foreground: #FFFFFF;
+
+  --destructive: #FF3B3B;
+  --destructive-foreground: #FFFFFF;
+
+  --border: #28282C;
+  --input: #121215;
+  --ring: #9D50FF;
+
+  --radius: 0.75rem;
+
+  --glow-primary: rgba(157, 80, 255, 0.7);
+  --glass-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+  --glass-border: rgba(255, 255, 255, 0.18);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-geist: var(--font-geist-sans);
-  --font-work: var(--font-work-sans);
-  --font-space-mono: var(--font-space-mono);
-  --font-space-grotesk: var(--font-space-grotesk);
-  --font-jersey-10: var(--font-jersey-10);
-  --font-mono: var(--font-geist-mono);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-inter: var(--font-inter);
+  --font-work: var(--font-work-sans);
+
+  --shadow-glow: 0 0 20px var(--glow-primary);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+  }
+
+  .glow-hover:hover {
+    box-shadow: 0 0 25px var(--glow-primary);
+    border-color: var(--primary);
+  }
 }
 
 button {
