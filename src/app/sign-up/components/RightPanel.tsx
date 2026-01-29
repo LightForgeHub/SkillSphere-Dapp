@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 interface RightPanelProps {
   formData: {
     email: string;
@@ -144,12 +146,13 @@ const RightPanel = ({
             <p className="text-red-500 text-xs ml-1 -mt-3">{errors.terms}</p>
           )}
 
+        <Link href="/marketplace">
           <button
             type="submit"
             className="w-full cursor-pointer bg-[#613485] font-semibold py-4 px-6 rounded-lg transition-all hover:opacity-90"
           >
             Sign Up
-          </button>
+          </button></Link>
 
           <p className="text-center text-gray-400 text-sm">
             Already have and account?{" "}
