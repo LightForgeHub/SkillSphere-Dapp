@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 /* @import "tailwindcss/preflight"; */
+@variant dark (&:where(.dark, .dark *));
+
 @tailwind utilities;
 
 :root {

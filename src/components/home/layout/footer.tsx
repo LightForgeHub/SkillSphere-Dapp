@@ -3,13 +3,13 @@ import { Twitter, Linkedin, Facebook, Github } from "lucide-react";
 
 export default function Footer() {
   return (
-    <footer className="bg-[#0B0113] text-gray-400 py-16 border-t border-gray-900">
+    <footer className="bg-background text-gray-400 py-16 border-t border-gray-900">
       <div className="max-w-[1440px] mx-auto px-6 sm:px-12 lg:px-20">
         <div className="flex flex-col lg:flex-row justify-between gap-12 mb-20">
           {/* Logo and Description */}
           <div className="max-w-xs">
             <div className="mb-6">
-              <span className="text-3xl font-jersey-10 tracking-[3px] font-bold text-white">
+              <span className="text-3xl font-jersey-10 tracking-[3px] font-bold text-foreground">
                 SkillSphere
               </span>
             </div>
@@ -21,7 +21,7 @@ export default function Footer() {
           {/* Link Columns */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-12 lg:gap-24">
             <div>
-              <h3 className="text-white text-sm font-semibold mb-6">Product</h3>
+              <h3 className="text-foreground text-sm font-semibold mb-6">Product</h3>
               <ul className="space-y-4">
                 {["Overview", "Features", "Solutions", "Tutorials", "Pricing"].map((text) => (
                   <li key={text}>

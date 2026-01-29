@@ -74,11 +74,8 @@ const SkillSphereSignUp = () => {
 
   return (
     <div
-      className="min-h-screen flex"
-      style={{
-        background:
-          "linear-gradient(210.99deg, #1E0333 13.06%, #06010A 59.44%)",
-      }}
+      className="min-h-screen flex bg-background"
+  
     >
       <LeftPanel />
       <RightPanel

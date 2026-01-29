@@ -78,16 +78,16 @@ const creators = [
 
 export function TopRatedArtist() {
   return (
-    <section className="relative w-full py-[60px] md:py-20 px-4 md:px-8 lg:px-[60px] bg-[#0e0516]">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-[#FFFFFF]/0 to-transparent z-10" />
+    <section className="relative w-full py-[60px] md:py-20 px-4 md:px-8 lg:px-[60px] bg-background">
+
       <div className="max-w-[1320px] mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-[60px]">
           <div className="flex flex-col gap-2.5 max-w-[703px]">
-            <h2 className="font-work font-semibold text-[32px] md:text-[38px] leading-[1.2] text-white capitalize">
+            <h2 className="font-work font-semibold text-[32px] md:text-[38px] leading-[1.2] text-foreground capitalize">
               Top creators
             </h2>
-            <p className="font-work text-lg md:text-[22px] leading-[1.6] text-white capitalize">
+            <p className="font-work text-lg md:text-[22px] leading-[1.6] text-foreground capitalize">
               Checkout Top Rated Creators on the NFT Marketplace
             </p>
           </div>

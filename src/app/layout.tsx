@@ -8,6 +8,9 @@ import {
 } from "next/font/google";
 import "./globals.css";
 import NavBar from "@/components/home/layout/navbar";
+import Footer from "@/components/home/layout/footer";
+import AppLayout from "@/components/layout/AppLayout";
+import { ThemeProvider } from "@/components/providers/theme-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -65,8 +68,19 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${geistSans.variable} ${SpaceGrotesk.variable} ${spaceMono.variable} ${workSans.variable} ${inter.variable} ${Jeysey10.variable} ${geistMono.variable} antialiased`}
       >
-        <NavBar />
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AppLayout 
+            headerSlot={<NavBar />} 
+            footerSlot={<Footer />}
+          >
+            {children}
+          </AppLayout>
+        </ThemeProvider>
       </body>
     </html>
   );

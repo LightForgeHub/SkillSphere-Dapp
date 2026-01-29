@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 interface RightPanelProps {
   formData: {
     email: string;
@@ -25,12 +27,12 @@ const RightPanel = ({
     <div className="w-full lg:w-1/2 xl:w-[49%] flex items-center justify-center p-6 sm:p-8">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <h1 className="text-white text-4xl sm:text-5xl font-bold mb-3">
+          <h1 className="text-[#613485] dark:text-white text-4xl sm:text-5xl font-bold mb-3">
             Sign Up
           </h1>
           <p className="text-gray-400 text-sm sm:text-base">
             Create an account on{" "}
-            <span className="text-white font-medium">SkillSphere</span>
+            <span className="text-[#613485] dark:text-white font-medium">SkillSphere</span>
           </p>
         </div>
 
@@ -38,7 +40,7 @@ const RightPanel = ({
           <button
             type="button"
             onClick={onGoogleSignUp}
-            className="w-full bg-white text-gray-800 font-medium py-4 px-6 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors"
+            className="w-full dark:bg-[#613485] dark:text-white bg-white text-gray-800 font-medium py-4 px-6 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors"
           >
             <svg width="20" height="20" viewBox="0 0 20 20">
               <path
@@ -76,7 +78,7 @@ const RightPanel = ({
               placeholder="Moses"
               className={`w-full bg-transparent border ${
                 errors.email ? "border-red-500" : "border-gray-600"
-              } text-white px-5 py-4 rounded-lg focus:outline-none focus:border-purple-500 transition-colors placeholder-gray-500`}
+              } dark:text-white text-dark px-5 py-4 rounded-lg focus:outline-none focus:border-purple-500 transition-colors placeholder-gray-500`}
             />
             {errors.email && (
               <p className="text-red-500 text-xs mt-1 ml-1">{errors.email}</p>
@@ -144,12 +146,13 @@ const RightPanel = ({
             <p className="text-red-500 text-xs ml-1 -mt-3">{errors.terms}</p>
           )}
 
+        <Link href="/marketplace">
           <button
             type="submit"
             className="w-full cursor-pointer bg-[#613485] font-semibold py-4 px-6 rounded-lg transition-all hover:opacity-90"
           >
             Sign Up
-          </button>
+          </button></Link>
 
           <p className="text-center text-gray-400 text-sm">
             Already have and account?{" "}
