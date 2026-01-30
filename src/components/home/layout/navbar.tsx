@@ -56,12 +56,12 @@ export default function NavBar() {
               {!isLandingPage && (
                 <Link href="/" className="text-sm hover:text-purple-400 transition-colors">Home</Link>
               )}
-              <a href="#" className="text-sm hover:text-purple-400 transition-colors">Explore Experts</a>
-              <a href="#" className="text-sm hover:text-purple-400 transition-colors">Community</a>
+              <Link href="/explore-experts" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/explore-experts' ? 'text-purple-400 font-semibold' : ''}`}>Explore Experts</Link>
+              <Link href="/community" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/community' ? 'text-purple-400 font-semibold' : ''}`}>Community</Link>
               {isLandingPage && (
-                <a href="#" className="text-sm hover:text-purple-400 transition-colors">Contact us</a>
+                <Link href="/contact-us" className="text-sm hover:text-purple-400 transition-colors">Contact us</Link>
               )}
-              <a href="#" className="text-sm hover:text-purple-400 transition-colors">FAQ's</a>
+              <Link href="/faqs" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/faqs' ? 'text-purple-400 font-semibold' : ''}`}>FAQ's</Link>
             </div>
 
             {/* Desktop Auth/Signed-in Buttons */}
@@ -130,11 +130,11 @@ export default function NavBar() {
               </div>
               <div className="flex flex-col space-y-3">
                 {!isLandingPage && (
-                  <Link href="/" className="text-sm hover:text-purple-400 transition-colors">Home</Link>
+                  <Link href="/" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/' ? 'text-purple-400 font-semibold' : ''}`}>Home</Link>
                 )}
-                <a href="#" className="text-sm hover:text-purple-400 transition-colors">Explore Experts</a>
-                <a href="#" className="text-sm hover:text-purple-400 transition-colors">Community</a>
-                <a href="#" className="text-sm hover:text-purple-400 transition-colors">FAQ's</a>
+                <Link href="/explore-experts" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/explore-experts' ? 'text-purple-400 font-semibold' : ''}`}>Explore Experts</Link>
+                <Link href="/community" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/community' ? 'text-purple-400 font-semibold' : ''}`}>Community</Link>
+                <Link href="/faqs" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/faqs' ? 'text-purple-400 font-semibold' : ''}`}>FAQ's</Link>
                 
                 {isLandingPage ? (
                   <>
