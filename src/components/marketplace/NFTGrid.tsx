@@ -3,156 +3,8 @@
 import { useState } from 'react';
 import * as React from 'react';
 import { FilterDropdown } from './FilterDropdown';
-import { NFT, NFTCard } from './NFTCard';
-
-
-
-const nftData: NFT[] = [
-    {
-        id: 1,
-        title: 'Science Lab',
-        timeLeft: '23+hrs',
-        rating: 4.7,
-        reviews: 4.7,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '1.63',
-        image: '/nft4.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 2,
-        title: 'Aoen.Net',
-        timeLeft: '23+hrs',
-        rating: 4.7,
-        reviews: 4.7,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '2.45',
-        image: '/nft7.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 3,
-        title: 'Flow Dymenisty',
-        timeLeft: '23+hrs',
-        rating: 4.7,
-        reviews: 4.7,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '0.89',
-        image: '/nft8.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 4,
-        title: 'Centry Networks',
-        timeLeft: '23+hrs',
-        rating: 4.7,
-        reviews: 4.7,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '3.21',
-        image: '/nft6.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 5,
-        title: 'Centry Networks',
-        timeLeft: '23+hrs',
-        rating: 4.8,
-        reviews: 4.8,
-        creator: 'Jane Anderson',
-        creatorRole: 'BlockchainExplorer',
-        price: '1.99',
-        image: '/nft8.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 6,
-        title: 'Flow Dymenisty',
-        timeLeft: '23+hrs',
-        rating: 4.6,
-        reviews: 4.6,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '1.35',
-        image: '/nft-lab.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 7,
-        title: 'Aoen.Net',
-        timeLeft: '23+hrs',
-        rating: 4.9,
-        reviews: 4.9,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '2.75',
-        image: '/nft6.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 8,
-        title: 'Science Lab',
-        timeLeft: '23+hrs',
-        rating: 4.5,
-        reviews: 4.5,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '0.75',
-        image: '/nft4.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 9,
-        title: 'Aoen.Net',
-        timeLeft: '23+hrs',
-        rating: 4.7,
-        reviews: 4.7,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '1.85',
-        image: '/nft6.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 10,
-        title: 'Flow Dymenisty',
-        timeLeft: '23+hrs',
-        rating: 4.8,
-        reviews: 4.8,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '3.50',
-        image: '/nft-neon.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 11,
-        title: 'Centry Networks',
-        timeLeft: '23+hrs',
-        rating: 4.6,
-        reviews: 4.6,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '2.10',
-        image: '/nft4.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 12,
-        title: 'Science Lab',
-        timeLeft: '23+hrs',
-        rating: 4.9,
-        reviews: 4.9,
-        creator: 'Spaceone',
-        creatorRole: 'BlockchainExplorer',
-        price: '1.20',
-        image: '/nft4.svg',
-        avatar: '/nftAvatar3.png',
-    },
-];
+import { NFTCard } from './NFTCard';
+import { mocknftData } from '../../../utils/data/mock-data';
 
 
 
@@ -161,7 +13,7 @@ export default function NFTGrid() {
     const [category, setCategory] = useState('All Categories');
     const [sortBy, setSortBy] = useState('Popular');
     const [priceFilter, setPriceFilter] = useState('Price');
-    const [filteredNFTs, setFilteredNFTs] = useState(nftData);
+    const [filteredNFTs, setFilteredNFTs] = useState(mocknftData);
 
     const categoryOptions = ['All Categories', 'Science Lab', 'Aoen.Net', 'Flow Dymenisty', 'Centry Networks'];
     const sortOptions = ['Popular', 'Recent', 'Price: Low to High', 'Price: High to Low', 'Most Liked'];
@@ -169,7 +21,7 @@ export default function NFTGrid() {
 
     // Apply filters
     React.useEffect(() => {
-        let result = [...nftData];
+        let result = [...mocknftData];
 
         // Filter by category
         if (category !== 'All Categories') {

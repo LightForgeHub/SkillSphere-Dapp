@@ -1,18 +1,8 @@
 import { Star, Users } from "lucide-react";
 import Image from "next/image";
+import { NFT } from "../../../utils/types/types";
 
-export interface NFT {
-    id: number;
-    title: string;
-    timeLeft: string;
-    rating: number;
-    reviews: number;
-    creator: string;
-    creatorRole: string;
-    price: string;
-    image: string;
-    avatar: string;
-}
+
 
 export const NFTCard = ({ nft }: { nft: NFT }) => {
     return (

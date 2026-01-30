@@ -4,42 +4,9 @@ import { useState, useEffect } from 'react'; // Added useEffect
 import Image from 'next/image';
 import { Flame } from 'lucide-react';
 import { FilterDropdown } from './FilterDropdown';
+import { Collection } from '../../../utils/types/types';
+import { mockCollections } from '../../../utils/data/mock-data';
 
-interface Collection {
-    id: number;
-    name: string;
-    items: number;
-    price: string;
-    image: string;
-    avatar: string;
-}
-
-const collections: Collection[] = [
-    {
-        id: 1,
-        name: 'Spaceone',
-        items: 4,
-        price: '1.63',
-        image: '/nft3.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 2,
-        name: 'Spaceone',
-        items: 3,
-        price: '1.63',
-        image: '/nft1.svg',
-        avatar: '/nftAvatar3.png',
-    },
-    {
-        id: 3,
-        name: 'Spaceone',
-        items: 5,
-        price: '1.63',
-        image: '/nft2.svg',
-        avatar: '/nftAvatar3.png',
-    },
-];
 
 const CollectionRow = ({ collection }: { collection: Collection }) => {
     return (
@@ -94,14 +61,14 @@ export default function HottestCollections() {
     const [sortBy, setSortBy] = useState('Popular');
     const [priceFilter, setPriceFilter] = useState('Price');
     const [dayFilter, setDayFilter] = useState('Day');
-    const [filteredCollections, setFilteredCollections] = useState(collections);
+    const [filteredCollections, setFilteredCollections] = useState(mockCollections);
 
     const sortOptions = ['Popular', 'Trending', 'Recent', 'Top Rated'];
     const priceOptions = ['Price', 'Low to High', 'High to Low'];
     const dayOptions = ['Day', 'Week', 'Month', 'All Time'];
 
     useEffect(() => {
-        const result = [...collections];
+        const result = [...mockCollections];
 
         // Apply price filter
         if (priceFilter === 'Low to High') {
