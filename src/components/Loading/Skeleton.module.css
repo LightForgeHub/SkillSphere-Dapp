@@ -1,0 +1,94 @@
+/* Light/dark friendly variables */
+:root {
+	--skeleton-bg: #f3f4f6;
+	--skeleton-block: #e6e7ea;
+	--skeleton-border: #e2e8f0;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--skeleton-bg: #111217;
+		--skeleton-block: #1f2024;
+		--skeleton-border: #2a2f36;
+	}
+}
+
+.container {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+/* base skeleton frame */
+.skeleton {
+	position: relative;
+	overflow: hidden;
+	border-radius: 8px;
+	background: var(--skeleton-bg);
+	min-height: 56px;
+	border: 1px solid var(--skeleton-border);
+}
+
+/* Card variant */
+.card .image {
+	height: 120px;
+	background: var(--skeleton-block);
+	border-radius: 6px;
+	margin: 12px;
+}
+.card .content {
+	padding: 0 12px 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* List variant */
+.list .row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 8px 12px;
+}
+.avatar {
+	width: 48px;
+	height: 48px;
+	border-radius: 50%;
+	background: var(--skeleton-block);
+}
+
+/* Table row variant */
+.tableRow .rowCells {
+	display: flex;
+	gap: 12px;
+	padding: 12px;
+	align-items: center;
+}
+.cell {
+	height: 14px;
+	background: var(--skeleton-block);
+	border-radius: 8px;
+}
+
+/* Generic line */
+.line {
+	height: 12px;
+	background: var(--skeleton-block);
+	border-radius: 6px;
+}
+
+/* Shimmer */
+.shimmer {
+	position: absolute;
+	inset: 0;
+	transform: translateX(-100%);
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+	animation: shimmer 1.2s infinite;
+	pointer-events: none;
+}
+
+@keyframes shimmer {
+	to {
+		transform: translateX(100%);
+	}
+}

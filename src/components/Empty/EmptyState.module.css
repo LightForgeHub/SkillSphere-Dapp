@@ -1,0 +1,56 @@
+:root {
+	--empty-text: #374151;
+	--empty-sub: #6b7280;
+	--empty-bg: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--empty-text: #e6edf3;
+		--empty-sub: #9aa6b2;
+		--empty-bg: transparent;
+	}
+}
+
+.wrapper {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	background: var(--empty-bg);
+	border-radius: 8px;
+	min-height: 140px;
+}
+
+.inner {
+	text-align: center;
+	max-width: 520px;
+	padding: 8px 12px;
+}
+
+.icon {
+	margin: 0 auto 8px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 56px;
+	height: 56px;
+	border-radius: 12px;
+	background: rgba(0, 0, 0, 0.03);
+}
+
+.title {
+	margin: 8px 0 4px;
+	font-size: 1rem;
+	color: var(--empty-text);
+}
+
+.description {
+	margin: 0 0 8px;
+	color: var(--empty-sub);
+	font-size: 0.9375rem;
+}
+
+.action {
+	margin-top: 8px;
+}
