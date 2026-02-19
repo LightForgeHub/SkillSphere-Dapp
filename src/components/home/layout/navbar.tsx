@@ -5,9 +5,11 @@ import { Menu, X, Search, Bell, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import CreateWalletModal from '@/components/CreateWalletModal';
 
 export default function NavBar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   const pathname = usePathname();
 
   // Hide navbar on auth routes
@@ -82,7 +84,7 @@ export default function NavBar() {
                 </>
               ) : (
                 <>
-                  <button className="flex items-center space-x-2 px-4 h-10 text-sm font-medium bg-[#FA7F2B] rounded-lg hover:bg-[#e67425] transition-colors cursor-pointer whitespace-nowrap">
+                  <button onClick={() => setWalletOpen(true)} className="flex items-center space-x-2 px-4 h-10 text-sm font-medium bg-[#FA7F2B] rounded-lg hover:bg-[#e67425] transition-colors cursor-pointer whitespace-nowrap">
       <Wallet className="w-5 h-5 text-white" />
                     <span>Connect Wallet</span>
                   </button>
@@ -151,7 +153,7 @@ export default function NavBar() {
                   </>
                 ) : (
                   <div className="pt-4 border-t border-gray-800 space-y-4">
-                    <button className="w-full flex items-center justify-center space-x-2 px-4 py-2 text-sm bg-[#FA7F2B] rounded-lg">
+                    <button onClick={() => setWalletOpen(true)} className="w-full flex items-center justify-center space-x-2 px-4 py-2 text-sm bg-[#FA7F2B] rounded-lg">
                       <img src="/wallet-icon.png" alt="wallet" className="w-5 h-5 invert" />
                       <span>Connect Wallet</span>
                     </button>
@@ -169,6 +171,7 @@ export default function NavBar() {
           )}
         </div>
       </nav>
+      <CreateWalletModal open={walletOpen} onClose={() => setWalletOpen(false)} />
     </div>
   );
 }
