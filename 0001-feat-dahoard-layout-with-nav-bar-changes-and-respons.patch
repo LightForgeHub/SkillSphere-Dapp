@@ -1,0 +1,876 @@
+From 3f0c4d4406253880e6a35287c5193d473fab92b7 Mon Sep 17 00:00:00 2001
+From: Mayowa <danielmayowa0008@gmail.com>
+Date: Fri, 20 Feb 2026 08:54:31 +0000
+Subject: [PATCH] feat:dahoard layout with nav bar changes and responsiveness
+
+---
+ public/assets/Avatar Placeholder.png        | Bin 0 -> 4568 bytes
+ public/icons/ai chatbot.svg                 |   6 +
+ public/icons/course.svg                     |   4 +
+ public/icons/home-05.svg                    |   5 +
+ public/icons/learner.svg                    |   7 +
+ public/icons/message-notification.svg       |   5 +
+ public/icons/support.svg                    |   6 +
+ public/icons/wallet-02.svg                  |   5 +
+ src/app/dashboard/ai/page.tsx               |   8 +
+ src/app/dashboard/courses/page.tsx          |   8 +
+ src/app/dashboard/earnings/page.tsx         |   8 +
+ src/app/dashboard/layout.tsx                |   9 +
+ src/app/dashboard/learners/page.tsx         |   8 +
+ src/app/dashboard/notifications/page.tsx    |   8 +
+ src/app/dashboard/page.tsx                  |   8 +
+ src/app/dashboard/support/page.tsx          |   8 +
+ src/components/dashboard/DashboardShell.tsx |  30 ++
+ src/components/dashboard/Header.tsx         | 127 ++++++++
+ src/components/dashboard/Sidebar.tsx        | 317 ++++++++++++++++++++
+ src/components/layout/AppLayout.tsx         |  21 +-
+ 20 files changed, 594 insertions(+), 4 deletions(-)
+ create mode 100644 public/assets/Avatar Placeholder.png
+ create mode 100644 public/icons/ai chatbot.svg
+ create mode 100644 public/icons/course.svg
+ create mode 100644 public/icons/home-05.svg
+ create mode 100644 public/icons/learner.svg
+ create mode 100644 public/icons/message-notification.svg
+ create mode 100644 public/icons/support.svg
+ create mode 100644 public/icons/wallet-02.svg
+ create mode 100644 src/app/dashboard/ai/page.tsx
+ create mode 100644 src/app/dashboard/courses/page.tsx
+ create mode 100644 src/app/dashboard/earnings/page.tsx
+ create mode 100644 src/app/dashboard/layout.tsx
+ create mode 100644 src/app/dashboard/learners/page.tsx
+ create mode 100644 src/app/dashboard/notifications/page.tsx
+ create mode 100644 src/app/dashboard/page.tsx
+ create mode 100644 src/app/dashboard/support/page.tsx
+ create mode 100644 src/components/dashboard/DashboardShell.tsx
+ create mode 100644 src/components/dashboard/Header.tsx
+ create mode 100644 src/components/dashboard/Sidebar.tsx
+
+diff --git a/public/assets/Avatar Placeholder.png b/public/assets/Avatar Placeholder.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..00c69ccfed281624f6b02c623ea2bca32655e32f
+GIT binary patch
+literal 4568
+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
+Cwv_1r
+
+literal 0
+HcmV?d00001
+
+diff --git a/public/icons/ai chatbot.svg b/public/icons/ai chatbot.svg
+new file mode 100644
+index 0000000..354bff0
+--- /dev/null
++++ b/public/icons/ai chatbot.svg	
+@@ -0,0 +1,6 @@
++<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
++<path d="M17 10.8045C17 10.4588 17 10.286 17.052 10.132C17.2032 9.68444 17.6018 9.51076 18.0011 9.32888C18.45 9.12442 18.6744 9.02219 18.8968 9.0042C19.1493 8.98378 19.4022 9.03818 19.618 9.15929C19.9041 9.31984 20.1036 9.62493 20.3079 9.87302C21.2513 11.0188 21.7229 11.5918 21.8955 12.2236C22.0348 12.7334 22.0348 13.2666 21.8955 13.7764C21.6438 14.6979 20.8485 15.4704 20.2598 16.1854C19.9587 16.5511 19.8081 16.734 19.618 16.8407C19.4022 16.9618 19.1493 17.0162 18.8968 16.9958C18.6744 16.9778 18.45 16.8756 18.0011 16.6711C17.6018 16.4892 17.2032 16.3156 17.052 15.868C17 15.714 17 15.5412 17 15.1955V10.8045Z" stroke="white" stroke-width="1.5"/>
++<path d="M7 10.8046C7 10.3694 6.98778 9.97821 6.63591 9.6722C6.50793 9.5609 6.33825 9.48361 5.99891 9.32905C5.55001 9.12458 5.32556 9.02235 5.10316 9.00436C4.43591 8.9504 4.07692 9.40581 3.69213 9.87318C2.74875 11.019 2.27706 11.5919 2.10446 12.2237C1.96518 12.7336 1.96518 13.2668 2.10446 13.7766C2.3562 14.6981 3.15152 15.4705 3.74021 16.1856C4.11129 16.6363 4.46577 17.0475 5.10316 16.996C5.32556 16.978 5.55001 16.8757 5.99891 16.6713C6.33825 16.5167 6.50793 16.4394 6.63591 16.3281C6.98778 16.0221 7 15.631 7 15.1957V10.8046Z" stroke="white" stroke-width="1.5"/>
++<path d="M5 9C5 5.68629 8.13401 3 12 3C15.866 3 19 5.68629 19 9" stroke="white" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="round"/>
++<path d="M19 17V17.8C19 19.5673 17.2091 21 15 21H13" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++</svg>
+diff --git a/public/icons/course.svg b/public/icons/course.svg
+new file mode 100644
+index 0000000..4e953e4
+--- /dev/null
++++ b/public/icons/course.svg
+@@ -0,0 +1,4 @@
++<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
++<path d="M20 15C20 16.8638 20 17.7956 19.6955 18.5307C19.2895 19.5108 18.5108 20.2895 17.5307 20.6955C16.7956 21 15.8637 21 14 21H11C7.22874 21 5.3431 21 4.17153 19.8284C2.99995 18.6568 2.99997 16.7712 3 12.9999L3.00006 6.99983C3.00008 4.79078 4.79088 3 6.99993 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++<path d="M9.99996 8.5L10.4337 12.4689C10.4751 12.8007 10.679 13.0899 10.9862 13.2219C11.6722 13.5165 12.957 14 14 14C15.0431 14 16.3279 13.5165 17.0139 13.2219C17.3211 13.0899 17.525 12.8007 17.5664 12.4689L18 8.5M20.5 7.5V11.2692M14 4L7 7L14 10L21 7L14 4Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++</svg>
+diff --git a/public/icons/home-05.svg b/public/icons/home-05.svg
+new file mode 100644
+index 0000000..6a29dbc
+--- /dev/null
++++ b/public/icons/home-05.svg
+@@ -0,0 +1,5 @@
++<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
++<path d="M12 17H12.009" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
++<path d="M20 8.5V13.5C20 17.2712 20 19.1569 18.8284 20.3284C17.6569 21.5 15.7712 21.5 12 21.5C8.22876 21.5 6.34315 21.5 5.17157 20.3284C4 19.1569 4 17.2712 4 13.5V8.5" stroke="white" stroke-width="1.5"/>
++<path d="M22 10.5L17.6569 6.33548C14.9902 3.77849 13.6569 2.5 12 2.5C10.3431 2.5 9.00981 3.77849 6.34315 6.33548L2 10.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
++</svg>
+diff --git a/public/icons/learner.svg b/public/icons/learner.svg
+new file mode 100644
+index 0000000..d900f0c
+--- /dev/null
++++ b/public/icons/learner.svg
+@@ -0,0 +1,7 @@
++<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
++<path d="M2.5 6L8 4L13.5 6L11 7.5V9C11 9 10.3333 8.5 8 8.5C5.66667 8.5 5 9 5 9V7.5L2.5 6ZM2.5 6V10" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++<path d="M11 8.5V9.38889C11 11.1071 9.65685 12.5 8 12.5C6.34315 12.5 5 11.1071 5 9.38889V8.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++<path d="M15.3182 11.0294C15.3182 11.0294 15.803 10.6765 17.5 10.6765C19.197 10.6765 19.6818 11.0294 19.6818 11.0294M15.3182 11.0294V10L13.5 9L17.5 7.5L21.5 9L19.6818 10V11.0294M15.3182 11.0294V11.3182C15.3182 12.5232 16.295 13.5 17.5 13.5C18.705 13.5 19.6818 12.5232 19.6818 11.3182V11.0294" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++<path d="M4.38505 15.926C3.44187 16.4525 0.968909 17.5276 2.47511 18.8729C3.21087 19.53 4.03033 20 5.06058 20H10.9394C11.9697 20 12.7891 19.53 13.5249 18.8729C15.0311 17.5276 12.5581 16.4525 11.6149 15.926C9.40321 14.6913 6.59679 14.6913 4.38505 15.926Z" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++<path d="M16 20H19.7048C20.4775 20 21.0921 19.624 21.6439 19.0983C22.7736 18.0221 20.9189 17.162 20.2115 16.7408C18.9362 15.9814 17.3972 15.8059 16 16.2141" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++</svg>
+diff --git a/public/icons/message-notification.svg b/public/icons/message-notification.svg
+new file mode 100644
+index 0000000..fa7f02f
+--- /dev/null
++++ b/public/icons/message-notification.svg
+@@ -0,0 +1,5 @@
++<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
++<path d="M21.9598 10.9707C22.0134 11.8009 22.0134 12.6607 21.9598 13.4909C21.6856 17.7332 18.3536 21.1125 14.1706 21.3905C12.7435 21.4854 11.2536 21.4852 9.8294 21.3905C9.33896 21.3579 8.8044 21.2409 8.34401 21.0513C7.83177 20.8403 7.5756 20.7348 7.44544 20.7508C7.31527 20.7668 7.1264 20.9061 6.74868 21.1846C6.08268 21.6757 5.24367 22.0285 3.99943 21.9982C3.37026 21.9829 3.05568 21.9752 2.91484 21.7351C2.77401 21.495 2.94941 21.1626 3.30021 20.4978C3.78674 19.5758 4.09501 18.5203 3.62791 17.6746C2.82343 16.4666 2.1401 15.036 2.04024 13.4909C1.98659 12.6607 1.98659 11.8009 2.04024 10.9707C2.31441 6.72838 5.64639 3.34913 9.8294 3.07107C11.0318 2.99114 11.2812 2.97856 12.5 3.03368" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++<path d="M8.5 15H15.5M8.5 10H12" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++<path d="M22 5.5C22 7.433 20.433 9 18.5 9C16.567 9 15 7.433 15 5.5C15 3.567 16.567 2 18.5 2C20.433 2 22 3.567 22 5.5Z" stroke="white" stroke-width="1.5"/>
++</svg>
+diff --git a/public/icons/support.svg b/public/icons/support.svg
+new file mode 100644
+index 0000000..354bff0
+--- /dev/null
++++ b/public/icons/support.svg
+@@ -0,0 +1,6 @@
++<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
++<path d="M17 10.8045C17 10.4588 17 10.286 17.052 10.132C17.2032 9.68444 17.6018 9.51076 18.0011 9.32888C18.45 9.12442 18.6744 9.02219 18.8968 9.0042C19.1493 8.98378 19.4022 9.03818 19.618 9.15929C19.9041 9.31984 20.1036 9.62493 20.3079 9.87302C21.2513 11.0188 21.7229 11.5918 21.8955 12.2236C22.0348 12.7334 22.0348 13.2666 21.8955 13.7764C21.6438 14.6979 20.8485 15.4704 20.2598 16.1854C19.9587 16.5511 19.8081 16.734 19.618 16.8407C19.4022 16.9618 19.1493 17.0162 18.8968 16.9958C18.6744 16.9778 18.45 16.8756 18.0011 16.6711C17.6018 16.4892 17.2032 16.3156 17.052 15.868C17 15.714 17 15.5412 17 15.1955V10.8045Z" stroke="white" stroke-width="1.5"/>
++<path d="M7 10.8046C7 10.3694 6.98778 9.97821 6.63591 9.6722C6.50793 9.5609 6.33825 9.48361 5.99891 9.32905C5.55001 9.12458 5.32556 9.02235 5.10316 9.00436C4.43591 8.9504 4.07692 9.40581 3.69213 9.87318C2.74875 11.019 2.27706 11.5919 2.10446 12.2237C1.96518 12.7336 1.96518 13.2668 2.10446 13.7766C2.3562 14.6981 3.15152 15.4705 3.74021 16.1856C4.11129 16.6363 4.46577 17.0475 5.10316 16.996C5.32556 16.978 5.55001 16.8757 5.99891 16.6713C6.33825 16.5167 6.50793 16.4394 6.63591 16.3281C6.98778 16.0221 7 15.631 7 15.1957V10.8046Z" stroke="white" stroke-width="1.5"/>
++<path d="M5 9C5 5.68629 8.13401 3 12 3C15.866 3 19 5.68629 19 9" stroke="white" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="round"/>
++<path d="M19 17V17.8C19 19.5673 17.2091 21 15 21H13" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
++</svg>
+diff --git a/public/icons/wallet-02.svg b/public/icons/wallet-02.svg
+new file mode 100644
+index 0000000..c27bfb3
+--- /dev/null
++++ b/public/icons/wallet-02.svg
+@@ -0,0 +1,5 @@
++<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
++<path d="M16 14C16 14.8284 16.6716 15.5 17.5 15.5C18.3284 15.5 19 14.8284 19 14C19 13.1716 18.3284 12.5 17.5 12.5C16.6716 12.5 16 13.1716 16 14Z" stroke="white" stroke-width="1.5"/>
++<path d="M18.9 8C18.9656 7.67689 19 7.34247 19 7C19 4.23858 16.7614 2 14 2C11.2386 2 9 4.23858 9 7C9 7.34247 9.03443 7.67689 9.10002 8" stroke="white" stroke-width="1.5"/>
++<path d="M7 7.99324H16C18.8284 7.99324 20.2426 7.99324 21.1213 8.87234C22 9.75145 22 11.1663 22 13.9961V15.9971C22 18.8269 22 20.2418 21.1213 21.1209C20.2426 22 18.8284 22 16 22H10C6.22876 22 4.34315 22 3.17157 20.8279C2 19.6557 2 17.7692 2 13.9961V11.9952C2 8.22211 2 6.33558 3.17157 5.16344C4.11466 4.2199 5.52043 4.03589 8 4H10" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
++</svg>
+diff --git a/src/app/dashboard/ai/page.tsx b/src/app/dashboard/ai/page.tsx
+new file mode 100644
+index 0000000..45aa555
+--- /dev/null
++++ b/src/app/dashboard/ai/page.tsx
+@@ -0,0 +1,8 @@
++export default function AIChatPage() {
++  return (
++    <div>
++      <h2 className="text-2xl font-semibold">AI Chat Bot</h2>
++      <p className="mt-4 text-slate-600">Chat with the AI assistant here.</p>
++    </div>
++  )
++}
+diff --git a/src/app/dashboard/courses/page.tsx b/src/app/dashboard/courses/page.tsx
+new file mode 100644
+index 0000000..038ce92
+--- /dev/null
++++ b/src/app/dashboard/courses/page.tsx
+@@ -0,0 +1,8 @@
++export default function CoursesPage() {
++  return (
++    <div>
++      <h2 className="text-2xl font-semibold">Courses</h2>
++      <p className="mt-4 text-slate-600">Create, edit, and manage courses here.</p>
++    </div>
++  )
++}
+diff --git a/src/app/dashboard/earnings/page.tsx b/src/app/dashboard/earnings/page.tsx
+new file mode 100644
+index 0000000..b499d69
+--- /dev/null
++++ b/src/app/dashboard/earnings/page.tsx
+@@ -0,0 +1,8 @@
++export default function EarningsPage() {
++  return (
++    <div>
++      <h2 className="text-2xl font-semibold">Earnings</h2>
++      <p className="mt-4 text-slate-600">View revenue, payouts, and transaction history.</p>
++    </div>
++  )
++}
+diff --git a/src/app/dashboard/layout.tsx b/src/app/dashboard/layout.tsx
+new file mode 100644
+index 0000000..cd0ac27
+--- /dev/null
++++ b/src/app/dashboard/layout.tsx
+@@ -0,0 +1,9 @@
++import DashboardShell from "@/components/dashboard/DashboardShell"
++
++export const metadata = {
++  title: "Dashboard - SkillSphere",
++}
++
++export default function DashboardLayout({ children }: { children: React.ReactNode }) {
++  return <DashboardShell>{children}</DashboardShell>
++}
+diff --git a/src/app/dashboard/learners/page.tsx b/src/app/dashboard/learners/page.tsx
+new file mode 100644
+index 0000000..9f51648
+--- /dev/null
++++ b/src/app/dashboard/learners/page.tsx
+@@ -0,0 +1,8 @@
++export default function LearnersPage() {
++  return (
++    <div>
++      <h2 className="text-2xl font-semibold">Learners</h2>
++      <p className="mt-4 text-slate-600">Manage and review learner activity here.</p>
++    </div>
++  )
++}
+diff --git a/src/app/dashboard/notifications/page.tsx b/src/app/dashboard/notifications/page.tsx
+new file mode 100644
+index 0000000..7f2b48a
+--- /dev/null
++++ b/src/app/dashboard/notifications/page.tsx
+@@ -0,0 +1,8 @@
++export default function NotificationsPage() {
++  return (
++    <div>
++      <h2 className="text-2xl font-semibold">Notifications</h2>
++      <p className="mt-4 text-slate-600">All notifications will appear here.</p>
++    </div>
++  )
++}
+diff --git a/src/app/dashboard/page.tsx b/src/app/dashboard/page.tsx
+new file mode 100644
+index 0000000..40cb12f
+--- /dev/null
++++ b/src/app/dashboard/page.tsx
+@@ -0,0 +1,8 @@
++export default function DashboardHome() {
++  return (
++    <div>
++      <h2 className="text-2xl font-semibold">Overview</h2>
++      <p className="mt-4 text-slate-600">Welcome to your dashboard. Use the sidebar to navigate.</p>
++    </div>
++  )
++}
+diff --git a/src/app/dashboard/support/page.tsx b/src/app/dashboard/support/page.tsx
+new file mode 100644
+index 0000000..620944e
+--- /dev/null
++++ b/src/app/dashboard/support/page.tsx
+@@ -0,0 +1,8 @@
++export default function SupportPage() {
++  return (
++    <div>
++      <h2 className="text-2xl font-semibold">Support</h2>
++      <p className="mt-4 text-slate-600">Contact support or view help articles here.</p>
++    </div>
++  )
++}
+diff --git a/src/components/dashboard/DashboardShell.tsx b/src/components/dashboard/DashboardShell.tsx
+new file mode 100644
+index 0000000..687db05
+--- /dev/null
++++ b/src/components/dashboard/DashboardShell.tsx
+@@ -0,0 +1,30 @@
++"use client"
++import React from "react"
++import Header from "@/components/dashboard/Header"
++import Sidebar, { MobileDrawer } from "@/components/dashboard/Sidebar"
++
++export default function DashboardShell({ children }: { children: React.ReactNode }) {
++  const [open, setOpen] = React.useState(false)
++
++  return (
++    <div className="min-h-screen">
++      <Header onToggleMenu={() => setOpen((v) => !v)} />
++
++      <MobileDrawer isOpen={open} onClose={() => setOpen(false)} />
++
++      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:pl-72">
++        <div className="md:flex md:space-x-6">
++          <aside className="hidden md:block md:w-64 flex-shrink-0">
++            <div className="sticky top-6">
++              <Sidebar />
++            </div>
++          </aside>
++
++          <main className="flex-1 mt-6 md:mt-0">
++            <div className="bg-[#110719] rounded-lg shadow-sm p-6 min-h-[400px]">{children}</div>
++          </main>
++        </div>
++      </div>
++    </div>
++  )
++}
+diff --git a/src/components/dashboard/Header.tsx b/src/components/dashboard/Header.tsx
+new file mode 100644
+index 0000000..3be4b47
+--- /dev/null
++++ b/src/components/dashboard/Header.tsx
+@@ -0,0 +1,127 @@
++"use client"
++import Link from "next/link"
++import { useEffect, useState } from "react"
++import { ChevronDown } from "lucide-react"
++const profiles = [
++  { id: "nora", name: "Miss Nora" },
++  { id: "sam", name: "Mr Sam" },
++  { id: "lulu", name: "Mrs Lulu" },
++]
++
++export default function Header({
++  title,
++  onToggleMenu,
++}: {
++  title?: string
++  onToggleMenu?: () => void
++}) {
++  const [profile, setProfile] = useState(profiles[0])
++  const [open, setOpen] = useState(false)
++  const [mobileProfileModalOpen, setMobileProfileModalOpen] = useState(false)
++
++  useEffect(() => {
++    try {
++      const v = localStorage.getItem("dashboard_profile")
++      if (v) setProfile(JSON.parse(v))
++    } catch (e) {}
++  }, [])
++
++  useEffect(() => {
++    try {
++      localStorage.setItem("dashboard_profile", JSON.stringify(profile))
++    } catch (e) {}
++  }, [profile])
++
++  useEffect(() => {
++    if (!open) return
++    function onKey(e: KeyboardEvent) {
++      if (e.key === "Escape") setOpen(false)
++    }
++    window.addEventListener("keydown", onKey)
++    return () => window.removeEventListener("keydown", onKey)
++  }, [open])
++
++  useEffect(() => {
++    function onStorage(e: StorageEvent) {
++      if (e.key === "dashboard_profile" && e.newValue) {
++        try {
++          setProfile(JSON.parse(e.newValue))
++        } catch (e) {}
++      }
++    }
++    window.addEventListener("storage", onStorage)
++    return () => window.removeEventListener("storage", onStorage)
++  }, [])
++
++    function classNames(...classes: (string | undefined | null | false)[]): string {
++        return classes.filter(Boolean).join(" ")
++    }
++  return (
++    <header className="bg-[#110719] border-b border-white/20">
++      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
++        <div className="flex items-center justify-between h-16">
++          <div className="flex items-center gap-4">
++            <button
++              onClick={onToggleMenu}
++              aria-label="Toggle menu"
++              className="md:hidden p-2 rounded-md hover:bg-slate-100"
++            >
++              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
++              </svg>
++            </button>
++            <h1 className="text-lg font-semibold text-white">{title || "Dashboard"}</h1>
++          </div>
++
++          <div className="flex items-center gap-4">
++        
++
++            <div>
++              <button
++                onClick={() => {
++                  // open mobile modal only on small screens
++                  if (typeof window !== "undefined" && window.innerWidth < 768) {
++                    setMobileProfileModalOpen(true)
++                  }
++                }}
++                className="flex items-center gap-2 p-2 rounded-md hover:bg-slate-100"
++              >
++                <span className="hidden sm:inline text-sm text-slate-200">{profile.name}</span>
++                <div className="w-8 h-8 bg-slate-200 rounded-full" />
++                <ChevronDown className="w-4 h-4 text-slate-200" />
++              </button>
++
++              {mobileProfileModalOpen && (
++                <>
++                  <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setMobileProfileModalOpen(false)} />
++
++                  <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] bg-white rounded-xl p-4 border shadow-lg z-50 md:hidden">
++                    <div className="text-sm text-gray-600 mb-3">Select profile</div>
++                    <div className="space-y-2">
++                      {profiles.map((p) => (
++                        <button
++                          key={p.id}
++                          onClick={() => {
++                            setProfile(p)
++                            setMobileProfileModalOpen(false)
++                          }}
++                          className={classNames(
++                            "w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
++                            p.id === profile.id ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:bg-slate-50"
++                          )}
++                        >
++                          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500" />
++                          <span>{p.name}</span>
++                        </button>
++                      ))}
++                    </div>
++                  </div>
++                </>
++              )}
++            </div>
++          </div>
++        </div>
++      </div>
++    </header>
++  )
++}
+diff --git a/src/components/dashboard/Sidebar.tsx b/src/components/dashboard/Sidebar.tsx
+new file mode 100644
+index 0000000..d7ae593
+--- /dev/null
++++ b/src/components/dashboard/Sidebar.tsx
+@@ -0,0 +1,317 @@
++"use client"
++
++import Link from "next/link"
++import { usePathname } from "next/navigation"
++import { useState, useEffect } from "react"
++import { ChevronDown } from "lucide-react"
++
++
++const navItems = [
++  { href: "/dashboard", label: "Home", iconName: "home-05" },
++  { href: "/dashboard/learners", label: "Learners", iconName: "learner" },
++  { href: "/dashboard/notifications", label: "Notifications", iconName: "message-notification" },
++  { href: "/dashboard/courses", label: "Courses", iconName: "course" },
++  { href: "/dashboard/earnings", label: "Earnings", iconName: "wallet-02" },
++]
++
++const bottomItems = [
++  { href: "/dashboard/support", label: "Support", iconName: "support" },
++  { href: "/dashboard/ai", label: "AI chat bot", iconName: "ai chatbot" },
++]
++
++const profiles = [
++  { id: "nora", name: "Miss Nora" },
++  { id: "sam", name: "Mr Sam" },
++  { id: "lulu", name: "Mrs Lulu" },
++]
++
++function classNames(...c: Array<string | false | undefined>) {
++  return c.filter(Boolean).join(" ")
++}
++
++export default function Sidebar() {
++  const pathname = usePathname()
++  const [open, setOpen] = useState(false)
++  const [desktopProfileOpen, setDesktopProfileOpen] = useState(false)
++
++  const [profile, setProfile] = useState(profiles[0])
++
++  useEffect(() => {
++    try {
++      const v = localStorage.getItem("dashboard_profile")
++      if (v) setProfile(JSON.parse(v))
++    } catch (e) {}
++  }, [])
++
++  useEffect(() => {
++    try {
++      localStorage.setItem("dashboard_profile", JSON.stringify(profile))
++    } catch (e) {}
++  }, [profile])
++
++  const activeItem = navItems.find((item) => pathname === item.href)?.label || "Home"
++
++  return (
++    <>
++      {/* MOBILE DROPDOWN */}
++      <div className="md:hidden mb-4">
++        <button
++          onClick={() => setOpen(!open)}
++          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#110719] text-white"
++        >
++          {activeItem}
++          <ChevronDown size={18} />
++        </button>
++
++        {open && (
++          <div className="mt-2 bg-[#110719] rounded-xl p-2">
++            {/* Profile selector in mobile dropdown */}
++            <div className="mb-3">
++              <div className="text-xs text-gray-300 mb-2">Profile</div>
++              <div className="space-y-1">
++                {profiles.map((p) => (
++                  <button
++                    key={p.id}
++                    onClick={() => {
++                      setProfile(p)
++                      setOpen(false)
++                    }}
++                    className={classNames(
++                      "w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
++                      p.id === profile.id ? "bg-purple-600/20 text-white" : "text-gray-300 hover:bg-white/5"
++                    )}
++                  >
++                    <img src={`/assets/${encodeURIComponent("Avatar Placeholder.png")}`} alt="avatar" className="w-7 h-7 rounded-full object-cover" />
++                    <span>{p.name}</span>
++                  </button>
++                ))}
++              </div>
++            </div>
++
++            <div className="space-y-1">
++              {navItems.map((item) => {
++                const active = pathname === item.href
++                return (
++                  <Link
++                    key={item.href}
++                    href={item.href}
++                    className={classNames(
++                      "flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
++                      active ? "bg-purple-600/20 text-white" : "text-gray-300 hover:bg-white/5"
++                    )}
++                    onClick={() => setOpen(false)}
++                  >
++                    <span className="w-[18px] h-[18px]">
++                      <img src={`/icons/${encodeURIComponent(item.iconName)}.svg`} alt={item.label} className="w-[18px] h-[18px]" />
++                    </span>
++                    {item.label}
++                  </Link>
++                )
++              })}
++            </div>
++
++            <div className="mt-3 pt-3 border-t border-white/10 space-y-1">
++              {bottomItems.map((b) => (
++                <Link
++                  key={b.href}
++                  href={b.href}
++                  onClick={() => setOpen(false)}
++                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-white/5"
++                >
++                  <span className="w-[18px] h-[18px]">
++                    <img src={`/icons/${encodeURIComponent(b.iconName)}.svg`} alt={b.label} className="w-[18px] h-[18px]" />
++                  </span>
++                  {b.label}
++                </Link>
++              ))}
++            </div>
++          </div>
++        )}
++      </div>
++
++      {/* DESKTOP SIDEBAR */}
++      <aside className="hidden md:flex flex-col w-[260px] h-[90vh] md:h-[80vh] bg-[#110719] border-r border-white/5 p-4">
++        
++        {/* Profile */}
++        <div className="mb-6 relative">
++          <button
++            onClick={() => setDesktopProfileOpen((v) => !v)}
++            className="w-full flex items-center justify-between bg-[#110719] rounded-xl px-3 py-2"
++            aria-expanded={desktopProfileOpen}
++          >
++              <div className="flex items-center gap-2">
++              <img src={`/assets/${encodeURIComponent("Avatar Placeholder.png")}`} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
++              <span className="text-sm text-white">{profile.name}</span>
++            </div>
++
++            <ChevronDown size={16} className="text-gray-400" />
++          </button>
++
++          {desktopProfileOpen && (
++            <div className="absolute left-0 top-full mt-2 w-56 bg-[#110719] rounded-xl p-2 border border-white/5 shadow-lg z-50">
++              {profiles.map((p) => (
++                <button
++                  key={p.id}
++                  onClick={() => {
++                    setProfile(p)
++                    setDesktopProfileOpen(false)
++                  }}
++                  className={classNames(
++                    "w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
++                    p.id === profile.id ? "bg-purple-600/20 text-white" : "text-gray-300 hover:bg-white/5"
++                  )}
++                >
++                  <img src={`/assets/${encodeURIComponent("Avatar Placeholder.png")}`} alt="avatar" className="w-6 h-6 rounded-full object-cover" />
++                  <span>{p.name}</span>
++                </button>
++              ))}
++            </div>
++          )}
++        </div>
++
++        {/* Nav */}
++        <ul className="space-y-1">
++          {navItems.map((item) => {
++            const active = pathname === item.href
++
++            return (
++              <li key={item.href}>
++                <Link
++                  href={item.href}
++                  className={classNames(
++                    "flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition",
++                    active
++                      ? "bg-[#613485] text-white"
++                      : "text-gray-400 hover:bg-white/5"
++                  )}
++                >
++                  <span className="w-[18px] h-[18px]">
++                    <img src={`/icons/${encodeURIComponent(item.iconName)}.svg`} alt={item.label} className="w-[18px] h-[18px]" />
++                  </span>
++                  {item.label}
++                </Link>
++              </li>
++            )
++          })}
++        </ul>
++
++        {/* Bottom utilities */}
++        <div className="mt-auto pt-6 space-y-3">
++          {bottomItems.map((b) => (
++            <Link
++              key={b.href}
++              href={b.href}
++              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/5"
++            >
++              <span className="w-[18px] h-[18px]">
++                <img src={`/icons/${encodeURIComponent(b.iconName)}.svg`} alt={b.label} className="w-[18px] h-[18px]" />
++              </span>
++              {b.label}
++            </Link>
++          ))}
++        </div>
++      </aside>
++    </>
++  )
++}
++
++// Controlled mobile drawer used by DashboardShell (slide-in)
++export function MobileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
++  const pathname = usePathname() || "/"
++  const [profile, setProfile] = useState(profiles[0])
++
++  useEffect(() => {
++    try {
++      const v = localStorage.getItem("dashboard_profile")
++      if (v) setProfile(JSON.parse(v))
++    } catch (e) {}
++  }, [])
++
++  const handleSelectProfile = (p: { id: string; name: string }) => {
++    try {
++      localStorage.setItem("dashboard_profile", JSON.stringify(p))
++    } catch (e) {}
++    setProfile(p)
++    onClose()
++  }
++
++  return (
++    <>
++      <div
++        className={`fixed inset-0 bg-black/40 z-40 transition-opacity ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
++        onClick={onClose}
++        aria-hidden={!isOpen}
++      />
++
++      <aside
++        className={`fixed left-0 top-0 bottom-0 w-64 bg-[#110719] z-50 transform transition-transform ${
++          isOpen ? "translate-x-0" : "-translate-x-full"
++        }`}
++      >
++        <div className="p-4 border-b">
++          <div className="flex items-center justify-between">
++            <div className="flex items-center gap-3">
++              <img src={`/assets/${encodeURIComponent("Avatar Placeholder.png")}`} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
++              <div>
++                <div className="text-sm font-semibold text-white">{profile.name}</div>
++                <div className="text-xs text-gray-300">Active profile</div>
++              </div>
++            </div>
++
++            <button onClick={onClose} aria-label="Close menu" className="p-2 rounded-md hover:bg-slate-100">
++              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
++                <path strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
++              </svg>
++            </button>
++          </div>
++
++          <div className="mt-3">
++            <div className="text-xs text-gray-300 mb-2">Profiles</div>
++          
++          </div>
++        </div>
++
++        <nav className="p-4">
++          <ul className="space-y-2">
++            {navItems.map((item) => {
++              const active = pathname === item.href
++              return (
++                <li key={item.href}>
++                  <Link
++                    href={item.href}
++                    onClick={onClose}
++                    className={classNames(
++                      "flex items-center gap-3 px-3 py-2 rounded-md",
++                      active ? "bg-purple-600/20 text-white" : "text-gray-300 hover:bg-white/5"
++                    )}
++                  >
++                    <span className="w-[18px] h-[18px]">
++                        <img src={`/icons/${encodeURIComponent(item.iconName)}.svg`} alt={item.label} className="w-[18px] h-[18px]" />
++                    </span>
++                    {item.label}
++                  </Link>
++                </li>
++              )
++            })}
++          </ul>
++
++          <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
++            {bottomItems.map((b) => (
++              <Link
++                key={b.href}
++                href={b.href}
++                onClick={onClose}
++                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5"
++              >
++                <span className="w-[18px] h-[18px]">
++                  <img src={`/icons/${encodeURIComponent(b.iconName)}.svg`} alt={b.label} className="w-[18px] h-[18px]" />
++                </span>
++                {b.label}
++              </Link>
++            ))}
++          </div>
++        </nav>
++      </aside>
++    </>
++  )
++}
+\ No newline at end of file
+diff --git a/src/components/layout/AppLayout.tsx b/src/components/layout/AppLayout.tsx
+index 72a26ac..d9ad130 100644
+--- a/src/components/layout/AppLayout.tsx
++++ b/src/components/layout/AppLayout.tsx
+@@ -1,4 +1,6 @@
++"use client"
+ import React, { ReactNode } from "react";
++import { usePathname } from "next/navigation";
+ 
+ interface AppLayoutProps {
+   children: ReactNode;
+@@ -11,15 +13,26 @@ export default function AppLayout({
+   headerSlot,
+   footerSlot,
+ }: AppLayoutProps) {
++  const pathname = usePathname() || "/";
++  const isDashboard = pathname.startsWith("/dashboard");
++
+   return (
+     <div className="min-h-screen flex flex-col bg-background text-foreground">
+-      {headerSlot && <header className="sticky top-0 z-50">{headerSlot}</header>}
+-      
+-      <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
++      {!isDashboard && headerSlot && (
++        <header className="sticky top-0 z-50">{headerSlot}</header>
++      )}
++
++      <main
++        className={
++          isDashboard
++            ? "flex-1 w-full px-0 py-0"
++            : "flex-1 w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8"
++        }
++      >
+         {children}
+       </main>
+ 
+-      {footerSlot && <footer>{footerSlot}</footer>}
++      {!isDashboard && footerSlot && <footer>{footerSlot}</footer>}
+     </div>
+   );
+ }
+-- 
+2.52.0
+
