@@ -1,14 +1,14 @@
 "use client"
 import React from "react"
-import Header from "@/components/dashboard/Header"
+import DashboardTopBar from "@/components/dashboard/DashboardTopBar"
 import Sidebar, { MobileDrawer } from "@/components/dashboard/Sidebar"
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false)
 
   return (
-    <div className="min-h-screen">
-      <Header onToggleMenu={() => setOpen((v) => !v)} />
+    <div className="min-h-screen bg-[#05010d]">
+      <DashboardTopBar onToggleMenu={() => setOpen((v) => !v)} />
 
       <MobileDrawer isOpen={open} onClose={() => setOpen(false)} />
 
