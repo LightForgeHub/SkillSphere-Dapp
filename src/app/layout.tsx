@@ -62,7 +62,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head></head>
       <body
         suppressHydrationWarning
@@ -74,8 +74,8 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AppLayout 
-            headerSlot={<NavBar />} 
+          <AppLayout
+            headerSlot={<NavBar />}
             footerSlot={<Footer />}
           >
             {children}
