@@ -1,8 +1,18 @@
+import SupportTable from "@/components/dashboard/SupportTable"
+
 export default function SupportPage() {
   return (
-    <div>
-      <h2 className="text-2xl font-semibold">Support</h2>
-      <p className="mt-4 text-slate-600">Contact support or view help articles here.</p>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-semibold text-white mb-2">
+          Blockchain Integration Help (Understanding on-chain payments & certifications)
+        </h2>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-300">Action History Table</h3>
+        <SupportTable />
+      </div>
     </div>
   )
 }
