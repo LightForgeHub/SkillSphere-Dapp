@@ -1,10 +1,11 @@
 "use client"
-import React from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 
 export default function QuickActions() {
+  const router = useRouter()
   const actions = [
-    { label: "Create Course", onClick: () => console.log("Create Course clicked") },
+    { label: "Create Course", onClick: () => router.push("/dashboard/courses/create") },
     { label: "Viewing Earnings", onClick: () => console.log("Viewing Earnings clicked") },
     { label: "Student Feedback", onClick: () => console.log("Student Feedback clicked") },
   ]

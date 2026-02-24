@@ -6,8 +6,10 @@ import Logo from "@/components/ui/Logo"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/Avatar"
+import { useRouter } from "next/navigation"
 
 export default function DashboardTopBar({ onToggleMenu }: { onToggleMenu?: () => void }) {
+  const router = useRouter()
   return (
     <header className="w-full bg-[#05010d] border-b border-white/5 px-4 md:px-8 py-3 flex items-center justify-between sticky top-0 z-50">
       {/* Left: Hamburger, Logo and Breadcrumbs */}
@@ -51,7 +53,10 @@ export default function DashboardTopBar({ onToggleMenu }: { onToggleMenu?: () =>
         </div>
 
         {/* Create Courses Button */}
-        <Button className="hidden sm:flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white h-10 px-4 rounded-xl text-sm font-medium transition-all">
+        <Button 
+          onClick={() => router.push("/dashboard/courses/create")}
+          className="hidden sm:flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white h-10 px-4 rounded-xl text-sm font-medium transition-all"
+        >
           <img src="/icons/paint-brush.svg" alt="Create" className="w-5 h-5 invert transition-all" />
           <span>Create Courses</span>
         </Button>
