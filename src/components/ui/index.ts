@@ -32,3 +32,6 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuRadioGroup,
 } from "./DropdownMenu";
+
+export { FileUpload } from "./FileUpload";
+export * from "./Select";
