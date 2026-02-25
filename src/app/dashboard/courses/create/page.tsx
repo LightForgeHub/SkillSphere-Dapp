@@ -38,6 +38,8 @@ export default function CreateCoursePage() {
 
   const inputClass = "bg-[#1A1520] border-white/5 text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
 
+  const sectionInputClass = "bg-[#110D18] border border-white/[0.06] text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
+
   return (
     <div className="min-h-screen bg-[#05010d] text-white/90 p-4 md:p-5 space-y-8 max-w-7xl mx-auto">
 
@@ -148,26 +150,26 @@ export default function CreateCoursePage() {
       {/* Sections Area */}
       <div className="mt-16 space-y-12">
         {sections.map((section, idx) => (
-          <div key={section.id} className="bg-[#0D0B14] rounded-2xl p-8 border border-white/5 space-y-8">
-            <h4 className="text-white/60 text-sm font-medium">Section {idx + 1}</h4>
+          <div key={section.id} className="bg-[#0C0A12] rounded-2xl p-6 md:p-8 border border-white/[0.04] space-y-8">
+            <h4 className="text-white/50 text-sm font-medium tracking-wide">Section {idx + 1}</h4>
             
             <div className="flex flex-col md:flex-row gap-8">
               <FileUpload 
                 variant="video" 
                 label="Add Video" 
                 onFileSelect={(file) => console.log(`Video for section ${section.id}:`, file)} 
-                className="shrink-0 aspect-[1.3/1] w-full md:w-[240px] h-[180px]"
+                className="shrink-0 w-full md:w-[200px] h-[150px] !bg-[#0F1A15] !border-[#1a3a28]/60"
               />
 
               <div className="flex-1 space-y-6">
                 <div>
                   <label style={labelStyle}>Lecture title*</label>
-                  <Input placeholder="Enter lecture title" className={inputClass.replace('#1A1520', '#0D0B14').replace('border-white/5', 'border-white/[0.03]')} />
+                  <Input placeholder="Enter lecture title" className={sectionInputClass} />
                 </div>
                 <div>
                   <label style={labelStyle}>Duration*</label>
                   <div className="w-full md:w-[200px]">
-                    <Input placeholder="1hrs" className={inputClass.replace('#1A1520', '#0D0B14').replace('border-white/5', 'border-white/[0.03]')} />
+                    <Input placeholder="1hrs" className={sectionInputClass} />
                   </div>
                 </div>
               </div>
@@ -178,7 +180,7 @@ export default function CreateCoursePage() {
                 <label style={labelStyle}>Note*</label>
                 <textarea 
                   placeholder="Note description"
-                  className="w-full bg-[#0D0B14] border border-white/[0.03] rounded-xl p-4 min-h-[180px] text-white placeholder:text-white/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all"
+                  className="w-full bg-[#110D18] border border-white/[0.06] rounded-xl p-4 min-h-[150px] text-white placeholder:text-white/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all"
                 />
               </div>
 
@@ -186,22 +188,22 @@ export default function CreateCoursePage() {
                 <div>
                   <label style={labelStyle}>Quiz</label>
                   <div className="space-y-4">
-                    <Input placeholder="Enter title" className={inputClass.replace('#1A1520', '#0D0B14').replace('border-white/5', 'border-white/[0.03]')} />
+                    <Input placeholder="Enter title" className={sectionInputClass} />
                     <textarea 
                       placeholder="Quiz description"
-                      className="w-full bg-[#0D0B14] border border-white/[0.03] rounded-xl p-4 min-h-[120px] text-white placeholder:text-white/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all"
+                      className="w-full bg-[#110D18] border border-white/[0.06] rounded-xl p-4 min-h-[100px] text-white placeholder:text-white/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
                   <label style={labelStyle}>Exercise</label>
-                  <Input placeholder="Enter exercise details" className={inputClass.replace('#1A1520', '#0D0B14').replace('border-white/5', 'border-white/[0.03]')} />
+                  <Input placeholder="Enter exercise details" className={sectionInputClass} />
                 </div>
 
                 <div>
                   <label style={labelStyle}>Assignment</label>
-                  <Input placeholder="Enter assignment details" className={inputClass.replace('#1A1520', '#0D0B14').replace('border-white/5', 'border-white/[0.03]')} />
+                  <Input placeholder="Enter assignment details" className={sectionInputClass} />
                 </div>
               </div>
             </div>
