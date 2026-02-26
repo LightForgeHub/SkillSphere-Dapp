@@ -45,15 +45,9 @@ export function CourseCard({
               <h3 className="text-2xl font-semibold text-white leading-tight">
                 {title}
               </h3>
-              <StatusBadge 
-                status={status} 
-                className={cn(
-                  "px-4 py-1.5 text-xs font-medium rounded-full border-none",
-                  status === "Published" ? "bg-[#2D2E2D] text-[#90A1B9]" : "bg-[#2D2E2D] text-[#90A1B9]"
-                )} 
-              />
+              <StatusBadge status={status} />
             </div>
-            
+
             <p className="text-[#45818e] text-base font-normal">
               Video/Note guides available
             </p>
