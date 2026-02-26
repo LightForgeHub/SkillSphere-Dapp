@@ -19,6 +19,8 @@ const badgeVariants = cva(
         success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20",
         warning: "border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20",
         info: "border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20",
+        published: "border-green-500/30 bg-green-500/15 text-green-400 hover:bg-green-500/25",
+        draft: "border-zinc-500/30 bg-zinc-500/15 text-zinc-400 hover:bg-zinc-500/25",
       },
     },
     defaultVariants: {

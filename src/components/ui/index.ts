@@ -11,6 +11,8 @@ export {
 } from "./Card";
 
 export { Badge } from "./Badge";
+export { StatusBadge } from "./StatusBadge";
+export type { StatusVariant, CourseStatus } from "./StatusBadge";
 export { Checkbox } from "./Checkbox";
 export { Separator } from "./Separator";
 export { Avatar, AvatarImage, AvatarFallback } from "./Avatar";
