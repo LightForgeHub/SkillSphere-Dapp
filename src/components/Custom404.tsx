@@ -2,163 +2,133 @@
 
 import React from "react";
 import Link from "next/link";
-import Head from "next/head";
-import Footer from "./home/layout/footer";
-import Navbar from "./home/layout/navbar";
+import { Home, Search, ArrowLeft } from "lucide-react";
 
 export default function Custom404() {
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-r from-green-50 to-teal-50 w-full overflow-x-hidden">
-      <Head>
-        <title>404 - Knowledge Gap Detected</title>
-        <meta name="description" content="Page not found" />
-      </Head>
+    <div className="min-h-screen bg-[#0B0113] flex items-center justify-center px-4 relative overflow-hidden">
+      {/* Background effects matching SkillSphere theme */}
+      <div 
+        className="absolute inset-0 opacity-20"
+        style={{
+          backgroundImage: `url(/effect.png), linear-gradient(213.91deg, rgba(23, 22, 22, 0) 61.67%, rgba(44, 9, 74, 0.71) 116.1%), linear-gradient(144.95deg, rgba(19, 19, 19, 0) 50.66%, rgba(142, 56, 217, 0.15) 84.18%)`
+        }}
+      />
+      
+      {/* Animated background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#0B0113] via-purple-900/20 to-[#0B0113] animate-pulse" />
+      
+      {/* Main content */}
+      <div className="relative z-10 text-center max-w-2xl mx-auto">
+        {/* Floating animation container */}
+        <div className="animate-fade-in-up">
+          {/* 404 Number with gradient effect */}
+          <div className="relative mb-8">
+            <h1 className="text-[150px] md:text-[200px] font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent leading-none">
+              404
+            </h1>
+            
+            {/* Glitch effect overlay */}
+            <div className="absolute inset-0 text-[150px] md:text-[200px] font-bold text-purple-500/20 leading-none animate-pulse">
+              404
+            </div>
+          </div>
 
-      {/* Navigation Bar */}
-      <Navbar />
+          {/* Error message */}
+          <h2 className="text-2xl md:text-3xl font-semibold text-white mb-4">
+            Oops! The page you're looking for doesn't exist.
+          </h2>
+          
+          <p className="text-gray-400 text-lg mb-8 max-w-md mx-auto">
+            It seems this skill has vanished into the digital void. Let's get you back to learning.
+          </p>
 
-      <main className="flex-grow flex flex-col items-center text-center px-4 py-6 md:py-12 relative overflow-hidden">
-        {/* Background grid pattern */}
-        <div className="absolute inset-0 opacity-10 pointer-events-none z-0">
-          <div className="grid grid-cols-12 h-full w-full">
-            {[...Array(144)].map((_, i) => (
-              <div key={i} className="border border-teal-200"></div>
-            ))}
+          {/* Animated icon */}
+          <div className="mb-8 flex justify-center">
+            <div className="relative">
+              <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-full flex items-center justify-center animate-bounce">
+                <Search className="w-10 h-10 text-white" />
+              </div>
+              
+              {/* Orbiting dots */}
+              <div className="absolute inset-0 animate-spin-slow">
+                <div className="absolute top-0 left-1/2 w-2 h-2 bg-purple-400 rounded-full -translate-x-1/2 -translate-y-1/2" />
+                <div className="absolute bottom-0 left-1/2 w-2 h-2 bg-cyan-400 rounded-full -translate-x-1/2 translate-y-1/2" />
+                <div className="absolute left-0 top-1/2 w-2 h-2 bg-pink-400 rounded-full -translate-y-1/2 -translate-x-1/2" />
+                <div className="absolute right-0 top-1/2 w-2 h-2 bg-yellow-400 rounded-full -translate-y-1/2 translate-x-1/2" />
+              </div>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Link
+              href="/dashboard"
+              className="px-8 py-3 bg-gradient-to-r from-purple-500 to-cyan-500 text-white font-semibold rounded-lg hover:from-purple-600 hover:to-cyan-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-purple-500/25 flex items-center gap-2"
+            >
+              <Home className="w-5 h-5" />
+              Go Back Home
+            </Link>
+            
+            <Link
+              href="/explore-experts"
+              className="px-8 py-3 bg-transparent border border-gray-600 text-gray-300 font-semibold rounded-lg hover:bg-gray-800/50 hover:border-gray-500 hover:text-white transition-all duration-300 flex items-center gap-2"
+            >
+              <Search className="w-5 h-5" />
+              Explore Experts
+            </Link>
+          </div>
+
+          {/* Help text */}
+          <div className="mt-8 text-gray-500 text-sm">
+            <p>If you believe this is an error, please contact our support team.</p>
           </div>
         </div>
 
-        {/* Error code */}
-        <h1 className="text-6xl md:text-8xl font-bold text-teal-600 mt-6 md:mt-8 z-10">
-          404
-        </h1>
-        <h2 className="text-xl md:text-2xl font-semibold text-gray-800 mt-2 mb-4 z-10">
-          Knowledge Gap Detected
-        </h2>
-        <p className="text-sm md:text-base text-gray-600 max-w-lg mb-6 z-10">
-          Oops! This page seems to have emerged <b>404</b> in search of
-          expertise. Even the most knowledgeable platforms have their blind
-          spots.
-        </p>
+        {/* Decorative elements */}
+        <div className="absolute top-10 left-10 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-10 right-10 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-1/2 left-10 w-24 h-24 bg-pink-500/10 rounded-full blur-3xl animate-pulse delay-500" />
+      </div>
 
-        {/* SVG Network Visualization */}
-        <div
-          className="relative w-56 md:w-64 h-56 md:h-64 mb-6 z-10"
-          aria-hidden="true"
-        >
-          <svg viewBox="0 0 200 200" className="w-full h-full">
-            <g stroke="rgba(20, 184, 166, 0.8)" fill="none" strokeWidth="1">
-              <circle
-                cx="100"
-                cy="100"
-                r="50"
-                strokeDasharray="4 2"
-                className="opacity-40"
-              />
-              <circle
-                cx="100"
-                cy="100"
-                r="70"
-                strokeDasharray="4 2"
-                className="opacity-30"
-              />
-              {[
-                ["70", "80"],
-                ["120", "60"],
-                ["150", "100"],
-                ["130", "140"],
-                ["80", "150"],
-                ["50", "120"],
-              ].map(([x, y], i) => (
-                <circle
-                  key={i}
-                  cx={x}
-                  cy={y}
-                  r="4"
-                  fill="rgba(20, 184, 166, 0.8)"
-                />
-              ))}
-              <circle cx="100" cy="100" r="6" fill="rgba(239, 68, 68, 0.8)" />
-              {[
-                [70, 80, 120, 60],
-                [120, 60, 150, 100],
-                [150, 100, 130, 140],
-                [130, 140, 80, 150],
-                [80, 150, 50, 120],
-                [50, 120, 70, 80],
-              ].map(([x1, y1, x2, y2], i) => (
-                <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />
-              ))}
-              {[
-                ["70", "80"],
-                ["120", "60"],
-                ["150", "100"],
-                ["130", "140"],
-                ["80", "150"],
-                ["50", "120"],
-              ].map(([x, y], i) => (
-                <line
-                  key={`c${i}`}
-                  x1="100"
-                  y1="100"
-                  x2={x}
-                  y2={y}
-                  className="opacity-50"
-                />
-              ))}
-            </g>
-          </svg>
-        </div>
+      {/* CSS for custom animations */}
+      <style jsx>{`
+        @keyframes fade-in-up {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
 
-        {/* Technical info */}
-        <div className="bg-teal-100 border border-teal-200 rounded-lg p-4 max-w-lg text-sm text-gray-600 mb-8 z-10">
-          <p>
-            The term "404 error" originated in the early days of the internet.
-            It's the HTTP status code that indicates a server couldn't find the
-            requested page.
-            <b> 404 is the code that returns even the experts</b> when you ask a
-            question that stumps even the experts.
-          </p>
-        </div>
+        @keyframes spin-slow {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
 
-        {/* Action button */}
-        <div className="z-10">
-          <Link
-            href="/"
-            className="px-6 py-2 bg-teal-500 text-white text-sm rounded-md hover:bg-teal-600 transition-colors"
-          >
-            Go to Home
-          </Link>
-        </div>
+        .animate-fade-in-up {
+          animation: fade-in-up 0.8s ease-out;
+        }
 
-        {/* Decorative corner elements */}
-        <div className="absolute bottom-0 left-0 w-24 h-24 opacity-20">
-          <svg
-            viewBox="0 0 100 100"
-            fill="none"
-            stroke="rgba(20, 184, 166, 0.8)"
-            strokeWidth="2"
-          >
-            <rect x="0" y="70" width="30" height="30" />
-            <rect x="20" y="50" width="30" height="30" />
-            <rect x="40" y="70" width="30" height="30" />
-          </svg>
-        </div>
-        <div className="absolute bottom-0 right-0 w-24 h-24 opacity-20">
-          <svg
-            viewBox="0 0 100 100"
-            fill="none"
-            stroke="rgba(75, 85, 99, 0.8)"
-            strokeWidth="2"
-          >
-            <rect x="30" y="70" width="30" height="30" />
-            <rect x="50" y="50" width="30" height="30" />
-            <rect x="70" y="70" width="30" height="30" />
-          </svg>
-        </div>
-      </main>
+        .animate-spin-slow {
+          animation: spin-slow 8s linear infinite;
+        }
 
-      {/* Footer */}
-      <Footer />
+        .delay-500 {
+          animation-delay: 500ms;
+        }
+
+        .delay-1000 {
+          animation-delay: 1000ms;
+        }
+      `}</style>
     </div>
   );
 }
