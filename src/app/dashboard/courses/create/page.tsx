@@ -1,43 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, ChevronDown, Clock, Search, X } from "lucide-react";
-import { 
-  Button, 
-  Input, 
-  Card, 
-  CardContent, 
-  FileUpload,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui";
+import { Plus } from "lucide-react";
+import { Button, Input, FileUpload } from "@/components/ui";
+import CoursePricingPanel from "@/components/dashboard/CoursePricingPanel";
 
 export default function CreateCoursePage() {
   const [sections, setSections] = useState([{ id: 1 }]);
-  const [skills, setSkills] = useState(["Front-End"]);
 
-  const addSection = () => {
-    setSections([...sections, { id: sections.length + 1 }]);
-  };
+  const addSection = () => setSections([...sections, { id: sections.length + 1 }]);
 
-  const removeSkill = (skillToRemove: string) => {
-    setSkills(skills.filter(skill => skill !== skillToRemove));
-  };
-
-  const labelStyle = {
-    color: "#FCFCFC",
-    fontWeight: 400,
-    fontSize: "14px",
-    lineHeight: "24px",
-    marginBottom: "8px",
-    display: "block",
-  };
-
+  const label = "block text-[#FCFCFC] text-sm font-normal leading-6 mb-2";
   const inputClass = "bg-[#1A1520] border-white/5 text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
-
   const sectionInputClass = "bg-[#110D18] border border-white/[0.06] text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
 
   return (
@@ -54,96 +28,23 @@ export default function CreateCoursePage() {
 
           <div className="space-y-6">
             <div>
-              <label style={labelStyle}>Course title*</label>
+              <label className={label}>Course title*</label>
               <Input placeholder="Design made simple" className={inputClass} />
             </div>
 
             <div>
-              <label style={labelStyle}>Course description</label>
+              <label className={label}>Course description</label>
               <textarea 
                 placeholder="Write your cover letter"
-                className="w-full bg-[#1A1520] border border-white/5 rounded-xl p-4 min-h-[300px] text-white placeholder:text-white/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all"
+                className="w-full bg-[#1A1520] border border-white/5 rounded-xl p-4 min-h-75 text-white placeholder:text-white/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all"
               />
             </div>
           </div>
         </div>
 
-        {/* Right Column: Details and Certification */}
-        <div className="space-y-8">
-                {/* Top Header Actions */}
-      <div className="flex flex-col justify-end gap-4 mb-8">
-        <Button variant="glow" className="bg-[#9B59FF] hover:bg-[#8A48EB] text-white border-none h-12 px-8 uppercase font-bold text-xs tracking-wider">
-          Publish for $50
-        </Button>
-        <Button variant="secondary" className="bg-[#110719] border-white/5 hover:bg-white/10 text-white h-12 px-8 uppercase font-bold text-xs tracking-wider">
-          Add to Draft
-        </Button>
-      </div>
-          <div className="grid grid-cols-1  gap-6">
-            <div>
-              <label style={labelStyle}>Course amount*</label>
-              <Select defaultValue="24">
-                <SelectTrigger className={inputClass}>
-                  <SelectValue placeholder="$24" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="24">$24</SelectItem>
-                  <SelectItem value="49">$49</SelectItem>
-                  <SelectItem value="99">$99</SelectItem>
-                  <SelectItem value="free">Free</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label style={labelStyle}>Access*</label>
-              <Select defaultValue="paid">
-                <SelectTrigger className={inputClass}>
-                  <SelectValue placeholder="Paid Course" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="paid">Paid Course</SelectItem>
-                  <SelectItem value="free">Free Access</SelectItem>
-                  <SelectItem value="restricted">Restricted</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Skills you will gain</label>
-            <div className="flex flex-wrap gap-2 p-2 bg-[#05010d] border border-white/5 rounded-xl min-h-[48px] items-center">
-              {skills.map((skill) => (
-                <div key={skill} className="bg-[#1A1520] text-xs px-3 py-1.5 rounded-lg border border-white/10 text-white/60 flex items-center gap-2">
-                  {skill}
-                  <X className="w-3 h-3 cursor-pointer hover:text-white" onClick={() => removeSkill(skill)} />
-                </div>
-              ))}
-              <button className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-white/10 text-white/40 hover:text-white hover:bg-white/5 transition-colors">
-                Add
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div>
-              <label style={labelStyle}>Certification*</label>
-              <Select defaultValue="yes">
-                <SelectTrigger className={inputClass}>
-                  <SelectValue placeholder="Yes" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yes">Yes</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <FileUpload 
-              variant="compact" 
-              label="Add file" 
-              onFileSelect={(file) => console.log("Cert selected:", file)} 
-            />
-          </div>
+        {/* Right Column: Pricing & Metadata Panel */}
+        <div>
+          <CoursePricingPanel />
         </div>
       </div>
 
@@ -151,7 +52,7 @@ export default function CreateCoursePage() {
       <div className="mt-16 space-y-12">
         {sections.map((section, idx) => (
           <div key={section.id} className="bg-[#0C0A12] rounded-2xl p-6 md:p-8 border border-white/[0.04] space-y-8">
-            <h4 className="text-white/50 text-sm font-medium tracking-wide">Section {idx + 1}</h4>
+            <h4 className="text-white/40 text-xs font-semibold tracking-widest uppercase">Section {idx + 1}</h4>
             
             <div className="flex flex-col md:flex-row gap-8">
               <FileUpload 
@@ -163,11 +64,11 @@ export default function CreateCoursePage() {
 
               <div className="flex-1 space-y-6">
                 <div>
-                  <label style={labelStyle}>Lecture title*</label>
+                  <label className={label}>Lecture title*</label>
                   <Input placeholder="Enter lecture title" className={sectionInputClass} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Duration*</label>
+                  <label className={label}>Duration*</label>
                   <div className="w-full md:w-[200px]">
                     <Input placeholder="1hrs" className={sectionInputClass} />
                   </div>
@@ -177,7 +78,7 @@ export default function CreateCoursePage() {
 
             <div className="space-y-8">
               <div>
-                <label style={labelStyle}>Note*</label>
+                <label className={label}>Note*</label>
                 <textarea 
                   placeholder="Note description"
                   className="w-full bg-[#110D18] border border-white/[0.06] rounded-xl p-4 min-h-[150px] text-white placeholder:text-white/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all"
@@ -186,7 +87,7 @@ export default function CreateCoursePage() {
 
               <div className="space-y-6">
                 <div>
-                  <label style={labelStyle}>Quiz</label>
+                  <label className={label}>Quiz</label>
                   <div className="space-y-4">
                     <Input placeholder="Enter title" className={sectionInputClass} />
                     <textarea 
@@ -197,12 +98,12 @@ export default function CreateCoursePage() {
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Exercise</label>
+                  <label className={label}>Exercise</label>
                   <Input placeholder="Enter exercise details" className={sectionInputClass} />
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Assignment</label>
+                  <label className={label}>Assignment</label>
                   <Input placeholder="Enter assignment details" className={sectionInputClass} />
                 </div>
               </div>
