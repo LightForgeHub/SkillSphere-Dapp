@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { cn } from "@/components/ui/utils";
 import { Input } from "@/components/ui/Input";
 import { FileUpload } from "@/components/ui/FileUpload";
 
 const lbl = "block text-[#FCFCFC] text-sm font-normal leading-6 mb-2";
 const inputCls =
   "bg-[#110D18] border border-white/[0.06] text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
+const errorCls =
+  "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20";
 const textareaCls =
   "w-full bg-[#110D18] border border-white/[0.06] rounded-xl p-4 text-white placeholder:text-white/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all resize-none";
 
@@ -26,6 +29,15 @@ export default function CourseSection({ index, onRemove, canRemove }: CourseSect
   const [quizDesc, setQuizDesc] = useState("");
   const [exercise, setExercise] = useState("");
   const [assignment, setAssignment] = useState("");
+  const [touched, setTouched] = useState({ lectureTitle: false, duration: false });
+
+  const errors = {
+    lectureTitle: lectureTitle.trim() === "" ? "Lecture title is required." : "",
+    duration: duration.trim() === "" ? "Duration is required." : "",
+  };
+
+  const touch = (field: "lectureTitle" | "duration") =>
+    setTouched((prev) => ({ ...prev, [field]: true }));
 
   return (
     <div className="bg-[#0C0A12] rounded-2xl border border-white/[0.04] overflow-hidden">
@@ -78,8 +90,12 @@ export default function CourseSection({ index, onRemove, canRemove }: CourseSect
                   placeholder="Enter lecture title"
                   value={lectureTitle}
                   onChange={(e) => setLectureTitle(e.target.value)}
-                  className={inputCls}
+                  onBlur={() => touch("lectureTitle")}
+                  className={cn(inputCls, touched.lectureTitle && errors.lectureTitle && errorCls)}
                 />
+                <p className={cn("mt-1.5 text-xs min-h-[18px]", touched.lectureTitle && errors.lectureTitle ? "text-red-400" : "text-transparent")}>
+                  {errors.lectureTitle || ""}
+                </p>
               </div>
               <div>
                 <label className={lbl}>Duration*</label>
@@ -88,8 +104,12 @@ export default function CourseSection({ index, onRemove, canRemove }: CourseSect
                     placeholder="1hrs"
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
-                    className={inputCls}
+                    onBlur={() => touch("duration")}
+                    className={cn(inputCls, touched.duration && errors.duration && errorCls)}
                   />
+                  <p className={cn("mt-1.5 text-xs min-h-[18px]", touched.duration && errors.duration ? "text-red-400" : "text-transparent")}>
+                    {errors.duration || ""}
+                  </p>
                 </div>
               </div>
             </div>
