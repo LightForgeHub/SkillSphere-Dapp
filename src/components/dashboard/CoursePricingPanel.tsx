@@ -2,6 +2,7 @@
 
 import { useState, useRef, KeyboardEvent } from "react";
 import { X, Plus } from "lucide-react";
+import { cn } from "@/components/ui/utils";
 import { Button } from "@/components/ui/Button";
 import {
   Select,
@@ -83,13 +84,25 @@ function TagInput({
 interface CoursePricingPanelProps {
   courseAmount: string;
   onAmountChange: (value: string) => void;
+  access: string;
+  onAccessChange: (value: string) => void;
+  isPublishDisabled: boolean;
 }
 
-export default function CoursePricingPanel({ courseAmount, onAmountChange }: CoursePricingPanelProps) {
+export default function CoursePricingPanel({
+  courseAmount,
+  onAmountChange,
+  access,
+  onAccessChange,
+  isPublishDisabled,
+}: CoursePricingPanelProps) {
   const [skills, setSkills] = useState(["Front-End", "UI Design"]);
+  const [accessTouched, setAccessTouched] = useState(false);
 
   const publishLabel =
     courseAmount === "free" ? "Publish for Free" : `Publish for $${courseAmount}`;
+
+  const accessError = accessTouched && !access ? "Access type is required." : "";
 
   return (
     <div className="flex flex-col gap-6 bg-[#0C0A12] border border-white/[0.06] rounded-2xl p-6">
@@ -98,7 +111,8 @@ export default function CoursePricingPanel({ courseAmount, onAmountChange }: Cou
       <div className="flex flex-col gap-3">
         <Button
           variant="glow"
-          className="w-full bg-[#9B59FF] hover:bg-[#8A48EB] text-white border-none h-12 uppercase font-bold text-xs tracking-wider"
+          disabled={isPublishDisabled}
+          className="w-full bg-[#9B59FF] hover:bg-[#8A48EB] text-white border-none h-12 uppercase font-bold text-xs tracking-wider disabled:opacity-40 disabled:cursor-not-allowed disabled:brightness-75"
         >
           {publishLabel}
         </Button>
@@ -131,9 +145,15 @@ export default function CoursePricingPanel({ courseAmount, onAmountChange }: Cou
       {/* Access */}
       <div>
         <label className={label}>Access*</label>
-        <Select defaultValue="paid">
-          <SelectTrigger>
-            <SelectValue placeholder="Paid Course" />
+        <Select
+          value={access}
+          onValueChange={(v) => { onAccessChange(v); setAccessTouched(true); }}
+        >
+          <SelectTrigger
+            onBlur={() => setAccessTouched(true)}
+            className={accessError ? "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20" : ""}
+          >
+            <SelectValue placeholder="Select access type" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="paid">Paid Course</SelectItem>
@@ -141,6 +161,9 @@ export default function CoursePricingPanel({ courseAmount, onAmountChange }: Cou
             <SelectItem value="restricted">Restricted</SelectItem>
           </SelectContent>
         </Select>
+        <p className={cn("mt-1.5 text-xs min-h-[18px]", accessError ? "text-red-400" : "text-transparent")}>
+          {accessError || ""}
+        </p>
       </div>
 
       {/* Skills Tag Input */}
