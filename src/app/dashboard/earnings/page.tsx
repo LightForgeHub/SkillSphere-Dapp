@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Percent } from "lucide-react"
 import { cn } from "@/lib/utils"
+import EarningsTable from "@/components/dashboard/EarningsTable"
 
 const EARNINGS_DATA = {
   "All-Time": "$1,500",
@@ -49,11 +50,9 @@ export default function EarningsPage() {
         </div>
       </div>
 
+      {/* Payment History Table */}
       <div className="mt-12">
-        <p className="text-slate-500 text-sm">Recent History</p>
-        <div className="mt-4 border-t border-[#1C1C1E] pt-4">
-          <p className="text-slate-600">No recent transactions found.</p>
-        </div>
+        <EarningsTable />
       </div>
     </div>
   )
