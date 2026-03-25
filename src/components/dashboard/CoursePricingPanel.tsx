@@ -80,11 +80,19 @@ function TagInput({
   );
 }
 
-export default function CoursePricingPanel() {
+interface CoursePricingPanelProps {
+  courseAmount: string;
+  onAmountChange: (value: string) => void;
+}
+
+export default function CoursePricingPanel({ courseAmount, onAmountChange }: CoursePricingPanelProps) {
   const [skills, setSkills] = useState(["Front-End", "UI Design"]);
 
+  const publishLabel =
+    courseAmount === "free" ? "Publish for Free" : `Publish for $${courseAmount}`;
+
   return (
-    <div className="flex flex-col gap-6 bg-[#0C0A12] border border-white/6 rounded-2xl p-6">
+    <div className="flex flex-col gap-6 bg-[#0C0A12] border border-white/[0.06] rounded-2xl p-6">
 
       {/* Action Buttons */}
       <div className="flex flex-col gap-3">
@@ -92,7 +100,7 @@ export default function CoursePricingPanel() {
           variant="glow"
           className="w-full bg-[#9B59FF] hover:bg-[#8A48EB] text-white border-none h-12 uppercase font-bold text-xs tracking-wider"
         >
-          Publish for $50
+          {publishLabel}
         </Button>
         <Button
           variant="secondary"
@@ -107,9 +115,9 @@ export default function CoursePricingPanel() {
       {/* Course Amount */}
       <div>
         <label className={label}>Course amount*</label>
-        <Select defaultValue="24">
+        <Select value={courseAmount} onValueChange={onAmountChange}>
           <SelectTrigger>
-            <SelectValue placeholder="$24" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="free">Free</SelectItem>
