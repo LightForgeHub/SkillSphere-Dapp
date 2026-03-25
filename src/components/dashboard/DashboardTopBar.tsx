@@ -6,10 +6,14 @@ import Logo from "@/components/ui/Logo"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/Avatar"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 
 export default function DashboardTopBar({ onToggleMenu }: { onToggleMenu?: () => void }) {
   const router = useRouter()
+  const pathname = usePathname()
+  
+  const isProfilePage = pathname === "/dashboard/profile"
+
   return (
     <header className="w-full bg-[#05010d] border-b border-white/5 px-4 md:px-8 py-3 flex items-center justify-between sticky top-0 z-50">
       {/* Left: Hamburger, Logo and Breadcrumbs */}
@@ -30,7 +34,7 @@ export default function DashboardTopBar({ onToggleMenu }: { onToggleMenu?: () =>
         <nav aria-label="Breadcrumb" className="hidden xl:flex items-center text-sm font-medium">
           <span className="text-white">Home</span>
           <span className="mx-3 text-white/40">|</span>
-          <span className="text-white/60">Glance</span>
+          <span className="text-white/60">{isProfilePage ? "Profile" : "Glance"}</span>
         </nav>
       </div>
 

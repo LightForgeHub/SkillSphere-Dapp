@@ -1,82 +1,63 @@
-"use client";
-
-import React from "react";
-import Image, { StaticImageData } from "next/image";
-import { Edit2 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { StatusBadge } from "@/components/ui/StatusBadge";
-import { cn } from "@/components/ui/utils";
+import React from "react"
+import { cn } from "@/lib/utils"
 
 interface CourseCardProps {
-  title: string;
-  thumbnail: string | StaticImageData;
-  enrollmentCount: number;
-  rating: string | number;
-  status: "Published" | "Draft";
-  className?: string;
+  thumbnail: string
+  title: string
+  description: string
+  enrollment: string
+  rating: string
+  status: "Published" | "Draft"
 }
 
-export function CourseCard({
-  title,
+export default function CourseCard({
   thumbnail,
-  enrollmentCount,
+  title,
+  description,
+  enrollment,
   rating,
   status,
-  className,
 }: CourseCardProps) {
   return (
-    <Card className={cn("bg-[#110C1D] border-white/5 overflow-hidden transition-all hover:border-white/10", className)}>
-      <div className="flex flex-col md:flex-row p-5 gap-8">
-        {/* Thumbnail Section */}
-        <div className="relative w-full md:w-[320px] h-[180px] rounded-xl overflow-hidden flex-shrink-0">
-          <Image
-            src={thumbnail}
-            alt={title}
-            fill
-            className="object-cover"
-          />
+    <div className="bg-[#110719] border border-white/5 rounded-2xl overflow-hidden flex flex-col md:flex-row p-4 gap-6 group hover:bg-white/[0.02] transition-all duration-300">
+      {/* Thumbnail */}
+      <div className="relative w-full md:w-64 h-48 md:h-auto shrink-0 rounded-xl overflow-hidden">
+        <img
+          src={thumbnail}
+          alt={title}
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 flex flex-col justify-between py-1">
+        <div>
+          <div className="flex items-start justify-between mb-2">
+            <h3 className="text-xl font-bold text-white leading-tight">{title}</h3>
+            <span className={cn(
+              "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+              status === "Published" ? "bg-white/10 text-white/60" : "bg-yellow-500/10 text-yellow-500/80"
+            )}>
+              {status}
+            </span>
+          </div>
+          <p className="text-[#4CC9F0] text-sm mb-6">{description}</p>
+          
+          <div className="flex items-center gap-12">
+            <div className="flex flex-col">
+              <span className="text-xs text-white/40 mb-0.5 font-medium">Enrollment</span>
+              <span className="text-sm text-white font-semibold">{enrollment}</span>
+            </div>
+          </div>
         </div>
 
-        {/* Content Section */}
-        <div className="flex-grow flex flex-col justify-between py-1">
-          <div className="space-y-4">
-            <div className="flex justify-between items-start gap-4">
-              <h3 className="text-2xl font-semibold text-white leading-tight">
-                {title}
-              </h3>
-              <StatusBadge status={status} />
+        <div className="flex items-center justify-end mt-4">
+            <div className="flex flex-col items-end">
+              <span className="text-xs text-white/40 mb-0.5 font-medium">Rating</span>
+              <span className="text-sm text-white font-bold">{rating}/5</span>
             </div>
-
-            <p className="text-[#45818e] text-base font-normal">
-              Video/Note guides available
-            </p>
-
-            <div className="flex flex-wrap items-center gap-x-16 gap-y-4 pt-2">
-              <div className="flex items-center gap-2 text-base">
-                <span className="text-[#52525B]">Enrolment:</span>
-                <span className="text-[#E4E4E7] font-medium">{enrollmentCount} Learners</span>
-              </div>
-              <div className="flex items-center gap-2 text-base ml-auto md:ml-0">
-                <span className="text-[#52525B]">Rating:</span>
-                <span className="text-[#E4E4E7] font-medium">{rating}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 md:mt-0">
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-transparent border-white/10 hover:bg-white/5 text-[#E4E4E7] gap-3 px-5 h-11 rounded-xl text-sm font-medium"
-            >
-              <Edit2 className="size-4" />
-              Edit Course
-            </Button>
-          </div>
         </div>
       </div>
-    </Card>
-
-  );
+    </div>
+  )
 }
