@@ -3,6 +3,7 @@
 import { useState } from "react"
 import NotificationTabs, { NotificationTabType } from "@/components/dashboard/NotificationTabs"
 import NotificationList from "@/components/dashboard/NotificationList"
+import QuestionNotificationList from "@/components/dashboard/QuestionNotificationList"
 
 const mockLearnersData = [
   {
@@ -19,11 +20,25 @@ const mockLearnersData = [
   },
 ]
 
+const mockQuestionsData = [
+  {
+    id: "q1",
+    timestamp: "15 mins ago",
+    category: "Design",
+    question: "What videos and materials can you recommend for a beginner started web design",
+    avatarUrl: "/mia.svg", 
+  },
+  {
+    id: "q2",
+    timestamp: "2 hrs ago",
+    category: "Development",
+    question: "How do I ensure my smart contract is secure against reentrancy attacks?",
+    // Without avatarUrl to test fallback
+  }
+]
+
 export default function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<NotificationTabType>("New Learner")
-
-  // Mock handling: Only New Learner has data for now
-  const notifications = activeTab === "New Learner" ? mockLearnersData : []
 
   return (
     <div className="p-2 md:p-6 w-full max-w-5xl space-y-8">
@@ -34,7 +49,17 @@ export default function NotificationsPage() {
       />
 
       <div className="mt-8">
-        <NotificationList notifications={notifications} />
+        {activeTab === "New Learner" && (
+          <NotificationList notifications={mockLearnersData} />
+        )}
+        {activeTab === "Questions" && (
+          <QuestionNotificationList questions={mockQuestionsData} />
+        )}
+        {activeTab !== "New Learner" && activeTab !== "Questions" && (
+          <div className="py-8 text-center text-gray-400">
+            No notifications for {activeTab}.
+          </div>
+        )}
       </div>
     </div>
   )
