@@ -4,6 +4,7 @@ import { useState } from "react"
 import NotificationTabs, { NotificationTabType } from "@/components/dashboard/NotificationTabs"
 import NotificationList from "@/components/dashboard/NotificationList"
 import QuestionNotificationList from "@/components/dashboard/QuestionNotificationList"
+import PaymentNotificationList from "@/components/dashboard/PaymentNotificationList"
 
 const mockLearnersData = [
   {
@@ -37,6 +38,21 @@ const mockQuestionsData = [
   }
 ]
 
+const mockPaymentsData = [
+  {
+    id: "p1",
+    amount: "$15",
+    source: "0x411ad3c6ab...",
+    timestamp: "15 mins ago"
+  },
+  {
+    id: "p2",
+    amount: "$150",
+    source: "0x411ad3c6ab...",
+    timestamp: "1 week ago"
+  }
+]
+
 export default function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<NotificationTabType>("New Learner")
 
@@ -55,7 +71,10 @@ export default function NotificationsPage() {
         {activeTab === "Questions" && (
           <QuestionNotificationList questions={mockQuestionsData} />
         )}
-        {activeTab !== "New Learner" && activeTab !== "Questions" && (
+        {activeTab === "Payment" && (
+          <PaymentNotificationList payments={mockPaymentsData} />
+        )}
+        {activeTab === "Announcements" && (
           <div className="py-8 text-center text-gray-400">
             No notifications for {activeTab}.
           </div>
