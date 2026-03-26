@@ -1,10 +1,9 @@
 "use client"
 
 import React from "react"
-import { Edit2, Copy, ExternalLink } from "lucide-react"
 import CourseCard from "@/components/dashboard/CourseCard"
 import ReviewItem from "@/components/dashboard/ReviewItem"
-import { Button } from "@/components/ui/Button"
+import ProfileHeader from "@/components/dashboard/ProfileHeader"
 
 const COURSES = [
   {
@@ -30,45 +29,18 @@ export default function ProfilePage() {
   return (
     <div className="max-w-5xl mx-auto py-8 px-4">
       {/* Profile Header */}
-      <div className="flex flex-col gap-8 mb-12">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-6">
-            <div className="relative">
-              <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden  bg-gradient-to-tr from-purple-600 to-blue-400">
-                <img
-                  src="/newProfile.svg"
-                  alt="Flora Osatuyi"
-                  className="w-full h-full object-cover rounded-full"
-                />
-              </div>
-            </div>
+      <ProfileHeader
+        name="Miss Flora Osatuyi"
+        role="Product Designer"
+        avatarUrl="/newProfile.svg"
+        walletAddress="0x411ad3c6d3c6d3c6d3c6d3c6d3c6d3c6d3c6d3c6"
+      />
 
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Miss Flora Osatuyi</h1>
-                <span className="text-white/20 hidden md:block">|</span>
-                <span className="text-sm md:text-base text-white/60 font-medium">Product Designer</span>
-              </div>
-              <div className="flex items-center gap-3 mt-2">
-                <Button variant="outline" size="sm" className="h-9 px-4 rounded-xl border-white/10 hover:bg-white/5 gap-2 text-white/80">
-                  <Edit2 className="w-4 h-4" />
-                  Edit
-                </Button>
-                <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-3 py-1.5 rounded-xl cursor-pointer hover:bg-white/10 transition-colors">
-                  <span className="text-xs text-white/40 font-mono">0x411ad3c6...</span>
-                  <Copy className="w-3 h-3 text-white/40" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bio Box */}
-        <div className="bg-[#1C1129]/50 border border-white/5 rounded-2xl p-6 md:p-8 backdrop-blur-sm">
-          <p className="text-white/70 text-sm md:text-base leading-relaxed">
-            Flora is a talented product designer with 3+ years of experience creating functional, visually polished (FPV) designs. She also tutors aspiring designers, simplifying UI and product design concepts through hands-on learning. Passionate about blending creativity and usability, Flora helps her students and projects thrive in today's fast-paced digital world.
-          </p>
-        </div>
+      {/* Bio Box */}
+      <div className="bg-[#1C1129]/50 border border-white/5 rounded-2xl p-6 md:p-8 backdrop-blur-sm mb-12">
+        <p className="text-white/70 text-sm md:text-base leading-relaxed">
+          Flora is a talented product designer with 3+ years of experience creating functional, visually polished (FPV) designs. She also tutors aspiring designers, simplifying UI and product design concepts through hands-on learning. Passionate about blending creativity and usability, Flora helps her students and projects thrive in today&apos;s fast-paced digital world.
+        </p>
       </div>
 
       {/* Courses Offered */}
