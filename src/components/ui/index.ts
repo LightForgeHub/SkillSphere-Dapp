@@ -1,5 +1,7 @@
 export { Button } from "./Button";
 export { Input } from "./Input";
+export { CopyButton } from "./CopyButton";
+export { default as Toast } from "./Toast";
 
 export {
   Card,

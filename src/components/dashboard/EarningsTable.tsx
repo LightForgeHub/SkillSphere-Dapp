@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
 import { Copy, Check } from "lucide-react"
 import { cn } from "@/components/ui/utils"
+import CopyButton from "@/components/ui/CopyButton"
 
 export interface EarningTransaction {
   sn: number
@@ -58,25 +58,6 @@ export default function EarningsTable({
   transactions = mockTransactions,
   className,
 }: EarningsTableProps) {
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-
-  const handleCopy = async (id: string) => {
-    try {
-      await navigator.clipboard.writeText(id)
-      setCopiedId(id)
-      setTimeout(() => setCopiedId(null), 1500)
-    } catch {
-      // Fallback for environments without clipboard API
-      const textarea = document.createElement("textarea")
-      textarea.value = id
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand("copy")
-      document.body.removeChild(textarea)
-      setCopiedId(id)
-      setTimeout(() => setCopiedId(null), 1500)
-    }
-  }
 
   return (
     <div className={cn("flex flex-col items-start gap-3 w-full", className)}>
@@ -100,17 +81,11 @@ export default function EarningsTable({
                 <span className="text-sm text-gray-400 font-mono truncate">
                   {truncateId(tx.transactionId)}
                 </span>
-                <button
-                  onClick={() => handleCopy(tx.transactionId)}
-                  className="flex-shrink-0 text-gray-400 hover:text-white transition-colors"
-                  aria-label={`Copy transaction ID ${tx.transactionId}`}
-                >
-                  {copiedId === tx.transactionId ? (
-                    <Check className="w-4 h-4 text-green-400" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </button>
+                <CopyButton
+                  text={tx.transactionId}
+                  displayText={truncateId(tx.transactionId)}
+                  ariaLabel={`Copy transaction ID ${tx.transactionId}`}
+                />
               </div>
             </div>
             <div className="flex items-center justify-between">
@@ -170,17 +145,11 @@ export default function EarningsTable({
                     <td className="py-4 px-4 whitespace-nowrap text-sm text-gray-400">
                       <div className="flex items-center gap-2">
                         <span className="font-mono">{truncateId(tx.transactionId)}</span>
-                        <button
-                          onClick={() => handleCopy(tx.transactionId)}
-                          className="text-gray-400 hover:text-white transition-colors"
-                          aria-label={`Copy transaction ID ${tx.transactionId}`}
-                        >
-                          {copiedId === tx.transactionId ? (
-                            <Check className="w-4 h-4 text-green-400" />
-                          ) : (
-                            <Copy className="w-4 h-4" />
-                          )}
-                        </button>
+                        <CopyButton
+                          text={tx.transactionId}
+                          displayText={truncateId(tx.transactionId)}
+                          ariaLabel={`Copy transaction ID ${tx.transactionId}`}
+                        />
                       </div>
                     </td>
                     <td className="py-4 px-4 whitespace-nowrap text-sm text-gray-400">
