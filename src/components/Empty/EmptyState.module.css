@@ -1,18 +1,8 @@
-:root {
+.wrapper {
 	--empty-text: #374151;
 	--empty-sub: #6b7280;
 	--empty-bg: transparent;
-}
 
-@media (prefers-color-scheme: dark) {
-	:root {
-		--empty-text: #e6edf3;
-		--empty-sub: #9aa6b2;
-		--empty-bg: transparent;
-	}
-}
-
-.wrapper {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -20,6 +10,14 @@
 	background: var(--empty-bg);
 	border-radius: 8px;
 	min-height: 140px;
+}
+
+@media (prefers-color-scheme: dark) {
+	.wrapper {
+		--empty-text: #e6edf3;
+		--empty-sub: #9aa6b2;
+		--empty-bg: transparent;
+	}
 }
 
 .inner {

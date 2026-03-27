@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CreateCourseCTA } from "@/components/dashboard/CreateCourseCTA";
-import { CourseCard } from "@/components/dashboard/CourseCard";
+import CourseCard from "@/components/dashboard/CourseCard";
 import image1 from "../../../../public/Image (1).png";
 import image2 from "../../../../public/Image (2).png"; 
 
@@ -10,49 +10,55 @@ const COURES_DATA = [
   {
     id: 1,
     title: "Become a Web3 Developer: A beginners approach",
-    thumbnail: image1,
-    enrollmentCount: 20,
-    rating: "4.5/5",
+    thumbnail: image1.src,
+    description: "Learn the fundamentals of blockchain development.",
+    enrollment: "20 Learners",
+    rating: "4.5",
     status: "Published" as const,
   },
   {
     id: 2,
     title: "Design made simple",
-    thumbnail: image2,
-    enrollmentCount:  15,
+    thumbnail: image2.src,
+    description: "A complete guide to modern interface design.",
+    enrollment: "15 Learners",
     rating: "N/A",
     status: "Draft" as const,
   },
   {
     id: 3,
     title: "Smart Contract Security",
-    thumbnail: image1,
-    enrollmentCount: 45,
-    rating: "4.8/5",
+    thumbnail: image1.src,
+    description: "Advanced techniques for auditing smart contracts.",
+    enrollment: "45 Learners",
+    rating: "4.8",
     status: "Published" as const,
   },
   {
     id: 4,
     title: "Frontend Excellence with React",
-    thumbnail: image2,
-    enrollmentCount: 32,
-    rating: "4.2/5",
+    thumbnail: image2.src,
+    description: "Master React patterns and hooks for scalable apps.",
+    enrollment: "32 Learners",
+    rating: "4.2",
     status: "Published" as const,
   },
   {
     id: 5,
     title: "Introduction to Blockchain",
-    thumbnail: image1,
-    enrollmentCount: 50,
-    rating: "4.9/5",
+    thumbnail: image1.src,
+    description: "Understand the technology behind decentralization.",
+    enrollment: "50 Learners",
+    rating: "4.9",
     status: "Published" as const,
   },
   {
     id: 6,
     title: "Advanced UI/UX Patterns",
-    thumbnail: image2,
-    enrollmentCount: 25,
-    rating: "4.6/5",
+    thumbnail: image2.src,
+    description: "Deep dive into user behavior and interface logic.",
+    enrollment: "25 Learners",
+    rating: "4.6",
     status: "Draft" as const,
   },
 ];

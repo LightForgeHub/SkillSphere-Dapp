@@ -1,9 +1,10 @@
 "use client"
 
-import React from "react"
+import React, { useState } from "react"
 import CourseCard from "@/components/dashboard/CourseCard"
 import ReviewItem from "@/components/dashboard/ReviewItem"
 import ProfileHeader from "@/components/dashboard/ProfileHeader"
+import { EditProfileModal, type ProfileData } from "@/components/profile/EditProfileModal"
 
 const COURSES = [
   {
@@ -26,20 +27,35 @@ const REVIEWS = [
 ]
 
 export default function ProfilePage() {
+  const [profile, setProfile] = useState<ProfileData>({
+    name: "Miss Flora Osatuyi",
+    title: "Product Designer",
+    avatarUrl: "/newProfile.svg",
+    about: "Flora is a talented product designer with 3+ years of experience creating functional, visually polished (FPV) designs. She also tutors aspiring designers, simplifying UI and product design concepts through hands-on learning. Passionate about blending creativity and usability, Flora helps her students and projects thrive in today's fast-paced digital world."
+  });
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const handleSaveProfile = (newData: ProfileData) => {
+    setProfile(newData);
+    setIsEditModalOpen(false);
+  };
+
   return (
     <div className="max-w-5xl mx-auto py-8 px-4">
       {/* Profile Header */}
       <ProfileHeader
-        name="Miss Flora Osatuyi"
-        role="Product Designer"
-        avatarUrl="/newProfile.svg"
+        name={profile.name}
+        role={profile.title}
+        avatarUrl={profile.avatarUrl}
         walletAddress="0x411ad3c6d3c6d3c6d3c6d3c6d3c6d3c6d3c6d3c6"
+        onEdit={() => setIsEditModalOpen(true)}
       />
 
       {/* Bio Box */}
       <div className="bg-[#1C1129]/50 border border-white/5 rounded-2xl p-6 md:p-8 backdrop-blur-sm mb-12">
         <p className="text-white/70 text-sm md:text-base leading-relaxed">
-          Flora is a talented product designer with 3+ years of experience creating functional, visually polished (FPV) designs. She also tutors aspiring designers, simplifying UI and product design concepts through hands-on learning. Passionate about blending creativity and usability, Flora helps her students and projects thrive in today&apos;s fast-paced digital world.
+          {profile.about}
         </p>
       </div>
 
@@ -64,6 +80,14 @@ export default function ProfilePage() {
           ))}
         </div>
       </section>
+
+      {/* Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleSaveProfile}
+        initialData={profile}
+      />
     </div>
   )
 }

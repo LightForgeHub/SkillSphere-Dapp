@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useState } from "react";
-import { Plus, X, Upload, File, Video, Image as ImageIcon } from "lucide-react";
+import { Plus, X, File, Video, Image as ImageIcon } from "lucide-react";
 import { cn } from "./utils";
 import { Button } from "./Button";
 

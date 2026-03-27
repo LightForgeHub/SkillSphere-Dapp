@@ -1,18 +1,3 @@
-/* Light/dark friendly variables */
-:root {
-	--skeleton-bg: #f3f4f6;
-	--skeleton-block: #e6e7ea;
-	--skeleton-border: #e2e8f0;
-}
-
-@media (prefers-color-scheme: dark) {
-	:root {
-		--skeleton-bg: #111217;
-		--skeleton-block: #1f2024;
-		--skeleton-border: #2a2f36;
-	}
-}
-
 .container {
 	display: flex;
 	flex-direction: column;
@@ -21,12 +6,24 @@
 
 /* base skeleton frame */
 .skeleton {
+	--skeleton-bg: #f3f4f6;
+	--skeleton-block: #e6e7ea;
+	--skeleton-border: #e2e8f0;
+
 	position: relative;
 	overflow: hidden;
 	border-radius: 8px;
 	background: var(--skeleton-bg);
 	min-height: 56px;
 	border: 1px solid var(--skeleton-border);
+}
+
+@media (prefers-color-scheme: dark) {
+	.skeleton {
+		--skeleton-bg: #111217;
+		--skeleton-block: #1f2024;
+		--skeleton-border: #2a2f36;
+	}
 }
 
 /* Card variant */
