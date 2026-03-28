@@ -66,7 +66,7 @@ export default function QuestionAnswerChat({ questionData }: QuestionAnswerChatP
   }
 
   return (
-    <div className="flex flex-col w-full max-w-[756px] mx-auto bg-[#101110] border border-[#252625] rounded-xl overflow-hidden h-[calc(100vh-220px)] min-h-[480px]">
+    <div className="flex flex-col w-full h-full   overflow-hidden">
       <QuestionAnswerHeader
         learnerName={questionData.learnerName}
         learnerAvatarUrl={questionData.learnerAvatarUrl}

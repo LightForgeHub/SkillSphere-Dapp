@@ -57,7 +57,7 @@ export default function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<NotificationTabType>("New Learner")
 
   return (
-    <div className="p-2 md:p-6 w-full max-w-5xl space-y-8">
+    <div className="p-2 md:p-6 w-full  space-y-8">
       <NotificationTabs
         tabs={["New Learner", "Questions", "Payment", "Announcements"]}
         activeTab={activeTab}
