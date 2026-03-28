@@ -5,6 +5,7 @@ import NotificationTabs, { NotificationTabType } from "@/components/dashboard/No
 import NotificationList from "@/components/dashboard/NotificationList"
 import QuestionNotificationList from "@/components/dashboard/QuestionNotificationList"
 import PaymentNotificationList from "@/components/dashboard/PaymentNotificationList"
+import AnnouncementNotificationList from "@/components/dashboard/AnnouncementNotificationList"
 
 const mockLearnersData = [
   {
@@ -53,11 +54,24 @@ const mockPaymentsData = [
   }
 ]
 
+const mockAnnouncementsData = [
+  {
+    id: "a1",
+    title: "Upcoming Learner Assessments",
+    description: "Don't forget to prepare your students for the Quarterly Assessment starting Feb 10th, 2025.",
+  },
+  {
+    id: "a2",
+    title: "Policy Update",
+    description: "Starting March 1st, 2025, all session reports must be submitted within 24 hours of the session.",
+  }
+]
+
 export default function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<NotificationTabType>("New Learner")
 
   return (
-    <div className="p-2 md:p-6 w-full max-w-5xl space-y-8">
+    <div className="p-2 md:p-6 w-full  space-y-8">
       <NotificationTabs
         tabs={["New Learner", "Questions", "Payment", "Announcements"]}
         activeTab={activeTab}
@@ -75,9 +89,7 @@ export default function NotificationsPage() {
           <PaymentNotificationList payments={mockPaymentsData} />
         )}
         {activeTab === "Announcements" && (
-          <div className="py-8 text-center text-gray-400">
-            No notifications for {activeTab}.
-          </div>
+          <AnnouncementNotificationList announcements={mockAnnouncementsData} />
         )}
       </div>
     </div>

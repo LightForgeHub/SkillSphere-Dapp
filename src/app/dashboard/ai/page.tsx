@@ -1,8 +1,11 @@
+"use client"
+
+import ChatLayout from "@/components/dashboard/chat/ChatLayout"
+
 export default function AIChatPage() {
   return (
-    <div>
-      <h2 className="text-2xl font-semibold">AI Chat Bot</h2>
-      <p className="mt-4 text-slate-600">Chat with the AI assistant here.</p>
+    <div className="flex items-center justify-center min-h-[732px]">
+      <ChatLayout />
     </div>
   )
 }
