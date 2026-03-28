@@ -2,6 +2,7 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { ChevronDown } from "lucide-react"
+import { safeLocalStorage } from "@/utils/safeLocalStorage"
 const profiles = [
   { id: "nora", name: "Miss Nora" },
   { id: "sam", name: "Mr Sam" },
@@ -20,16 +21,12 @@ export default function Header({
   const [mobileProfileModalOpen, setMobileProfileModalOpen] = useState(false)
 
   useEffect(() => {
-    try {
-      const v = localStorage.getItem("dashboard_profile")
-      if (v) setProfile(JSON.parse(v))
-    } catch (e) {}
+    const v = safeLocalStorage.get("dashboard_profile")
+    if (v) setProfile(JSON.parse(v))
   }, [])
 
   useEffect(() => {
-    try {
-      localStorage.setItem("dashboard_profile", JSON.stringify(profile))
-    } catch (e) {}
+    safeLocalStorage.set("dashboard_profile", JSON.stringify(profile))
   }, [profile])
 
   useEffect(() => {

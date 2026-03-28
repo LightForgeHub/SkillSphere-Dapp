@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, useEffect } from "react"
 import { ChevronDown } from "lucide-react"
+import { safeLocalStorage } from "@/utils/safeLocalStorage"
 
 
 const navItems = [
@@ -37,16 +38,12 @@ export default function Sidebar() {
   const [profile, setProfile] = useState(profiles[0])
 
   useEffect(() => {
-    try {
-      const v = localStorage.getItem("dashboard_profile")
-      if (v) setProfile(JSON.parse(v))
-    } catch (e) {}
+    const v = safeLocalStorage.get("dashboard_profile")
+    if (v) setProfile(JSON.parse(v))
   }, [])
 
   useEffect(() => {
-    try {
-      localStorage.setItem("dashboard_profile", JSON.stringify(profile))
-    } catch (e) {}
+    safeLocalStorage.set("dashboard_profile", JSON.stringify(profile))
   }, [profile])
 
   const activeItem = navItems.find((item) => pathname === item.href)?.label || "Home"
@@ -221,16 +218,12 @@ export function MobileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   const [profile, setProfile] = useState(profiles[0])
 
   useEffect(() => {
-    try {
-      const v = localStorage.getItem("dashboard_profile")
-      if (v) setProfile(JSON.parse(v))
-    } catch (e) {}
+    const v = safeLocalStorage.get("dashboard_profile")
+    if (v) setProfile(JSON.parse(v))
   }, [])
 
   const handleSelectProfile = (p: { id: string; name: string }) => {
-    try {
-      localStorage.setItem("dashboard_profile", JSON.stringify(p))
-    } catch (e) {}
+    safeLocalStorage.set("dashboard_profile", JSON.stringify(p))
     setProfile(p)
     onClose()
   }
