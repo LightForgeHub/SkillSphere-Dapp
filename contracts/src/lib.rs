@@ -330,6 +330,21 @@ impl SkillSphereContract {
     // ============ DISPUTE FLAGGING MECHANISM (Issue #122) ============
     /// Initiates a dispute for a session, freezing the balance.
     /// Only seeker can flag a dispute with a reason.
+    /// 
+    /// # Parameters
+    /// - session_id: ID of the session to dispute
+    /// - seeker: Address of the seeker (must match session.seeker)
+    /// - reason: String explaining dispute reason (required, non-empty)
+    /// - ipfs_metadata_hash: IPFS hash containing dispute evidence and details
+    ///
+    /// # Effects
+    /// - Changes session status to Disputed (prevents further settlements)
+    /// - Freezes remaining balance until arbitrator resolves
+    /// - Stores dispute record with metadata reference
+    /// - Emits 'disputed' event
+    ///
+    /// # Arbitrator Access
+    /// Use get_dispute(session_id) to retrieve dispute details and IPFS hash
     pub fn flag_dispute(
         env: Env,
         session_id: u64,
@@ -381,6 +396,17 @@ impl SkillSphereContract {
 
     /// Resolves a dispute (admin/arbitrator only).
     /// Transfers funds based on resolution decision.
+    /// 
+    /// # Resolution Options
+    /// - SeekerWins (1): Seeker gets full refund, expert gets nothing
+    /// - ExpertWins (2): Expert gets full balance, seeker gets nothing  
+    /// - Refund (3): Expert gets accrued_amount, seeker gets remaining balance
+    ///
+    /// # Arbitrator Notes
+    /// - Always verify dispute reason and IPFS metadata before resolving
+    /// - Check session.accrued_amount to understand expert's earned portion
+    /// - Use Refund for partial service delivery scenarios
+    /// - Emit 'resolved' event upon successful resolution
     pub fn resolve_dispute(
         env: Env,
         session_id: u64,
@@ -480,6 +506,18 @@ impl SkillSphereContract {
     }
 
     /// Get dispute details for a session
+    /// 
+    /// # Returns
+    /// Dispute struct containing:
+    /// - session_id: The disputed session
+    /// - reason: Dispute reason provided by seeker
+    /// - ipfs_metadata_hash: Reference to evidence on IPFS
+    /// - created_at: Timestamp when dispute was flagged
+    /// - resolved: Whether dispute has been resolved
+    /// - resolution: Resolution code (0=unresolved, 1=SeekerWins, 2=ExpertWins, 3=Refund)
+    ///
+    /// # Arbitrator Usage
+    /// Call this to retrieve dispute metadata before making resolution decision
     pub fn get_dispute(env: Env, session_id: u64) -> Result<Dispute, Error> {
         env.storage()
             .persistent()
