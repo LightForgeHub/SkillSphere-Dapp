@@ -1,5 +1,8 @@
+"use client"
+
 import React from "react"
 import Image from "next/image"
+import { useRouter } from "next/navigation"
 import { cn } from "@/components/ui/utils"
 import { Button } from "@/components/ui/Button"
 
@@ -22,6 +25,15 @@ export default function QuestionNotificationItem({
   className,
   onAnswer,
 }: QuestionNotificationItemProps) {
+  const router = useRouter()
+
+  const handleAnswer = () => {
+    if (onAnswer) {
+      onAnswer(id)
+    } else {
+      router.push(`/dashboard/notifications/questions/${id}`)
+    }
+  }
   return (
     <div 
       className={cn(
@@ -66,18 +78,18 @@ export default function QuestionNotificationItem({
 
       {/* Action Button */}
       <div className="flex-shrink-0 sm:ml-4 align-self-end sm:align-self-center mt-2 sm:mt-0">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => onAnswer?.(id)}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleAnswer}
           className="border-white/10 hover:bg-white/5 hover:border-white/20 transition-colors hidden sm:inline-flex"
         >
           Answer Question
         </Button>
-        <Button 
-          variant="outline" 
-          size="default" 
-          onClick={() => onAnswer?.(id)}
+        <Button
+          variant="outline"
+          size="default"
+          onClick={handleAnswer}
           className="w-full border-white/10 hover:bg-white/5 hover:border-white/20 transition-colors sm:hidden"
         >
           Answer Question
