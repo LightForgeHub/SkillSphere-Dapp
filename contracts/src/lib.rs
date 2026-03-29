@@ -15,6 +15,10 @@ pub enum Error {
     InvalidAmount = 5,
     NotStarted = 6,
     AlreadyFinished = 7,
+    DisputeNotFound = 8,
+    UpgradeNotInitiated = 9,
+    TimelockNotExpired = 10,
+    EmptyDisputeReason = 11,
 }
 
 #[contracttype]
@@ -23,6 +27,8 @@ pub enum DataKey {
     Admin,
     NextSessionId,
     Session(u64),
+    Dispute(u64),
+    UpgradeTimelock,
 }
 
 #[contracttype]
@@ -32,6 +38,33 @@ pub enum SessionStatus {
     Paused,
     Finished,
     Disputed,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq, Copy)]
+pub enum Resolution {
+    SeekerWins = 0,
+    ExpertWins = 1,
+    Refund = 2,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Dispute {
+    pub session_id: u64,
+    pub reason: soroban_sdk::String,
+    pub ipfs_metadata_hash: soroban_sdk::String,
+    pub created_at: u64,
+    pub resolved: bool,
+    pub resolution: u32, // 0 = unresolved, 1 = SeekerWins, 2 = ExpertWins, 3 = Refund
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpgradeTimelock {
+    pub new_wasm_hash: soroban_sdk::BytesN<32>,
+    pub initiated_at: u64,
+    pub execute_after: u64,
 }
 
 #[contracttype]
@@ -85,13 +118,12 @@ impl SkillSphereContract {
         let session_id = Self::next_session_id(&env);
         let now = env.ledger().timestamp();
 
-        token_client.transfer(&seeker, &env.current_contract_address(), &amount);
-
+        // Effects: Update internal state BEFORE token transfer (Checks-Effects-Interactions)
         let session = Session {
             id: session_id,
-            seeker,
-            expert,
-            token,
+            seeker: seeker.clone(),
+            expert: expert.clone(),
+            token: token.clone(),
             rate_per_second,
             start_timestamp: now,
             last_settlement_timestamp: now,
@@ -105,6 +137,9 @@ impl SkillSphereContract {
             .set(&DataKey::Session(session_id), &session);
         env.events()
             .publish((symbol_short!("started"),), session_id);
+
+        // Interactions: Perform external call (token transfer) after state update
+        token_client.transfer(&seeker, &env.current_contract_address(), &amount);
 
         Ok(session_id)
     }
@@ -176,9 +211,7 @@ impl SkillSphereContract {
             return Ok(0);
         }
 
-        let token_client = token::Client::new(&env, &session.token);
-        token_client.transfer(&env.current_contract_address(), &session.expert, &claimable);
-
+        // Effects: Update internal state BEFORE token transfer (Checks-Effects-Interactions)
         session.balance -= claimable;
         session.accrued_amount = 0;
         session.last_settlement_timestamp = now;
@@ -188,6 +221,11 @@ impl SkillSphereContract {
         }
 
         Self::save_session(&env, &session);
+
+        // Interactions: Perform external call (token transfer) after state update
+        let token_client = token::Client::new(&env, &session.token);
+        token_client.transfer(&env.current_contract_address(), &session.expert, &claimable);
+
         env.events()
             .publish((symbol_short!("settled"),), (session_id, claimable));
 
@@ -205,23 +243,26 @@ impl SkillSphereContract {
 
         let now = env.ledger().timestamp();
         let claimable = Self::claimable_amount_for_session(&session, now);
-        let token_client = token::Client::new(&env, &session.token);
-
-        if claimable > 0 {
-            token_client.transfer(&env.current_contract_address(), &session.expert, &claimable);
-        }
-
+        
+        // Effects: Update internal state BEFORE token transfers (Checks-Effects-Interactions)
         let remaining = session.balance - claimable;
-        if remaining > 0 {
-            token_client.transfer(&env.current_contract_address(), &session.seeker, &remaining);
-        }
-
         session.balance = 0;
         session.accrued_amount = 0;
         session.last_settlement_timestamp = now;
         session.status = SessionStatus::Finished;
 
         Self::save_session(&env, &session);
+
+        // Interactions: Perform external calls (token transfers) after state update
+        let token_client = token::Client::new(&env, &session.token);
+
+        if claimable > 0 {
+            token_client.transfer(&env.current_contract_address(), &session.expert, &claimable);
+        }
+
+        if remaining > 0 {
+            token_client.transfer(&env.current_contract_address(), &session.seeker, &remaining);
+        }
 
         Ok(())
     }
@@ -284,6 +325,273 @@ impl SkillSphereContract {
 
         let elapsed = current_time - session.last_settlement_timestamp;
         (elapsed as i128).saturating_mul(session.rate_per_second)
+    }
+
+    // ============ DISPUTE FLAGGING MECHANISM (Issue #122) ============
+    /// Initiates a dispute for a session, freezing the balance.
+    /// Only seeker can flag a dispute with a reason.
+    /// 
+    /// # Parameters
+    /// - session_id: ID of the session to dispute
+    /// - seeker: Address of the seeker (must match session.seeker)
+    /// - reason: String explaining dispute reason (required, non-empty)
+    /// - ipfs_metadata_hash: IPFS hash containing dispute evidence and details
+    ///
+    /// # Effects
+    /// - Changes session status to Disputed (prevents further settlements)
+    /// - Freezes remaining balance until arbitrator resolves
+    /// - Stores dispute record with metadata reference
+    /// - Emits 'disputed' event
+    ///
+    /// # Arbitrator Access
+    /// Use get_dispute(session_id) to retrieve dispute details and IPFS hash
+    pub fn flag_dispute(
+        env: Env,
+        session_id: u64,
+        seeker: Address,
+        reason: soroban_sdk::String,
+        ipfs_metadata_hash: soroban_sdk::String,
+    ) -> Result<(), Error> {
+        seeker.require_auth();
+
+        if reason.is_empty() {
+            return Err(Error::EmptyDisputeReason);
+        }
+
+        let mut session = Self::get_session_or_error(&env, session_id)?;
+
+        // Only seeker can flag dispute
+        if seeker != session.seeker {
+            return Err(Error::Unauthorized);
+        }
+
+        // Can only dispute active or paused sessions
+        if !matches!(session.status, SessionStatus::Active | SessionStatus::Paused) {
+            return Err(Error::InvalidSessionState);
+        }
+
+        // Freeze balance by changing status to Disputed
+        session.status = SessionStatus::Disputed;
+        Self::save_session(&env, &session);
+
+        // Store dispute details
+        let dispute = Dispute {
+            session_id,
+            reason,
+            ipfs_metadata_hash,
+            created_at: env.ledger().timestamp(),
+            resolved: false,
+            resolution: 0, // 0 = unresolved
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Dispute(session_id), &dispute);
+
+        env.events()
+            .publish((symbol_short!("disputed"),), session_id);
+
+        Ok(())
+    }
+
+    /// Resolves a dispute (admin/arbitrator only).
+    /// Transfers funds based on resolution decision.
+    /// 
+    /// # Resolution Options
+    /// - SeekerWins (1): Seeker gets full refund, expert gets nothing
+    /// - ExpertWins (2): Expert gets full balance, seeker gets nothing  
+    /// - Refund (3): Expert gets accrued_amount, seeker gets remaining balance
+    ///
+    /// # Arbitrator Notes
+    /// - Always verify dispute reason and IPFS metadata before resolving
+    /// - Check session.accrued_amount to understand expert's earned portion
+    /// - Use Refund for partial service delivery scenarios
+    /// - Emit 'resolved' event upon successful resolution
+    pub fn resolve_dispute(
+        env: Env,
+        session_id: u64,
+        resolution: Resolution,
+    ) -> Result<(), Error> {
+        let admin: Address = env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::Unauthorized)?;
+        
+        admin.require_auth();
+
+        let mut session = Self::get_session_or_error(&env, session_id)?;
+        let mut dispute: Dispute = env.storage()
+            .persistent()
+            .get(&DataKey::Dispute(session_id))
+            .ok_or(Error::DisputeNotFound)?;
+
+        if dispute.resolved {
+            return Err(Error::InvalidSessionState);
+        }
+
+        if session.status != SessionStatus::Disputed {
+            return Err(Error::InvalidSessionState);
+        }
+
+        let token_client = token::Client::new(&env, &session.token);
+
+        // Effects: Update state before transfers (Checks-Effects-Interactions pattern)
+        dispute.resolved = true;
+        dispute.resolution = match resolution {
+            Resolution::SeekerWins => 1,
+            Resolution::ExpertWins => 2,
+            Resolution::Refund => 3,
+        };
+        session.status = SessionStatus::Finished;
+
+        match resolution {
+            Resolution::SeekerWins => {
+                // Seeker gets full refund
+                if session.balance > 0 {
+                    token_client.transfer(
+                        &env.current_contract_address(),
+                        &session.seeker,
+                        &session.balance,
+                    );
+                }
+                session.balance = 0;
+            }
+            Resolution::ExpertWins => {
+                // Expert gets full balance
+                if session.balance > 0 {
+                    token_client.transfer(
+                        &env.current_contract_address(),
+                        &session.expert,
+                        &session.balance,
+                    );
+                }
+                session.balance = 0;
+            }
+            Resolution::Refund => {
+                // Split: expert gets accrued, seeker gets remaining
+                let expert_amount = session.accrued_amount;
+                let seeker_amount = session.balance - expert_amount;
+
+                if expert_amount > 0 {
+                    token_client.transfer(
+                        &env.current_contract_address(),
+                        &session.expert,
+                        &expert_amount,
+                    );
+                }
+
+                if seeker_amount > 0 {
+                    token_client.transfer(
+                        &env.current_contract_address(),
+                        &session.seeker,
+                        &seeker_amount,
+                    );
+                }
+
+                session.balance = 0;
+                session.accrued_amount = 0;
+            }
+        }
+
+        // Interactions: Perform transfers after state updates
+        Self::save_session(&env, &session);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Dispute(session_id), &dispute);
+
+        env.events()
+            .publish((symbol_short!("resolved"),), session_id);
+
+        Ok(())
+    }
+
+    /// Get dispute details for a session
+    /// 
+    /// # Returns
+    /// Dispute struct containing:
+    /// - session_id: The disputed session
+    /// - reason: Dispute reason provided by seeker
+    /// - ipfs_metadata_hash: Reference to evidence on IPFS
+    /// - created_at: Timestamp when dispute was flagged
+    /// - resolved: Whether dispute has been resolved
+    /// - resolution: Resolution code (0=unresolved, 1=SeekerWins, 2=ExpertWins, 3=Refund)
+    ///
+    /// # Arbitrator Usage
+    /// Call this to retrieve dispute metadata before making resolution decision
+    pub fn get_dispute(env: Env, session_id: u64) -> Result<Dispute, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Dispute(session_id))
+            .ok_or(Error::DisputeNotFound)
+    }
+
+    // ============ TIMELOCK FOR PROTOCOL UPGRADES (Issue #121) ============
+    /// Admin initiates a WASM upgrade with 48-hour timelock
+    pub fn initiate_upgrade(env: Env, new_wasm_hash: soroban_sdk::BytesN<32>) -> Result<(), Error> {
+        let admin: Address = env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::Unauthorized)?;
+        
+        admin.require_auth();
+
+        let now = env.ledger().timestamp();
+        const TIMELOCK_DURATION: u64 = 48 * 60 * 60; // 48 hours in seconds
+
+        let timelock = UpgradeTimelock {
+            new_wasm_hash,
+            initiated_at: now,
+            execute_after: now + TIMELOCK_DURATION,
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::UpgradeTimelock, &timelock);
+
+        env.events()
+            .publish((symbol_short!("upgInit"),), now);
+
+        Ok(())
+    }
+
+    /// Execute the upgrade after timelock expires
+    pub fn execute_upgrade(env: Env) -> Result<(), Error> {
+        let admin: Address = env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::Unauthorized)?;
+        
+        admin.require_auth();
+
+        let timelock: UpgradeTimelock = env.storage()
+            .instance()
+            .get(&DataKey::UpgradeTimelock)
+            .ok_or(Error::UpgradeNotInitiated)?;
+
+        let now = env.ledger().timestamp();
+        if now < timelock.execute_after {
+            return Err(Error::TimelockNotExpired);
+        }
+
+        // Effects: Update state before interaction
+        env.storage().instance().remove(&DataKey::UpgradeTimelock);
+
+        // Interactions: Perform upgrade
+        env.deployer()
+            .update_current_contract_wasm(timelock.new_wasm_hash);
+
+        env.events()
+            .publish((symbol_short!("upgExec"),), now);
+
+        Ok(())
+    }
+
+    /// Get current upgrade timelock status
+    pub fn get_upgrade_timelock(env: Env) -> Result<UpgradeTimelock, Error> {
+        env.storage()
+            .instance()
+            .get(&DataKey::UpgradeTimelock)
+            .ok_or(Error::UpgradeNotInitiated)
     }
 }
 
