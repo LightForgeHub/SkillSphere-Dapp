@@ -11,6 +11,12 @@ const DISPUTE_EXPIRY_WINDOW: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_FEE_FIRST_TIER_LIMIT: i128 = 1_000;
 const DEFAULT_FEE_FIRST_TIER_BPS: u32 = 500;
 const DEFAULT_FEE_SECOND_TIER_BPS: u32 = 300;
+const STAKE_TIER_1: i128 = 1_000;
+const STAKE_TIER_2: i128 = 5_000;
+const STAKE_TIER_3: i128 = 10_000;
+const FEE_REDUCTION_TIER_1_BPS: u32 = 100;
+const FEE_REDUCTION_TIER_2_BPS: u32 = 200;
+const FEE_REDUCTION_TIER_3_BPS: u32 = 300;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -35,6 +41,7 @@ pub enum Error {
     InvalidSplitBps = 17,
     DisputeWindowActive = 18,
     InvalidFeeConfig = 19,
+    InsufficientTreasuryBalance = 20,
 }
 
 #[contracttype]
@@ -48,6 +55,10 @@ pub enum DataKey {
     Session(u64),
     Dispute(u64),
     UpgradeTimelock,
+    StakingContract,
+    ExpertStakedBalance(Address),
+    TreasuryAddress,
+    TreasuryBalance(Address),
 }
 
 #[contracttype]
@@ -194,6 +205,169 @@ impl SkillSphereContract {
 
     pub fn get_fee_config(env: Env) -> FeeConfig {
         Self::fee_config(&env)
+    }
+
+    pub fn set_staking_contract(env: Env, staking_contract: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::StakingContract, &staking_contract);
+        env.events()
+            .publish((symbol_short!("setStake"),), staking_contract);
+        Ok(())
+    }
+
+    pub fn get_staking_contract(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::StakingContract)
+    }
+
+    pub fn set_expert_staked_balance(
+        env: Env,
+        expert: Address,
+        staked_balance: i128,
+    ) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if staked_balance < 0 {
+            return Err(Error::InvalidAmount);
+        }
+        env.storage().persistent().set(
+            &DataKey::ExpertStakedBalance(expert.clone()),
+            &staked_balance,
+        );
+        env.events()
+            .publish((symbol_short!("setStBal"),), (expert, staked_balance));
+        Ok(())
+    }
+
+    pub fn get_expert_staked_balance(env: Env, expert: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertStakedBalance(expert))
+            .unwrap_or(0i128)
+    }
+
+    pub fn get_expert_fee_bps(env: Env, expert: Address) -> u32 {
+        let base_fee = Self::fee_config(&env).first_tier_bps;
+        let staked_balance = Self::get_expert_staked_balance(env, expert);
+
+        let reduction = if staked_balance >= STAKE_TIER_3 {
+            FEE_REDUCTION_TIER_3_BPS
+        } else if staked_balance >= STAKE_TIER_2 {
+            FEE_REDUCTION_TIER_2_BPS
+        } else if staked_balance >= STAKE_TIER_1 {
+            FEE_REDUCTION_TIER_1_BPS
+        } else {
+            0
+        };
+
+        base_fee.saturating_sub(reduction)
+    }
+
+    pub fn set_treasury_address(env: Env, treasury: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::TreasuryAddress, &treasury);
+        env.events().publish((symbol_short!("setTreas"),), treasury);
+        Ok(())
+    }
+
+    pub fn get_treasury_address(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::TreasuryAddress)
+    }
+
+    pub fn get_treasury_balance(env: Env, token: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TreasuryBalance(token))
+            .unwrap_or(0i128)
+    }
+
+    pub fn collect_fee(
+        env: Env,
+        session_id: u64,
+        token: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let current_balance = Self::get_treasury_balance(env.clone(), token.clone());
+        let new_balance = current_balance.saturating_add(amount);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::TreasuryBalance(token.clone()), &new_balance);
+
+        env.events()
+            .publish((symbol_short!("feeCollct"),), (session_id, token, amount));
+
+        Ok(())
+    }
+
+    pub fn withdraw_treasury(
+        env: Env,
+        token: Address,
+        amount: i128,
+        recipient: Address,
+    ) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let current_balance = Self::get_treasury_balance(env.clone(), token.clone());
+        if current_balance < amount {
+            return Err(Error::InsufficientTreasuryBalance);
+        }
+
+        let new_balance = current_balance.saturating_sub(amount);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TreasuryBalance(token.clone()), &new_balance);
+
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &recipient, &amount);
+
+        env.events().publish(
+            (symbol_short!("treasWdrw"),),
+            (token.clone(), amount, recipient.clone()),
+        );
+
+        Ok(())
+    }
+
+    pub fn withdraw_all_treasury(
+        env: Env,
+        token: Address,
+        recipient: Address,
+    ) -> Result<i128, Error> {
+        Self::require_admin(&env)?;
+
+        let current_balance = Self::get_treasury_balance(env.clone(), token.clone());
+        if current_balance <= 0 {
+            return Ok(0);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::TreasuryBalance(token.clone()), &0i128);
+
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &recipient,
+            &current_balance,
+        );
+
+        env.events().publish(
+            (symbol_short!("treasWdrw"),),
+            (token.clone(), current_balance, recipient.clone()),
+        );
+
+        Ok(current_balance)
     }
 
     pub fn calculate_platform_fee(env: Env, session_amount: i128) -> Result<i128, Error> {
@@ -829,7 +1003,7 @@ impl SkillSphereContract {
 
     fn is_valid_ipfs_cid(cid: &String) -> bool {
         let len = cid.len() as usize;
-        if len < 2 || len > 64 {
+        if !(2..=64).contains(&len) {
             return false;
         }
 
@@ -1206,5 +1380,300 @@ mod test {
         assert!(dispute.auto_resolved);
         assert_eq!(dispute.seeker_award_bps, MAX_BPS);
         assert_eq!(dispute.expert_award_bps, 0);
+    }
+
+    #[test]
+    fn test_expert_with_no_stake_pays_full_fee() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 500);
+    }
+
+    #[test]
+    fn test_expert_with_tier_1_stake_gets_100_bps_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &1_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 400);
+    }
+
+    #[test]
+    fn test_expert_with_tier_2_stake_gets_200_bps_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &5_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 300);
+    }
+
+    #[test]
+    fn test_expert_with_tier_3_stake_gets_300_bps_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &10_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 200);
+    }
+
+    #[test]
+    fn test_expert_stake_just_below_tier_1_pays_full_fee() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &999);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 500);
+    }
+
+    #[test]
+    fn test_expert_stake_between_tier_1_and_2_gets_tier_1_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &3_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 400);
+    }
+
+    #[test]
+    fn test_expert_stake_between_tier_2_and_3_gets_tier_2_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &7_500);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 300);
+    }
+
+    #[test]
+    fn test_expert_stake_above_tier_3_gets_tier_3_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &50_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 200);
+    }
+
+    #[test]
+    fn test_get_expert_staked_balance_returns_zero_for_new_expert() {
+        let (env, client, _, _, _, _, _, _) = setup();
+        let new_expert = Address::generate(&env);
+        let balance = client.get_expert_staked_balance(&new_expert);
+        assert_eq!(balance, 0);
+    }
+
+    #[test]
+    fn test_set_and_get_expert_staked_balance() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &2_500);
+        let balance = client.get_expert_staked_balance(&expert);
+        assert_eq!(balance, 2_500);
+    }
+
+    #[test]
+    fn test_set_staking_contract_address() {
+        let (env, client, _, _, _, _, _, _) = setup();
+        let staking_contract = Address::generate(&env);
+        client.set_staking_contract(&staking_contract);
+        let retrieved = client.get_staking_contract();
+        assert_eq!(retrieved, Some(staking_contract));
+    }
+
+    #[test]
+    fn test_get_staking_contract_returns_none_when_not_set() {
+        let (_, client, _, _, _, _, _, _) = setup();
+        let retrieved = client.get_staking_contract();
+        assert_eq!(retrieved, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_set_expert_staked_balance_rejects_negative_amount() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &-100);
+    }
+
+    #[test]
+    fn test_fee_reduction_respects_base_fee_changes() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_fee(&800);
+        client.set_expert_staked_balance(&expert, &10_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 500);
+    }
+
+    #[test]
+    fn test_get_treasury_balance_returns_zero_initially() {
+        let (_, client, _, _, _, _, token, _) = setup();
+        let balance = client.get_treasury_balance(&token);
+        assert_eq!(balance, 0);
+    }
+
+    #[test]
+    fn test_collect_fee_increases_treasury_balance() {
+        let (_, client, _, _, _, _, token, _) = setup();
+        client.collect_fee(&1, &token, &100);
+        let balance = client.get_treasury_balance(&token);
+        assert_eq!(balance, 100);
+    }
+
+    #[test]
+    fn test_collect_multiple_fees_accumulates_balance() {
+        let (_, client, _, _, _, _, token, _) = setup();
+        client.collect_fee(&1, &token, &100);
+        client.collect_fee(&2, &token, &250);
+        client.collect_fee(&3, &token, &150);
+        let balance = client.get_treasury_balance(&token);
+        assert_eq!(balance, 500);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_collect_fee_rejects_zero_amount() {
+        let (_, client, _, _, _, _, token, _) = setup();
+        client.collect_fee(&1, &token, &0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_collect_fee_rejects_negative_amount() {
+        let (_, client, _, _, _, _, token, _) = setup();
+        client.collect_fee(&1, &token, &-50);
+    }
+
+    #[test]
+    fn test_set_and_get_treasury_address() {
+        let (env, client, _, _, _, _, _, _) = setup();
+        let treasury = Address::generate(&env);
+        client.set_treasury_address(&treasury);
+        let retrieved = client.get_treasury_address();
+        assert_eq!(retrieved, Some(treasury));
+    }
+
+    #[test]
+    fn test_get_treasury_address_returns_none_when_not_set() {
+        let (_, client, _, _, _, _, _, _) = setup();
+        let retrieved = client.get_treasury_address();
+        assert_eq!(retrieved, None);
+    }
+
+    #[test]
+    fn test_withdraw_treasury_transfers_funds_and_updates_balance() {
+        let (env, client, contract_id, _, _, _, token, _token_admin) = setup();
+        let treasury = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+
+        client.collect_fee(&1, &token, &500);
+        asset_admin.mint(&contract_id, &500);
+
+        client.withdraw_treasury(&token, &300, &treasury);
+
+        assert_eq!(client.get_treasury_balance(&token), 200);
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&treasury), 300);
+    }
+
+    #[test]
+    fn test_withdraw_all_treasury_empties_balance() {
+        let (env, client, contract_id, _, _, _, token, _token_admin) = setup();
+        let treasury = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+
+        client.collect_fee(&1, &token, &750);
+        asset_admin.mint(&contract_id, &750);
+
+        let withdrawn = client.withdraw_all_treasury(&token, &treasury);
+
+        assert_eq!(withdrawn, 750);
+        assert_eq!(client.get_treasury_balance(&token), 0);
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&treasury), 750);
+    }
+
+    #[test]
+    fn test_withdraw_all_treasury_returns_zero_when_empty() {
+        let (env, client, _, _, _, _, token, _) = setup();
+        let treasury = Address::generate(&env);
+
+        let withdrawn = client.withdraw_all_treasury(&token, &treasury);
+
+        assert_eq!(withdrawn, 0);
+        assert_eq!(client.get_treasury_balance(&token), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #20)")]
+    fn test_withdraw_treasury_fails_with_insufficient_balance() {
+        let (env, client, _, _, _, _, token, _) = setup();
+        let treasury = Address::generate(&env);
+
+        client.collect_fee(&1, &token, &100);
+        client.withdraw_treasury(&token, &500, &treasury);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_withdraw_treasury_rejects_zero_amount() {
+        let (env, client, _, _, _, _, token, _) = setup();
+        let treasury = Address::generate(&env);
+
+        client.collect_fee(&1, &token, &100);
+        client.withdraw_treasury(&token, &0, &treasury);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_withdraw_treasury_rejects_negative_amount() {
+        let (env, client, _, _, _, _, token, _) = setup();
+        let treasury = Address::generate(&env);
+
+        client.collect_fee(&1, &token, &100);
+        client.withdraw_treasury(&token, &-50, &treasury);
+    }
+
+    #[test]
+    fn test_treasury_tracks_multiple_tokens_separately() {
+        let (env, client, _, _, _, _, token1, token_admin) = setup();
+        let token2 = env.register_stellar_asset_contract_v2(token_admin.clone());
+        let token2_address = token2.address();
+
+        client.collect_fee(&1, &token1, &100);
+        client.collect_fee(&2, &token2_address, &250);
+
+        assert_eq!(client.get_treasury_balance(&token1), 100);
+        assert_eq!(client.get_treasury_balance(&token2_address), 250);
+    }
+
+    #[test]
+    fn test_partial_withdrawals_maintain_correct_balance() {
+        let (env, client, contract_id, _, _, _, token, _token_admin) = setup();
+        let treasury = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+
+        client.collect_fee(&1, &token, &1_000);
+        asset_admin.mint(&contract_id, &1_000);
+
+        client.withdraw_treasury(&token, &300, &treasury);
+        assert_eq!(client.get_treasury_balance(&token), 700);
+
+        client.withdraw_treasury(&token, &200, &treasury);
+        assert_eq!(client.get_treasury_balance(&token), 500);
+
+        client.withdraw_treasury(&token, &500, &treasury);
+        assert_eq!(client.get_treasury_balance(&token), 0);
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&treasury), 1_000);
+    }
+
+    #[test]
+    fn test_treasury_balance_survives_multiple_collect_and_withdraw_cycles() {
+        let (env, client, contract_id, _, _, _, token, _token_admin) = setup();
+        let treasury = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+
+        client.collect_fee(&1, &token, &500);
+        asset_admin.mint(&contract_id, &500);
+        client.withdraw_treasury(&token, &200, &treasury);
+        assert_eq!(client.get_treasury_balance(&token), 300);
+
+        client.collect_fee(&2, &token, &400);
+        asset_admin.mint(&contract_id, &400);
+        assert_eq!(client.get_treasury_balance(&token), 700);
+
+        client.withdraw_treasury(&token, &700, &treasury);
+        assert_eq!(client.get_treasury_balance(&token), 0);
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&treasury), 900);
     }
 }
