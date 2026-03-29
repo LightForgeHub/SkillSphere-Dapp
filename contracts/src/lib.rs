@@ -7,6 +7,10 @@ use soroban_sdk::{
 
 const MAX_BPS: u32 = 10_000;
 const TIMELOCK_DURATION: u64 = 48 * 60 * 60;
+const DISPUTE_EXPIRY_WINDOW: u64 = 30 * 24 * 60 * 60;
+const DEFAULT_FEE_FIRST_TIER_LIMIT: i128 = 1_000;
+const DEFAULT_FEE_FIRST_TIER_BPS: u32 = 500;
+const DEFAULT_FEE_SECOND_TIER_BPS: u32 = 300;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -27,6 +31,10 @@ pub enum Error {
     ReputationTooLow = 13,
     InvalidFeeBps = 14,
     SessionExpired = 15,
+    InvalidCid = 16,
+    InvalidSplitBps = 17,
+    DisputeWindowActive = 18,
+    InvalidFeeConfig = 19,
 }
 
 #[contracttype]
@@ -34,7 +42,7 @@ pub enum Error {
 pub enum DataKey {
     Admin,
     NextSessionId,
-    PlatformFeeBps,
+    PlatformFeeConfig,
     ProtocolPaused,
     ExpertReputation(Address),
     Session(u64),
@@ -49,14 +57,7 @@ pub enum SessionStatus {
     Paused,
     Finished,
     Disputed,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq, Copy)]
-pub enum Resolution {
-    SeekerWins = 0,
-    ExpertWins = 1,
-    Refund = 2,
+    Resolved,
 }
 
 #[contracttype]
@@ -64,10 +65,20 @@ pub enum Resolution {
 pub struct Dispute {
     pub session_id: u64,
     pub reason: String,
-    pub ipfs_metadata_hash: String,
+    pub evidence_cid: String,
     pub created_at: u64,
     pub resolved: bool,
-    pub resolution: u32,
+    pub seeker_award_bps: u32,
+    pub expert_award_bps: u32,
+    pub auto_resolved: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeConfig {
+    pub first_tier_limit: i128,
+    pub first_tier_bps: u32,
+    pub second_tier_bps: u32,
 }
 
 #[contracttype]
@@ -107,9 +118,14 @@ impl SkillSphereContract {
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextSessionId, &1u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::PlatformFeeBps, &0u32);
+        env.storage().instance().set(
+            &DataKey::PlatformFeeConfig,
+            &FeeConfig {
+                first_tier_limit: DEFAULT_FEE_FIRST_TIER_LIMIT,
+                first_tier_bps: DEFAULT_FEE_FIRST_TIER_BPS,
+                second_tier_bps: DEFAULT_FEE_SECOND_TIER_BPS,
+            },
+        );
         env.storage()
             .instance()
             .set(&DataKey::ProtocolPaused, &false);
@@ -137,19 +153,56 @@ impl SkillSphereContract {
             return Err(Error::InvalidFeeBps);
         }
 
+        let mut config = Self::fee_config(&env);
+        config.first_tier_bps = fee_bps;
+
         env.storage()
             .instance()
-            .set(&DataKey::PlatformFeeBps, &fee_bps);
+            .set(&DataKey::PlatformFeeConfig, &config);
         env.events().publish((symbol_short!("setFee"),), fee_bps);
 
         Ok(())
     }
 
     pub fn get_fee(env: Env) -> u32 {
+        Self::fee_config(&env).first_tier_bps
+    }
+
+    pub fn set_fee_tiers(
+        env: Env,
+        first_tier_limit: i128,
+        first_tier_bps: u32,
+        second_tier_bps: u32,
+    ) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+
+        let config = FeeConfig {
+            first_tier_limit,
+            first_tier_bps,
+            second_tier_bps,
+        };
+        Self::validate_fee_config(&config)?;
+
         env.storage()
             .instance()
-            .get(&DataKey::PlatformFeeBps)
-            .unwrap_or(0u32)
+            .set(&DataKey::PlatformFeeConfig, &config);
+        env.events()
+            .publish((symbol_short!("feeCfg"),), config.clone());
+
+        Ok(())
+    }
+
+    pub fn get_fee_config(env: Env) -> FeeConfig {
+        Self::fee_config(&env)
+    }
+
+    pub fn calculate_platform_fee(env: Env, session_amount: i128) -> Result<i128, Error> {
+        if session_amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let config = Self::fee_config(&env);
+        Ok(Self::calculate_tiered_fee(&config, session_amount))
     }
 
     pub fn pause_protocol(env: Env) -> Result<(), Error> {
@@ -306,7 +359,7 @@ impl SkillSphereContract {
 
         if matches!(
             session.status,
-            SessionStatus::Finished | SessionStatus::Disputed
+            SessionStatus::Finished | SessionStatus::Disputed | SessionStatus::Resolved
         ) {
             return Err(Error::InvalidSessionState);
         }
@@ -377,12 +430,15 @@ impl SkillSphereContract {
         session_id: u64,
         seeker: Address,
         reason: String,
-        ipfs_metadata_hash: String,
+        evidence_cid: String,
     ) -> Result<(), Error> {
         seeker.require_auth();
 
         if reason.is_empty() {
             return Err(Error::EmptyDisputeReason);
+        }
+        if !Self::is_valid_ipfs_cid(&evidence_cid) {
+            return Err(Error::InvalidCid);
         }
 
         let mut session = Self::get_session_or_error(&env, session_id)?;
@@ -404,10 +460,12 @@ impl SkillSphereContract {
         let dispute = Dispute {
             session_id,
             reason,
-            ipfs_metadata_hash,
+            evidence_cid: evidence_cid.clone(),
             created_at: env.ledger().timestamp(),
             resolved: false,
-            resolution: 0,
+            seeker_award_bps: 0,
+            expert_award_bps: 0,
+            auto_resolved: false,
         };
 
         env.storage()
@@ -415,12 +473,12 @@ impl SkillSphereContract {
             .set(&DataKey::Dispute(session_id), &dispute);
 
         env.events()
-            .publish((symbol_short!("disputed"),), session_id);
+            .publish((symbol_short!("disputed"),), (session_id, evidence_cid));
 
         Ok(())
     }
 
-    pub fn resolve_dispute(env: Env, session_id: u64, resolution: Resolution) -> Result<(), Error> {
+    pub fn resolve_dispute(env: Env, session_id: u64, seeker_award_bps: u32) -> Result<(), Error> {
         Self::require_admin(&env)?;
 
         let mut session = Self::get_session_or_error(&env, session_id)?;
@@ -438,60 +496,30 @@ impl SkillSphereContract {
             return Err(Error::InvalidSessionState);
         }
 
-        dispute.resolved = true;
-        dispute.resolution = match resolution {
-            Resolution::SeekerWins => 1,
-            Resolution::ExpertWins => 2,
-            Resolution::Refund => 3,
-        };
-        session.status = SessionStatus::Finished;
+        Self::resolve_dispute_with_split(&env, &mut session, &mut dispute, seeker_award_bps, false)
+    }
 
-        let token_client = token::Client::new(&env, &session.token);
-        let mut seeker_amount = 0i128;
-        let mut expert_amount = 0i128;
+    pub fn auto_resolve_expiry(env: Env, caller: Address, session_id: u64) -> Result<(), Error> {
+        caller.require_auth();
 
-        match resolution {
-            Resolution::SeekerWins => {
-                seeker_amount = session.balance;
-                session.balance = 0;
-            }
-            Resolution::ExpertWins => {
-                expert_amount = session.balance;
-                session.balance = 0;
-            }
-            Resolution::Refund => {
-                expert_amount = session.accrued_amount.min(session.balance);
-                seeker_amount = session.balance - expert_amount;
-                session.balance = 0;
-                session.accrued_amount = 0;
-            }
-        }
+        let mut session = Self::get_session_or_error(&env, session_id)?;
+        Self::require_participant(&session, &caller)?;
 
-        Self::save_session(&env, &session);
-        env.storage()
+        let mut dispute: Dispute = env
+            .storage()
             .persistent()
-            .set(&DataKey::Dispute(session_id), &dispute);
+            .get(&DataKey::Dispute(session_id))
+            .ok_or(Error::DisputeNotFound)?;
 
-        if expert_amount > 0 {
-            token_client.transfer(
-                &env.current_contract_address(),
-                &session.expert,
-                &expert_amount,
-            );
+        if dispute.resolved || session.status != SessionStatus::Disputed {
+            return Err(Error::InvalidSessionState);
         }
 
-        if seeker_amount > 0 {
-            token_client.transfer(
-                &env.current_contract_address(),
-                &session.seeker,
-                &seeker_amount,
-            );
+        if env.ledger().timestamp() < Self::dispute_expiry_timestamp(&dispute) {
+            return Err(Error::DisputeWindowActive);
         }
 
-        env.events()
-            .publish((symbol_short!("resolved"),), session_id);
-
-        Ok(())
+        Self::resolve_dispute_with_split(&env, &mut session, &mut dispute, MAX_BPS, true)
     }
 
     pub fn get_dispute(env: Env, session_id: u64) -> Result<Dispute, Error> {
@@ -613,7 +641,7 @@ impl SkillSphereContract {
     fn close_session(env: &Env, session: &mut Session) -> Result<(i128, i128), Error> {
         if matches!(
             session.status,
-            SessionStatus::Finished | SessionStatus::Disputed
+            SessionStatus::Finished | SessionStatus::Disputed | SessionStatus::Resolved
         ) {
             return Err(Error::InvalidSessionState);
         }
@@ -693,13 +721,144 @@ impl SkillSphereContract {
             current_time
         }
     }
+
+    fn fee_config(env: &Env) -> FeeConfig {
+        env.storage()
+            .instance()
+            .get(&DataKey::PlatformFeeConfig)
+            .unwrap_or(FeeConfig {
+                first_tier_limit: DEFAULT_FEE_FIRST_TIER_LIMIT,
+                first_tier_bps: DEFAULT_FEE_FIRST_TIER_BPS,
+                second_tier_bps: DEFAULT_FEE_SECOND_TIER_BPS,
+            })
+    }
+
+    fn validate_fee_config(config: &FeeConfig) -> Result<(), Error> {
+        if config.first_tier_limit <= 0
+            || config.first_tier_bps > MAX_BPS
+            || config.second_tier_bps > MAX_BPS
+        {
+            return Err(Error::InvalidFeeConfig);
+        }
+
+        Ok(())
+    }
+
+    fn calculate_tiered_fee(config: &FeeConfig, session_amount: i128) -> i128 {
+        if session_amount <= 0 {
+            return 0;
+        }
+
+        let first_tier_amount = if session_amount > config.first_tier_limit {
+            config.first_tier_limit
+        } else {
+            session_amount
+        };
+        let second_tier_amount = if session_amount > config.first_tier_limit {
+            session_amount - config.first_tier_limit
+        } else {
+            0
+        };
+
+        first_tier_amount.saturating_mul(config.first_tier_bps as i128) / MAX_BPS as i128
+            + second_tier_amount.saturating_mul(config.second_tier_bps as i128) / MAX_BPS as i128
+    }
+
+    fn resolve_dispute_with_split(
+        env: &Env,
+        session: &mut Session,
+        dispute: &mut Dispute,
+        seeker_award_bps: u32,
+        auto_resolved: bool,
+    ) -> Result<(), Error> {
+        if seeker_award_bps > MAX_BPS {
+            return Err(Error::InvalidSplitBps);
+        }
+
+        let expert_award_bps = MAX_BPS - seeker_award_bps;
+        let seeker_amount =
+            session.balance.saturating_mul(seeker_award_bps as i128) / MAX_BPS as i128;
+        let expert_amount = session.balance.saturating_sub(seeker_amount);
+
+        dispute.resolved = true;
+        dispute.seeker_award_bps = seeker_award_bps;
+        dispute.expert_award_bps = expert_award_bps;
+        dispute.auto_resolved = auto_resolved;
+        session.balance = 0;
+        session.accrued_amount = 0;
+        session.status = SessionStatus::Resolved;
+
+        Self::save_session(env, session);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Dispute(session.id), dispute);
+
+        let token_client = token::Client::new(env, &session.token);
+        if expert_amount > 0 {
+            token_client.transfer(
+                &env.current_contract_address(),
+                &session.expert,
+                &expert_amount,
+            );
+        }
+        if seeker_amount > 0 {
+            token_client.transfer(
+                &env.current_contract_address(),
+                &session.seeker,
+                &seeker_amount,
+            );
+        }
+
+        env.events().publish(
+            (symbol_short!("resolved"),),
+            (
+                session.id,
+                seeker_amount,
+                expert_amount,
+                dispute.evidence_cid.clone(),
+                auto_resolved,
+            ),
+        );
+
+        Ok(())
+    }
+
+    fn dispute_expiry_timestamp(dispute: &Dispute) -> u64 {
+        dispute.created_at.saturating_add(DISPUTE_EXPIRY_WINDOW)
+    }
+
+    fn is_valid_ipfs_cid(cid: &String) -> bool {
+        let len = cid.len() as usize;
+        if len < 2 || len > 64 {
+            return false;
+        }
+
+        if len == 46 {
+            let mut buf = [0u8; 46];
+            cid.copy_into_slice(&mut buf);
+            return buf[0] == b'Q' && buf[1] == b'm' && buf.iter().all(|b| Self::is_base58btc(*b));
+        }
+
+        let mut buf = [0u8; 64];
+        cid.copy_into_slice(&mut buf[..len]);
+        matches!(buf[0], b'b' | b'B' | b'k' | b'K')
+            && buf[..len].iter().all(|b| Self::is_cid_v1_char(*b))
+    }
+
+    fn is_base58btc(byte: u8) -> bool {
+        matches!(byte, b'1'..=b'9' | b'A'..=b'H' | b'J'..=b'N' | b'P'..=b'Z' | b'a'..=b'k' | b'm'..=b'z')
+    }
+
+    fn is_cid_v1_char(byte: u8) -> bool {
+        matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'2'..=b'7' | b'0'..=b'9')
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger};
-    use soroban_sdk::{token, Address, Env};
+    use soroban_sdk::{token, Address, Env, String};
 
     fn setup() -> (
         Env,
@@ -864,6 +1023,31 @@ mod test {
     }
 
     #[test]
+    fn test_calculate_platform_fee_uses_default_tiers() {
+        let (_, client, _, _, _, _, _, _) = setup();
+        let config = client.get_fee_config();
+
+        assert_eq!(config.first_tier_bps, 500);
+        assert_eq!(config.second_tier_bps, 300);
+        assert_eq!(config.first_tier_limit, 1_000);
+        assert_eq!(client.calculate_platform_fee(&800), 40);
+        assert_eq!(client.calculate_platform_fee(&1_500), 65);
+    }
+
+    #[test]
+    fn test_admin_can_update_fee_tiers() {
+        let (_, client, _, _, _, _, _, _) = setup();
+
+        client.set_fee_tiers(&2_000, &600, &200);
+        let config = client.get_fee_config();
+
+        assert_eq!(config.first_tier_limit, 2_000);
+        assert_eq!(config.first_tier_bps, 600);
+        assert_eq!(config.second_tier_bps, 200);
+        assert_eq!(client.calculate_platform_fee(&2_500), 130);
+    }
+
+    #[test]
     #[should_panic(expected = "Error(Contract, #13)")]
     fn test_start_session_rejects_low_reputation_expert() {
         let (_, client, _, _, seeker, expert, token, _) = setup();
@@ -930,5 +1114,97 @@ mod test {
         assert_eq!(token_client.balance(&expert), 100);
         assert_eq!(token_client.balance(&seeker), 900);
         assert_eq!(session.status, SessionStatus::Finished);
+    }
+
+    #[test]
+    fn test_flag_dispute_stores_evidence_cid() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let cid = String::from_str(&env, "QmYwAPJzv5CZsnAzt8auVZRnGzrYxkM4Tveoxu48UUfGz8");
+
+        client.flag_dispute(
+            &session_id,
+            &seeker,
+            &String::from_str(&env, "Need arbitration"),
+            &cid,
+        );
+
+        let dispute = client.get_dispute(&session_id);
+        assert_eq!(dispute.evidence_cid, cid);
+        assert!(!dispute.resolved);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #16)")]
+    fn test_flag_dispute_rejects_invalid_cid() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+
+        client.flag_dispute(
+            &session_id,
+            &seeker,
+            &String::from_str(&env, "Bad evidence"),
+            &String::from_str(&env, "not-a-cid"),
+        );
+    }
+
+    #[test]
+    fn test_resolve_dispute_splits_funds_by_percentage() {
+        let (env, client, contract_id, _, seeker, expert, token, _) = setup();
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let token_client = token::Client::new(&env, &token);
+
+        client.flag_dispute(
+            &session_id,
+            &seeker,
+            &String::from_str(&env, "Split the escrow"),
+            &String::from_str(&env, "QmYwAPJzv5CZsnAzt8auVZRnGzrYxkM4Tveoxu48UUfGz8"),
+        );
+        client.resolve_dispute(&session_id, &5_000);
+
+        let session = client.get_session(&session_id);
+        let dispute = client.get_dispute(&session_id);
+
+        assert_eq!(token_client.balance(&seeker), 750);
+        assert_eq!(token_client.balance(&expert), 250);
+        assert_eq!(token_client.balance(&contract_id), 0);
+        assert_eq!(session.status, SessionStatus::Resolved);
+        assert!(dispute.resolved);
+        assert_eq!(dispute.seeker_award_bps, 5_000);
+        assert_eq!(dispute.expert_award_bps, 5_000);
+        assert!(!dispute.auto_resolved);
+    }
+
+    #[test]
+    fn test_auto_resolve_expiry_refunds_seeker_after_30_days() {
+        let (env, client, contract_id, _, seeker, expert, token, _) = setup();
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let token_client = token::Client::new(&env, &token);
+
+        client.flag_dispute(
+            &session_id,
+            &seeker,
+            &String::from_str(&env, "Arbitrator inactive"),
+            &String::from_str(
+                &env,
+                "bafybeigdyrzt5zq3w7x7o6m2e6l6i5zv6sq7sdb4xwz5ztq4w4m3l4k2rq",
+            ),
+        );
+
+        env.ledger()
+            .set_timestamp(1_000 + DISPUTE_EXPIRY_WINDOW + 1);
+        client.auto_resolve_expiry(&expert, &session_id);
+
+        let session = client.get_session(&session_id);
+        let dispute = client.get_dispute(&session_id);
+
+        assert_eq!(token_client.balance(&seeker), 1_000);
+        assert_eq!(token_client.balance(&expert), 0);
+        assert_eq!(token_client.balance(&contract_id), 0);
+        assert_eq!(session.status, SessionStatus::Resolved);
+        assert!(dispute.resolved);
+        assert!(dispute.auto_resolved);
+        assert_eq!(dispute.seeker_award_bps, MAX_BPS);
+        assert_eq!(dispute.expert_award_bps, 0);
     }
 }
