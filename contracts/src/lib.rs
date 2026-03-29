@@ -11,6 +11,12 @@ const DISPUTE_EXPIRY_WINDOW: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_FEE_FIRST_TIER_LIMIT: i128 = 1_000;
 const DEFAULT_FEE_FIRST_TIER_BPS: u32 = 500;
 const DEFAULT_FEE_SECOND_TIER_BPS: u32 = 300;
+const STAKE_TIER_1: i128 = 1_000;
+const STAKE_TIER_2: i128 = 5_000;
+const STAKE_TIER_3: i128 = 10_000;
+const FEE_REDUCTION_TIER_1_BPS: u32 = 100;
+const FEE_REDUCTION_TIER_2_BPS: u32 = 200;
+const FEE_REDUCTION_TIER_3_BPS: u32 = 300;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -48,6 +54,8 @@ pub enum DataKey {
     Session(u64),
     Dispute(u64),
     UpgradeTimelock,
+    StakingContract,
+    ExpertStakedBalance(Address),
 }
 
 #[contracttype]
@@ -194,6 +202,62 @@ impl SkillSphereContract {
 
     pub fn get_fee_config(env: Env) -> FeeConfig {
         Self::fee_config(&env)
+    }
+
+    pub fn set_staking_contract(env: Env, staking_contract: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::StakingContract, &staking_contract);
+        env.events()
+            .publish((symbol_short!("setStake"),), staking_contract);
+        Ok(())
+    }
+
+    pub fn get_staking_contract(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::StakingContract)
+    }
+
+    pub fn set_expert_staked_balance(
+        env: Env,
+        expert: Address,
+        staked_balance: i128,
+    ) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if staked_balance < 0 {
+            return Err(Error::InvalidAmount);
+        }
+        env.storage().persistent().set(
+            &DataKey::ExpertStakedBalance(expert.clone()),
+            &staked_balance,
+        );
+        env.events()
+            .publish((symbol_short!("setStBal"),), (expert, staked_balance));
+        Ok(())
+    }
+
+    pub fn get_expert_staked_balance(env: Env, expert: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertStakedBalance(expert))
+            .unwrap_or(0i128)
+    }
+
+    pub fn get_expert_fee_bps(env: Env, expert: Address) -> u32 {
+        let base_fee = Self::fee_config(&env).first_tier_bps;
+        let staked_balance = Self::get_expert_staked_balance(env, expert);
+
+        let reduction = if staked_balance >= STAKE_TIER_3 {
+            FEE_REDUCTION_TIER_3_BPS
+        } else if staked_balance >= STAKE_TIER_2 {
+            FEE_REDUCTION_TIER_2_BPS
+        } else if staked_balance >= STAKE_TIER_1 {
+            FEE_REDUCTION_TIER_1_BPS
+        } else {
+            0
+        };
+
+        base_fee.saturating_sub(reduction)
     }
 
     pub fn calculate_platform_fee(env: Env, session_amount: i128) -> Result<i128, Error> {
@@ -829,7 +893,7 @@ impl SkillSphereContract {
 
     fn is_valid_ipfs_cid(cid: &String) -> bool {
         let len = cid.len() as usize;
-        if len < 2 || len > 64 {
+        if !(2..=64).contains(&len) {
             return false;
         }
 
@@ -1206,5 +1270,116 @@ mod test {
         assert!(dispute.auto_resolved);
         assert_eq!(dispute.seeker_award_bps, MAX_BPS);
         assert_eq!(dispute.expert_award_bps, 0);
+    }
+
+    #[test]
+    fn test_expert_with_no_stake_pays_full_fee() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 500);
+    }
+
+    #[test]
+    fn test_expert_with_tier_1_stake_gets_100_bps_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &1_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 400);
+    }
+
+    #[test]
+    fn test_expert_with_tier_2_stake_gets_200_bps_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &5_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 300);
+    }
+
+    #[test]
+    fn test_expert_with_tier_3_stake_gets_300_bps_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &10_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 200);
+    }
+
+    #[test]
+    fn test_expert_stake_just_below_tier_1_pays_full_fee() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &999);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 500);
+    }
+
+    #[test]
+    fn test_expert_stake_between_tier_1_and_2_gets_tier_1_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &3_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 400);
+    }
+
+    #[test]
+    fn test_expert_stake_between_tier_2_and_3_gets_tier_2_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &7_500);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 300);
+    }
+
+    #[test]
+    fn test_expert_stake_above_tier_3_gets_tier_3_reduction() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &50_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 200);
+    }
+
+    #[test]
+    fn test_get_expert_staked_balance_returns_zero_for_new_expert() {
+        let (env, client, _, _, _, _, _, _) = setup();
+        let new_expert = Address::generate(&env);
+        let balance = client.get_expert_staked_balance(&new_expert);
+        assert_eq!(balance, 0);
+    }
+
+    #[test]
+    fn test_set_and_get_expert_staked_balance() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &2_500);
+        let balance = client.get_expert_staked_balance(&expert);
+        assert_eq!(balance, 2_500);
+    }
+
+    #[test]
+    fn test_set_staking_contract_address() {
+        let (env, client, _, _, _, _, _, _) = setup();
+        let staking_contract = Address::generate(&env);
+        client.set_staking_contract(&staking_contract);
+        let retrieved = client.get_staking_contract();
+        assert_eq!(retrieved, Some(staking_contract));
+    }
+
+    #[test]
+    fn test_get_staking_contract_returns_none_when_not_set() {
+        let (_, client, _, _, _, _, _, _) = setup();
+        let retrieved = client.get_staking_contract();
+        assert_eq!(retrieved, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_set_expert_staked_balance_rejects_negative_amount() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_expert_staked_balance(&expert, &-100);
+    }
+
+    #[test]
+    fn test_fee_reduction_respects_base_fee_changes() {
+        let (_, client, _, _, _, expert, _, _) = setup();
+        client.set_fee(&800);
+        client.set_expert_staked_balance(&expert, &10_000);
+        let fee_bps = client.get_expert_fee_bps(&expert);
+        assert_eq!(fee_bps, 500);
     }
 }
