@@ -41,6 +41,7 @@ pub enum Error {
     InvalidSplitBps = 17,
     DisputeWindowActive = 18,
     InvalidFeeConfig = 19,
+    InsufficientTreasuryBalance = 20,
 }
 
 #[contracttype]
@@ -56,6 +57,8 @@ pub enum DataKey {
     UpgradeTimelock,
     StakingContract,
     ExpertStakedBalance(Address),
+    TreasuryAddress,
+    TreasuryBalance(Address),
 }
 
 #[contracttype]
@@ -258,6 +261,113 @@ impl SkillSphereContract {
         };
 
         base_fee.saturating_sub(reduction)
+    }
+
+    pub fn set_treasury_address(env: Env, treasury: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::TreasuryAddress, &treasury);
+        env.events().publish((symbol_short!("setTreas"),), treasury);
+        Ok(())
+    }
+
+    pub fn get_treasury_address(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::TreasuryAddress)
+    }
+
+    pub fn get_treasury_balance(env: Env, token: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::TreasuryBalance(token))
+            .unwrap_or(0i128)
+    }
+
+    pub fn collect_fee(
+        env: Env,
+        session_id: u64,
+        token: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let current_balance = Self::get_treasury_balance(env.clone(), token.clone());
+        let new_balance = current_balance.saturating_add(amount);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::TreasuryBalance(token.clone()), &new_balance);
+
+        env.events()
+            .publish((symbol_short!("feeCollct"),), (session_id, token, amount));
+
+        Ok(())
+    }
+
+    pub fn withdraw_treasury(
+        env: Env,
+        token: Address,
+        amount: i128,
+        recipient: Address,
+    ) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let current_balance = Self::get_treasury_balance(env.clone(), token.clone());
+        if current_balance < amount {
+            return Err(Error::InsufficientTreasuryBalance);
+        }
+
+        let new_balance = current_balance.saturating_sub(amount);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TreasuryBalance(token.clone()), &new_balance);
+
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &recipient, &amount);
+
+        env.events().publish(
+            (symbol_short!("treasWdrw"),),
+            (token.clone(), amount, recipient.clone()),
+        );
+
+        Ok(())
+    }
+
+    pub fn withdraw_all_treasury(
+        env: Env,
+        token: Address,
+        recipient: Address,
+    ) -> Result<i128, Error> {
+        Self::require_admin(&env)?;
+
+        let current_balance = Self::get_treasury_balance(env.clone(), token.clone());
+        if current_balance <= 0 {
+            return Ok(0);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::TreasuryBalance(token.clone()), &0i128);
+
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &recipient,
+            &current_balance,
+        );
+
+        env.events().publish(
+            (symbol_short!("treasWdrw"),),
+            (token.clone(), current_balance, recipient.clone()),
+        );
+
+        Ok(current_balance)
     }
 
     pub fn calculate_platform_fee(env: Env, session_amount: i128) -> Result<i128, Error> {
@@ -1381,5 +1491,189 @@ mod test {
         client.set_expert_staked_balance(&expert, &10_000);
         let fee_bps = client.get_expert_fee_bps(&expert);
         assert_eq!(fee_bps, 500);
+    }
+
+    #[test]
+    fn test_get_treasury_balance_returns_zero_initially() {
+        let (_, client, _, _, _, _, token, _) = setup();
+        let balance = client.get_treasury_balance(&token);
+        assert_eq!(balance, 0);
+    }
+
+    #[test]
+    fn test_collect_fee_increases_treasury_balance() {
+        let (_, client, _, _, _, _, token, _) = setup();
+        client.collect_fee(&1, &token, &100);
+        let balance = client.get_treasury_balance(&token);
+        assert_eq!(balance, 100);
+    }
+
+    #[test]
+    fn test_collect_multiple_fees_accumulates_balance() {
+        let (_, client, _, _, _, _, token, _) = setup();
+        client.collect_fee(&1, &token, &100);
+        client.collect_fee(&2, &token, &250);
+        client.collect_fee(&3, &token, &150);
+        let balance = client.get_treasury_balance(&token);
+        assert_eq!(balance, 500);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_collect_fee_rejects_zero_amount() {
+        let (_, client, _, _, _, _, token, _) = setup();
+        client.collect_fee(&1, &token, &0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_collect_fee_rejects_negative_amount() {
+        let (_, client, _, _, _, _, token, _) = setup();
+        client.collect_fee(&1, &token, &-50);
+    }
+
+    #[test]
+    fn test_set_and_get_treasury_address() {
+        let (env, client, _, _, _, _, _, _) = setup();
+        let treasury = Address::generate(&env);
+        client.set_treasury_address(&treasury);
+        let retrieved = client.get_treasury_address();
+        assert_eq!(retrieved, Some(treasury));
+    }
+
+    #[test]
+    fn test_get_treasury_address_returns_none_when_not_set() {
+        let (_, client, _, _, _, _, _, _) = setup();
+        let retrieved = client.get_treasury_address();
+        assert_eq!(retrieved, None);
+    }
+
+    #[test]
+    fn test_withdraw_treasury_transfers_funds_and_updates_balance() {
+        let (env, client, contract_id, _, _, _, token, _token_admin) = setup();
+        let treasury = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+
+        client.collect_fee(&1, &token, &500);
+        asset_admin.mint(&contract_id, &500);
+
+        client.withdraw_treasury(&token, &300, &treasury);
+
+        assert_eq!(client.get_treasury_balance(&token), 200);
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&treasury), 300);
+    }
+
+    #[test]
+    fn test_withdraw_all_treasury_empties_balance() {
+        let (env, client, contract_id, _, _, _, token, _token_admin) = setup();
+        let treasury = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+
+        client.collect_fee(&1, &token, &750);
+        asset_admin.mint(&contract_id, &750);
+
+        let withdrawn = client.withdraw_all_treasury(&token, &treasury);
+
+        assert_eq!(withdrawn, 750);
+        assert_eq!(client.get_treasury_balance(&token), 0);
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&treasury), 750);
+    }
+
+    #[test]
+    fn test_withdraw_all_treasury_returns_zero_when_empty() {
+        let (env, client, _, _, _, _, token, _) = setup();
+        let treasury = Address::generate(&env);
+
+        let withdrawn = client.withdraw_all_treasury(&token, &treasury);
+
+        assert_eq!(withdrawn, 0);
+        assert_eq!(client.get_treasury_balance(&token), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #20)")]
+    fn test_withdraw_treasury_fails_with_insufficient_balance() {
+        let (env, client, _, _, _, _, token, _) = setup();
+        let treasury = Address::generate(&env);
+
+        client.collect_fee(&1, &token, &100);
+        client.withdraw_treasury(&token, &500, &treasury);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_withdraw_treasury_rejects_zero_amount() {
+        let (env, client, _, _, _, _, token, _) = setup();
+        let treasury = Address::generate(&env);
+
+        client.collect_fee(&1, &token, &100);
+        client.withdraw_treasury(&token, &0, &treasury);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_withdraw_treasury_rejects_negative_amount() {
+        let (env, client, _, _, _, _, token, _) = setup();
+        let treasury = Address::generate(&env);
+
+        client.collect_fee(&1, &token, &100);
+        client.withdraw_treasury(&token, &-50, &treasury);
+    }
+
+    #[test]
+    fn test_treasury_tracks_multiple_tokens_separately() {
+        let (env, client, _, _, _, _, token1, token_admin) = setup();
+        let token2 = env.register_stellar_asset_contract_v2(token_admin.clone());
+        let token2_address = token2.address();
+
+        client.collect_fee(&1, &token1, &100);
+        client.collect_fee(&2, &token2_address, &250);
+
+        assert_eq!(client.get_treasury_balance(&token1), 100);
+        assert_eq!(client.get_treasury_balance(&token2_address), 250);
+    }
+
+    #[test]
+    fn test_partial_withdrawals_maintain_correct_balance() {
+        let (env, client, contract_id, _, _, _, token, _token_admin) = setup();
+        let treasury = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+
+        client.collect_fee(&1, &token, &1_000);
+        asset_admin.mint(&contract_id, &1_000);
+
+        client.withdraw_treasury(&token, &300, &treasury);
+        assert_eq!(client.get_treasury_balance(&token), 700);
+
+        client.withdraw_treasury(&token, &200, &treasury);
+        assert_eq!(client.get_treasury_balance(&token), 500);
+
+        client.withdraw_treasury(&token, &500, &treasury);
+        assert_eq!(client.get_treasury_balance(&token), 0);
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&treasury), 1_000);
+    }
+
+    #[test]
+    fn test_treasury_balance_survives_multiple_collect_and_withdraw_cycles() {
+        let (env, client, contract_id, _, _, _, token, _token_admin) = setup();
+        let treasury = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+
+        client.collect_fee(&1, &token, &500);
+        asset_admin.mint(&contract_id, &500);
+        client.withdraw_treasury(&token, &200, &treasury);
+        assert_eq!(client.get_treasury_balance(&token), 300);
+
+        client.collect_fee(&2, &token, &400);
+        asset_admin.mint(&contract_id, &400);
+        assert_eq!(client.get_treasury_balance(&token), 700);
+
+        client.withdraw_treasury(&token, &700, &treasury);
+        assert_eq!(client.get_treasury_balance(&token), 0);
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&treasury), 900);
     }
 }
