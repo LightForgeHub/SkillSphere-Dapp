@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
-    String,
+    String, Vec,
 };
 
 const MAX_BPS: u32 = 10_000;
@@ -116,6 +116,7 @@ pub struct Session {
     pub status: SessionStatus,
     pub balance: i128,
     pub accrued_amount: i128,
+    pub metadata_cid: String,
 }
 
 #[contract]
@@ -453,6 +454,7 @@ impl SkillSphereContract {
         rate_per_second: i128,
         amount: i128,
         min_reputation: u32,
+        metadata_cid: String,
     ) -> Result<u64, Error> {
         Self::ensure_protocol_active(&env)?;
         seeker.require_auth();
@@ -463,6 +465,8 @@ impl SkillSphereContract {
 
         if amount < Self::min_session_deposit(&env) {
             return Err(Error::AmountBelowMinimum);
+        if !Self::is_valid_ipfs_cid(&metadata_cid) {
+            return Err(Error::InvalidCid);
         }
 
         if Self::get_expert_reputation(env.clone(), expert.clone()) < min_reputation {
@@ -488,13 +492,17 @@ impl SkillSphereContract {
             status: SessionStatus::Active,
             balance: amount,
             accrued_amount: 0,
+            metadata_cid: metadata_cid.clone(),
         };
 
         env.storage()
             .persistent()
             .set(&DataKey::Session(session_id), &session);
-        env.events()
-            .publish((symbol_short!("started"),), session_id);
+
+        env.events().publish(
+            (symbol_short!("session"), symbol_short!("started")),
+            (session_id, seeker.clone(), expert.clone(), rate_per_second, amount, now, metadata_cid),
+        );
 
         token_client.transfer(&seeker, &env.current_contract_address(), &amount);
 
@@ -532,7 +540,10 @@ impl SkillSphereContract {
         session.status = SessionStatus::Paused;
 
         Self::save_session(&env, &session);
-        env.events().publish((symbol_short!("paused"),), session_id);
+        env.events().publish(
+            (symbol_short!("session"), symbol_short!("paused")),
+            (session_id, now),
+        );
 
         Ok(())
     }
@@ -547,61 +558,54 @@ impl SkillSphereContract {
             return Err(Error::InvalidSessionState);
         }
 
-        session.last_settlement_timestamp = env.ledger().timestamp();
+        let now = env.ledger().timestamp();
+        session.last_settlement_timestamp = now;
         session.status = SessionStatus::Active;
 
         Self::save_session(&env, &session);
-        env.events()
-            .publish((symbol_short!("resumed"),), session_id);
+        env.events().publish(
+            (symbol_short!("session"), symbol_short!("resumed")),
+            (session_id, now),
+        );
 
         Ok(())
     }
 
     pub fn settle_session(env: Env, session_id: u64) -> Result<i128, Error> {
         Self::ensure_protocol_active(&env)?;
-        let mut session = Self::get_session_or_error(&env, session_id)?;
+        let session = Self::get_session_or_error(&env, session_id)?;
         session.expert.require_auth();
+        Self::internal_settle(&env, session)
+    }
 
-        if matches!(
-            session.status,
-            SessionStatus::Finished | SessionStatus::Disputed | SessionStatus::Resolved
-        ) {
-            return Err(Error::InvalidSessionState);
-        }
+    pub fn batch_settle(env: Env, expert: Address, session_ids: Vec<u64>) -> Result<Vec<i128>, Error> {
+        Self::ensure_protocol_active(&env)?;
+        expert.require_auth();
 
-        let now = env.ledger().timestamp();
-        let expiry = Self::expiry_timestamp_for_session(&session);
-        let effective_time = Self::bounded_time(&session, now);
-        let claimable = Self::claimable_amount_for_session(&session, effective_time);
+        let mut results: Vec<i128> = Vec::new(&env);
 
-        if claimable <= 0 {
-            if now > expiry {
-                session.status = SessionStatus::Finished;
-                session.last_settlement_timestamp = expiry;
-                Self::save_session(&env, &session);
-                return Err(Error::SessionExpired);
+        for session_id in session_ids.iter() {
+            let session = match Self::get_session_or_error(&env, session_id) {
+                Ok(s) => s,
+                Err(_) => {
+                    results.push_back(0i128);
+                    continue;
+                }
+            };
+
+            if session.expert != expert {
+                results.push_back(0i128);
+                continue;
             }
 
-            return Ok(0);
+            let amount = match Self::internal_settle(&env, session) {
+                Ok(a) => a,
+                Err(_) => 0i128,
+            };
+            results.push_back(amount);
         }
 
-        session.balance -= claimable;
-        session.accrued_amount = 0;
-        session.last_settlement_timestamp = effective_time;
-
-        if session.balance == 0 || now >= expiry {
-            session.status = SessionStatus::Finished;
-        }
-
-        Self::save_session(&env, &session);
-
-        let token_client = token::Client::new(&env, &session.token);
-        token_client.transfer(&env.current_contract_address(), &session.expert, &claimable);
-
-        env.events()
-            .publish((symbol_short!("settled"),), (session_id, claimable));
-
-        Ok(claimable)
+        Ok(results)
     }
 
     pub fn refund_session(env: Env, seeker: Address, session_id: u64) -> Result<i128, Error> {
@@ -628,6 +632,13 @@ impl SkillSphereContract {
 
     pub fn get_session(env: Env, session_id: u64) -> Result<Session, Error> {
         Self::get_session_or_error(&env, session_id)
+    }
+
+    pub fn get_current_earnings(env: Env, session_id: u64) -> Result<i128, Error> {
+        let session = Self::get_session_or_error(&env, session_id)?;
+        let now = env.ledger().timestamp();
+        let effective_time = Self::bounded_time(&session, now);
+        Ok(Self::claimable_amount_for_session(&session, effective_time))
     }
 
     pub fn flag_dispute(
@@ -677,8 +688,11 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::Dispute(session_id), &dispute);
 
-        env.events()
-            .publish((symbol_short!("disputed"),), (session_id, evidence_cid));
+        let created_at = dispute.created_at;
+        env.events().publish(
+            (symbol_short!("dispute"), symbol_short!("flagged")),
+            (session_id, seeker, evidence_cid, created_at),
+        );
 
         Ok(())
     }
@@ -843,6 +857,54 @@ impl SkillSphereContract {
         Ok(())
     }
 
+    fn internal_settle(env: &Env, mut session: Session) -> Result<i128, Error> {
+        if matches!(
+            session.status,
+            SessionStatus::Finished | SessionStatus::Disputed | SessionStatus::Resolved
+        ) {
+            return Err(Error::InvalidSessionState);
+        }
+
+        let now = env.ledger().timestamp();
+        let expiry = Self::expiry_timestamp_for_session(&session);
+        let effective_time = Self::bounded_time(&session, now);
+        let claimable = Self::claimable_amount_for_session(&session, effective_time);
+
+        if claimable <= 0 {
+            if now > expiry {
+                session.status = SessionStatus::Finished;
+                session.last_settlement_timestamp = expiry;
+                Self::save_session(env, &session);
+                return Err(Error::SessionExpired);
+            }
+            return Ok(0);
+        }
+
+        session.balance -= claimable;
+        session.accrued_amount = 0;
+        session.last_settlement_timestamp = effective_time;
+
+        if session.balance == 0 || now >= expiry {
+            session.status = SessionStatus::Finished;
+        }
+
+        let session_id = session.id;
+        let expert = session.expert.clone();
+        let token = session.token.clone();
+
+        Self::save_session(env, &session);
+
+        let token_client = token::Client::new(env, &token);
+        token_client.transfer(&env.current_contract_address(), &expert, &claimable);
+
+        env.events().publish(
+            (symbol_short!("session"), symbol_short!("settled")),
+            (session_id, claimable, now),
+        );
+
+        Ok(claimable)
+    }
+
     fn close_session(env: &Env, session: &mut Session) -> Result<(i128, i128), Error> {
         if matches!(
             session.status,
@@ -873,9 +935,10 @@ impl SkillSphereContract {
             token_client.transfer(&env.current_contract_address(), &session.seeker, &remaining);
         }
 
+        let finished_at = env.ledger().timestamp();
         env.events().publish(
-            (symbol_short!("finished"),),
-            (session.id, claimable, remaining),
+            (symbol_short!("session"), symbol_short!("finished")),
+            (session.id, claimable, remaining, finished_at),
         );
 
         Ok((claimable, remaining))
@@ -1021,14 +1084,15 @@ impl SkillSphereContract {
             );
         }
 
+        let resolved_at = env.ledger().timestamp();
         env.events().publish(
-            (symbol_short!("resolved"),),
+            (symbol_short!("dispute"), symbol_short!("resolved")),
             (
                 session.id,
                 seeker_amount,
                 expert_amount,
-                dispute.evidence_cid.clone(),
                 auto_resolved,
+                resolved_at,
             ),
         );
 
@@ -1070,7 +1134,11 @@ impl SkillSphereContract {
 mod test {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger};
-    use soroban_sdk::{token, Address, Env, String};
+    use soroban_sdk::{token, Address, Env, String, Vec};
+
+    fn test_cid(env: &Env) -> String {
+        String::from_str(env, "QmYwAPJzv5CZsnAzt8auVZRnGzrYxkM4Tveoxu48UUfGz8")
+    }
 
     fn setup() -> (
         Env,
@@ -1116,7 +1184,7 @@ mod test {
     #[test]
     fn test_calculate_claimable_amount_same_time_returns_zero() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
 
         let claimable = client.calculate_claimable_amount(&session_id, &env.ledger().timestamp());
         assert_eq!(claimable, 0);
@@ -1125,7 +1193,7 @@ mod test {
     #[test]
     fn test_start_session_locks_tokens_and_creates_session() {
         let (env, client, contract_id, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &5, &300, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &5, &300, &0, &test_cid(&env));
 
         let session = client.get_session(&session_id);
         let token_client = token::Client::new(&env, &token);
@@ -1147,14 +1215,14 @@ mod test {
     #[test]
     #[should_panic(expected = "Error(Contract, #4)")]
     fn test_start_session_fails_on_insufficient_balance() {
-        let (_, client, _, _, seeker, expert, token, _) = setup();
-        client.start_session(&seeker, &expert, &token, &5, &2_000, &0);
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        client.start_session(&seeker, &expert, &token, &5, &2_000, &0, &test_cid(&env));
     }
 
     #[test]
     fn test_linear_streaming_caps_at_remaining_balance() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &20, &100, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &20, &100, &0, &test_cid(&env));
 
         let claimable =
             client.calculate_claimable_amount(&session_id, &(env.ledger().timestamp() + 10));
@@ -1164,7 +1232,7 @@ mod test {
     #[test]
     fn test_pause_and_resume_preserve_accrued_amount() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
 
         env.ledger().set_timestamp(1_010);
         client.pause_session(&seeker, &session_id);
@@ -1188,7 +1256,7 @@ mod test {
     fn test_only_participants_can_pause_or_resume() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
         let stranger = Address::generate(&env);
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
 
         client.pause_session(&stranger, &session_id);
     }
@@ -1196,7 +1264,7 @@ mod test {
     #[test]
     fn test_settle_session_transfers_partial_milestone_payment() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
         let token_client = token::Client::new(&env, &token);
 
         env.ledger().set_timestamp(1_020);
@@ -1213,7 +1281,7 @@ mod test {
     #[test]
     fn test_multiple_settlements_track_milestones_without_ending_session() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
         let token_client = token::Client::new(&env, &token);
 
         env.ledger().set_timestamp(1_010);
@@ -1282,16 +1350,16 @@ mod test {
     #[test]
     #[should_panic(expected = "Error(Contract, #13)")]
     fn test_start_session_rejects_low_reputation_expert() {
-        let (_, client, _, _, seeker, expert, token, _) = setup();
-        client.start_session(&seeker, &expert, &token, &10, &500, &1);
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        client.start_session(&seeker, &expert, &token, &10, &500, &1, &test_cid(&env));
     }
 
     #[test]
     fn test_start_session_allows_expert_when_reputation_is_met() {
-        let (_, client, _, _, seeker, expert, token, _) = setup();
+        let (env, client, _, _, seeker, expert, token, _) = setup();
 
         client.set_expert_reputation(&expert, &85);
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &80);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &80, &test_cid(&env));
 
         assert_eq!(session_id, 1);
         assert_eq!(client.get_expert_reputation(&expert), 85);
@@ -1299,8 +1367,8 @@ mod test {
 
     #[test]
     fn test_expiry_timestamp_uses_remaining_balance_and_rate() {
-        let (_, client, _, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &101, &0);
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &101, &0, &test_cid(&env));
 
         assert_eq!(client.calculate_expiry_timestamp(&session_id), 1_011);
     }
@@ -1308,7 +1376,7 @@ mod test {
     #[test]
     fn test_settle_session_after_funded_window_drains_and_finishes() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
         let token_client = token::Client::new(&env, &token);
 
         env.ledger().set_timestamp(1_060);
@@ -1324,16 +1392,16 @@ mod test {
     #[test]
     #[should_panic(expected = "Error(Contract, #12)")]
     fn test_protocol_pause_blocks_new_sessions() {
-        let (_, client, _, _, seeker, expert, token, _) = setup();
+        let (env, client, _, _, seeker, expert, token, _) = setup();
         client.pause_protocol();
 
-        client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
     }
 
     #[test]
     fn test_protocol_pause_blocks_settlement_but_allows_refund_session() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
         let token_client = token::Client::new(&env, &token);
 
         env.ledger().set_timestamp(1_010);
@@ -1351,7 +1419,7 @@ mod test {
     #[test]
     fn test_flag_dispute_stores_evidence_cid() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
         let cid = String::from_str(&env, "QmYwAPJzv5CZsnAzt8auVZRnGzrYxkM4Tveoxu48UUfGz8");
 
         client.flag_dispute(
@@ -1370,7 +1438,7 @@ mod test {
     #[should_panic(expected = "Error(Contract, #16)")]
     fn test_flag_dispute_rejects_invalid_cid() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
 
         client.flag_dispute(
             &session_id,
@@ -1383,7 +1451,7 @@ mod test {
     #[test]
     fn test_resolve_dispute_splits_funds_by_percentage() {
         let (env, client, contract_id, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
         let token_client = token::Client::new(&env, &token);
 
         client.flag_dispute(
@@ -1410,7 +1478,7 @@ mod test {
     #[test]
     fn test_auto_resolve_expiry_refunds_seeker_after_30_days() {
         let (env, client, contract_id, _, seeker, expert, token, _) = setup();
-        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
         let token_client = token::Client::new(&env, &token);
 
         client.flag_dispute(
@@ -1733,5 +1801,144 @@ mod test {
         assert_eq!(client.get_treasury_balance(&token), 0);
         let token_client = token::Client::new(&env, &token);
         assert_eq!(token_client.balance(&treasury), 900);
+    }
+
+    // --- #139: Session metadata CID ---
+
+    #[test]
+    fn test_start_session_stores_metadata_cid() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let cid = test_cid(&env);
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &cid);
+
+        let session = client.get_session(&session_id);
+        assert_eq!(session.metadata_cid, cid);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #16)")]
+    fn test_start_session_rejects_invalid_metadata_cid() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let bad_cid = String::from_str(&env, "not-a-valid-cid");
+        client.start_session(&seeker, &expert, &token, &10, &500, &0, &bad_cid);
+    }
+
+    #[test]
+    fn test_start_session_accepts_cid_v1() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let cid_v1 = String::from_str(&env, "bafybeigdyrzt5zq3w7x7o6m2e6l6i5zv6sq7sd");
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &cid_v1);
+
+        let session = client.get_session(&session_id);
+        assert_eq!(session.metadata_cid, cid_v1);
+    }
+
+    // --- #137: get_current_earnings view function ---
+
+    #[test]
+    fn test_get_current_earnings_returns_zero_at_start() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
+
+        let earnings = client.get_current_earnings(&session_id);
+        assert_eq!(earnings, 0);
+    }
+
+    #[test]
+    fn test_get_current_earnings_reflects_elapsed_time() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
+
+        env.ledger().set_timestamp(1_015);
+        let earnings = client.get_current_earnings(&session_id);
+        assert_eq!(earnings, 150);
+    }
+
+    #[test]
+    fn test_get_current_earnings_caps_at_session_balance() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &100, &0, &test_cid(&env));
+
+        env.ledger().set_timestamp(1_100);
+        let earnings = client.get_current_earnings(&session_id);
+        assert_eq!(earnings, 100);
+    }
+
+    #[test]
+    fn test_get_current_earnings_zero_when_paused() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
+
+        env.ledger().set_timestamp(1_010);
+        client.pause_session(&seeker, &session_id);
+
+        env.ledger().set_timestamp(1_030);
+        let earnings = client.get_current_earnings(&session_id);
+        assert_eq!(earnings, 100);
+    }
+
+    // --- #138: batch_settle ---
+
+    #[test]
+    fn test_batch_settle_settles_multiple_sessions() {
+        let (env, client, _, _, seeker, expert, token, token_admin) = setup();
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+        asset_admin.mint(&seeker, &2_000);
+
+        let session_1 = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
+        let session_2 = client.start_session(&seeker, &expert, &token, &5, &300, &0, &test_cid(&env));
+
+        env.ledger().set_timestamp(1_020);
+
+        let mut ids = Vec::new(&env);
+        ids.push_back(session_1);
+        ids.push_back(session_2);
+
+        let results = client.batch_settle(&expert, &ids);
+
+        assert_eq!(results.get(0).unwrap(), 200);
+        assert_eq!(results.get(1).unwrap(), 100);
+
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&expert), 300);
+    }
+
+    #[test]
+    fn test_batch_settle_skips_sessions_belonging_to_other_expert() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let other_expert = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+        asset_admin.mint(&seeker, &1_000);
+
+        let session_1 = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
+        let session_2 = client.start_session(&seeker, &other_expert, &token, &10, &500, &0, &test_cid(&env));
+
+        env.ledger().set_timestamp(1_010);
+
+        let mut ids = Vec::new(&env);
+        ids.push_back(session_1);
+        ids.push_back(session_2);
+
+        let results = client.batch_settle(&expert, &ids);
+
+        assert_eq!(results.get(0).unwrap(), 100);
+        assert_eq!(results.get(1).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_batch_settle_skips_nonexistent_sessions() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &500, &0, &test_cid(&env));
+
+        env.ledger().set_timestamp(1_010);
+
+        let mut ids = Vec::new(&env);
+        ids.push_back(session_id);
+        ids.push_back(999u64);
+
+        let results = client.batch_settle(&expert, &ids);
+
+        assert_eq!(results.get(0).unwrap(), 100);
+        assert_eq!(results.get(1).unwrap(), 0);
     }
 }
