@@ -11,6 +11,7 @@ const DISPUTE_EXPIRY_WINDOW: u64 = 30 * 24 * 60 * 60;
 const DEFAULT_FEE_FIRST_TIER_LIMIT: i128 = 1_000;
 const DEFAULT_FEE_FIRST_TIER_BPS: u32 = 500;
 const DEFAULT_FEE_SECOND_TIER_BPS: u32 = 300;
+const DEFAULT_MIN_SESSION_DEPOSIT: i128 = 100;
 const STAKE_TIER_1: i128 = 1_000;
 const STAKE_TIER_2: i128 = 5_000;
 const STAKE_TIER_3: i128 = 10_000;
@@ -42,6 +43,7 @@ pub enum Error {
     DisputeWindowActive = 18,
     InvalidFeeConfig = 19,
     InsufficientTreasuryBalance = 20,
+    AmountBelowMinimum = 21,
 }
 
 #[contracttype]
@@ -50,6 +52,7 @@ pub enum DataKey {
     Admin,
     NextSessionId,
     PlatformFeeConfig,
+    MinimumSessionDeposit,
     ProtocolPaused,
     ExpertReputation(Address),
     Session(u64),
@@ -138,6 +141,10 @@ impl SkillSphereContract {
                 second_tier_bps: DEFAULT_FEE_SECOND_TIER_BPS,
             },
         );
+        env.storage().instance().set(
+            &DataKey::MinimumSessionDeposit,
+            &DEFAULT_MIN_SESSION_DEPOSIT,
+        );
         env.storage()
             .instance()
             .set(&DataKey::ProtocolPaused, &false);
@@ -206,6 +213,26 @@ impl SkillSphereContract {
 
     pub fn get_fee_config(env: Env) -> FeeConfig {
         Self::fee_config(&env)
+    }
+
+    pub fn set_min_session_deposit(env: Env, min_deposit: i128) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+
+        if min_deposit <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::MinimumSessionDeposit, &min_deposit);
+        env.events()
+            .publish((symbol_short!("setMinDep"),), min_deposit);
+
+        Ok(())
+    }
+
+    pub fn get_min_session_deposit(env: Env) -> i128 {
+        Self::min_session_deposit(&env)
     }
 
     pub fn set_staking_contract(env: Env, staking_contract: Address) -> Result<(), Error> {
@@ -436,6 +463,8 @@ impl SkillSphereContract {
             return Err(Error::InvalidAmount);
         }
 
+        if amount < Self::min_session_deposit(&env) {
+            return Err(Error::AmountBelowMinimum);
         if !Self::is_valid_ipfs_cid(&metadata_cid) {
             return Err(Error::InvalidCid);
         }
@@ -972,6 +1001,13 @@ impl SkillSphereContract {
             })
     }
 
+    fn min_session_deposit(env: &Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MinimumSessionDeposit)
+            .unwrap_or(DEFAULT_MIN_SESSION_DEPOSIT)
+    }
+
     fn validate_fee_config(config: &FeeConfig) -> Result<(), Error> {
         if config.first_tier_limit <= 0
             || config.first_tier_bps > MAX_BPS
@@ -1170,6 +1206,13 @@ mod test {
     }
 
     #[test]
+    #[should_panic(expected = "Error(Contract, #21)")]
+    fn test_start_session_fails_when_amount_is_below_minimum_deposit() {
+        let (_, client, _, _, seeker, expert, token, _) = setup();
+        client.start_session(&seeker, &expert, &token, &5, &99, &0);
+    }
+
+    #[test]
     #[should_panic(expected = "Error(Contract, #4)")]
     fn test_start_session_fails_on_insufficient_balance() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
@@ -1264,6 +1307,19 @@ mod test {
 
         client.set_admin(&new_admin);
         assert_eq!(client.get_admin(), new_admin);
+    }
+
+    #[test]
+    fn test_min_session_deposit_defaults_and_can_be_updated_by_admin() {
+        let (_, client, _, _, seeker, expert, token, _) = setup();
+
+        assert_eq!(client.get_min_session_deposit(), 100);
+
+        client.set_min_session_deposit(&250);
+        assert_eq!(client.get_min_session_deposit(), 250);
+
+        let session_id = client.start_session(&seeker, &expert, &token, &10, &250, &0);
+        assert_eq!(session_id, 1);
     }
 
     #[test]
