@@ -32,20 +32,24 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
 
       - name: Cache Cargo registry and build output
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: contracts
+          workspaces: contracts -> target
 
-      - name: Check Rust formatting
-        run: cargo fmt --all -- --check
+      - name: Install Soroban CLI
+        run: cargo install --locked soroban-cli
 
       - name: Run contract tests
         run: cargo test --locked
 
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
       - name: Build optimized contract WASM
-        run: cargo build --release --locked --target wasm32-unknown-unknown
+        run: soroban contract build
 
       - name: Upload built WASM artifact
         uses: actions/upload-artifact@v4
