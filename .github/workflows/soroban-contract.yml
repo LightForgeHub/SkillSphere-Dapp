@@ -1,0 +1,45 @@
+name: Soroban Contract
+
+on:
+  pull_request:
+    paths:
+      - "contracts/**"
+      - ".github/workflows/soroban-contract.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "contracts/**"
+      - ".github/workflows/soroban-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and test Soroban contract
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo registry and build output
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+
+      - name: Run contract tests
+        run: cargo test --locked
+
+      - name: Build optimized contract WASM
+        run: cargo build --release --locked --target wasm32-unknown-unknown
