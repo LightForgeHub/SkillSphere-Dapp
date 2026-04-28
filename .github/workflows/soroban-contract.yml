@@ -38,8 +38,18 @@ jobs:
         with:
           workspaces: contracts
 
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+
       - name: Run contract tests
         run: cargo test --locked
 
       - name: Build optimized contract WASM
         run: cargo build --release --locked --target wasm32-unknown-unknown
+
+      - name: Upload built WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: soroban-contract-wasm
+          path: contracts/target/wasm32-unknown-unknown/release/*.wasm
+          if-no-files-found: error
