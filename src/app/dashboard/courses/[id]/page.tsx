@@ -6,10 +6,21 @@ import SummaryTabContent from "@/components/dashboard/SummaryTabContent";
 import ResourcesTabContent from "@/components/dashboard/ResourcesTabContent";
 import TaskTabContent from "@/components/dashboard/TaskTabContent";
 import CourseContentTrackerSidebar from "@/components/dashboard/CourseContentTrackerSidebar";
-import CourseLearningHeader from "@/components/dashboard/CourseLearningHeader";
+import CourseVideoPlayer from "@/components/dashboard/CourseVideoPlayer";
+import { Checkbox } from "@/components/ui/Checkbox";
 import image1 from "../../../../../public/Image (1).png";
 
 type TabId = "overview" | "resources" | "tasks" | "summary";
+
+const LESSONS = [
+  { id: 1, title: "Lesson 1: Intro to Digital Technology", duration: "5 min" },
+  { id: 2, title: "Lesson 2: Blockchain Basics", duration: "5 min" },
+  { id: 3, title: "Lesson 3: Smart Contracts", duration: "5 min" },
+  { id: 4, title: "Lesson 4: DeFi Fundamentals", duration: "5 min" },
+  { id: 5, title: "Lesson 5: Web3 Wallets", duration: "5 min" },
+  { id: 6, title: "Lesson 6: dApp Development", duration: "5 min" },
+  { id: 7, title: "Lesson 7: Token Standards", duration: "5 min" },
+];
 
 interface Params {
   id: string;
@@ -106,6 +117,8 @@ const COURSE_DATA: Record<
 export default function CourseDetailsPage({ params }: { params: Params }) {
   const courseData = COURSE_DATA[params.id];
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [currentLesson, setCurrentLesson] = useState(0);
+  const [completed, setCompleted] = useState(false);
 
   if (!courseData) {
     return (
@@ -115,28 +128,49 @@ export default function CourseDetailsPage({ params }: { params: Params }) {
     );
   }
 
+  const handlePrevious = () =>
+    setCurrentLesson((prev) => Math.max(0, prev - 1));
+  const handleNext = () =>
+    setCurrentLesson((prev) => Math.min(LESSONS.length - 1, prev + 1));
+
   return (
     <div className="space-y-6 pb-12">
+      {/* Breadcrumb */}
+      <div className="bg-[#1A1520] border border-[#1D1D1C] rounded-xl px-5 py-3 flex items-center gap-3 text-sm">
+        <span className="text-white/60 truncate">{courseData.title}</span>
+        <span className="text-white/30 shrink-0">|</span>
+        <span className="text-white font-medium truncate">
+          {LESSONS[currentLesson].title}
+        </span>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: video + tabs */}
         <div className="lg:col-span-2 space-y-4">
-          <CourseLearningHeader
-            courseTitle={courseData.title}
-            currentLesson={courseData.currentLesson}
+          <CourseVideoPlayer
+            thumbnailSrc={courseData.image}
+            thumbnailAlt={LESSONS[currentLesson].title}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
           />
 
-          <div className="relative w-full h-64 rounded-lg overflow-hidden bg-gray-900">
-            <img
-              src={courseData.image}
-              alt={courseData.title}
-              className="w-full h-full object-cover"
+          {/* Completed checkbox */}
+          <label className="flex items-center gap-2 cursor-pointer w-fit">
+            <Checkbox
+              checked={completed}
+              onCheckedChange={(val) => setCompleted(Boolean(val))}
+              shape="square"
+              className="border-white/30 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
             />
-          </div>
+            <span className="text-sm text-white/80 select-none">Completed</span>
+          </label>
 
-          <div className="flex gap-2 border-b border-[#1D1D1C] overflow-x-auto mt-2">
+          {/* Tabs */}
+          <div className="flex gap-2 border-b border-[#1D1D1C] overflow-x-auto">
             {[
               { id: "overview" as const, label: "Overview" },
               { id: "resources" as const, label: "Resources" },
-              { id: "tasks" as const, label: "Tasks" },
+              { id: "tasks" as const, label: "Task" },
               { id: "summary" as const, label: "Summary" },
             ].map((tab) => (
               <button
@@ -173,8 +207,20 @@ export default function CourseDetailsPage({ params }: { params: Params }) {
           </div>
         </div>
 
+        {/* Right: tutor + content tracker */}
         <div className="lg:col-span-1">
-          <CourseContentTrackerSidebar />
+          <CourseContentTrackerSidebar
+            lessons={LESSONS.map((l) => ({
+              id: l.id,
+              title: l.title,
+              duration: l.duration,
+            }))}
+            tutorInfo={{
+              name: "Satoshi Nakamoto",
+              role: "Front-End Developer",
+              avatar: "/avatarPlaceholder1.jpg",
+            }}
+          />
         </div>
       </div>
     </div>
