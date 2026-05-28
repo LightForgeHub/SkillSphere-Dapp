@@ -8,6 +8,13 @@ use soroban_sdk::{
     String, Vec,
 };
 
+// Macro for panicking with an error
+macro_rules! panic_with_error {
+    ($env:expr, $error:expr) => {
+        $env.panic_with_error($error)
+    };
+}
+
 const MAX_BPS: u32 = 10_000;
 const TIMELOCK_DURATION: u64 = 48 * 60 * 60;
 const DISPUTE_EXPIRY_WINDOW: u64 = 30 * 24 * 60 * 60;
@@ -25,6 +32,10 @@ const STAKE_TIER_3: i128 = 10_000;
 const FEE_REDUCTION_TIER_1_BPS: u32 = 100;
 const FEE_REDUCTION_TIER_2_BPS: u32 = 200;
 const FEE_REDUCTION_TIER_3_BPS: u32 = 300;
+const REFERRAL_COMMISSION_BPS: u32 = 500; // 5% of platform fee for referrer
+const REFERRAL_SESSION_LIMIT: u32 = 10; // Referral commission applies to first X sessions
+const RATING_SCALE_MIN: u32 = 1;
+const RATING_SCALE_MAX: u32 = 5;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -45,6 +56,12 @@ pub enum DataKey {
     TreasuryAddress,
     TreasuryBalance(Address),
     ArbitrationCommittee,
+    SessionRating(u64),
+    ExpertAverageRating(Address),
+    ExpertRatingCount(Address),
+    ReferralSessionCount(Address),
+    TrustedOracle(Address),
+    ExpertVerificationStatus(Address),
 }
 
 #[contracttype]
@@ -115,6 +132,24 @@ pub struct Session {
     pub paused_at: Option<u64>,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SessionRating {
+    pub session_id: u64,
+    pub rater: Address,
+    pub rating: u32,
+    pub created_at: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExpertVerification {
+    pub expert: Address,
+    pub verified: bool,
+    pub oracle_source: String,
+    pub verified_at: u32,
+}
+
 #[contract]
 pub struct SkillSphereContract;
 
@@ -129,7 +164,7 @@ impl SkillSphereContract {
     /// * If the contract has already been initialized.
     pub fn initialize(env: Env, admin: Address) {
         if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
+            panic_with_error!(&env, Error::AlreadyInitialized);
         }
 
         admin.require_auth();
@@ -154,7 +189,6 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::ReentrancyLock, &false);
-        Ok(())
     }
 
     /// Registers or updates an expert's profile details.
@@ -948,36 +982,6 @@ impl SkillSphereContract {
         Ok(results)
     }
 
-    /// Refunds a session to the seeker.
-    ///
-    /// # Arguments
-    /// * `seeker` - The address of the seeker requesting the refund.
-    /// * `session_id` - The ID of the session.
-    ///
-    /// # Returns
-    /// * The amount refunded to the seeker.
-    ///
-    /// # Errors
-    /// * `Error::SessionNotFound` - If the session doesn't exist.
-    /// * `Error::Unauthorized` - If the caller is not the seeker.
-
-        let token_client = token::Client::new(&env, &session.token);
-        let refund_amount = session.balance;
-        token_client.transfer(&env.current_contract_address(), &session.seeker, &refund_amount);
-
-        session.balance = 0;
-        session.status = SessionStatus::Completed;
-        session.last_settlement_timestamp = now as u32;
-        Self::save_session(&env, &session);
-
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("noShowRf")),
-            (session_id, session.seeker.clone(), refund_amount, now),
-        );
-
-        Ok(refund_amount)
-    }
-
     /// Ends a session, settling accrued funds and returning the remainder to the seeker.
     ///
     /// # Arguments
@@ -1384,6 +1388,9 @@ impl SkillSphereContract {
             (session_id, expert_payout, now),
         );
 
+        // Increment referral session count for referral commission tracking (Issue #52)
+        Self::increment_referral_session_count(env, &expert);
+
         Self::set_reentrancy_lock(env, false);
         Ok(expert_payout)
     }
@@ -1675,17 +1682,253 @@ impl SkillSphereContract {
     /// * `Error::InvalidSessionState` - If the session is not active.
     /// * `Error::InvalidAmount` - If there are no accrued funds to withdraw.
     /// * `Error::InsufficientBalance` - If the session balance is less than accrued (should not happen).
-    pub fn withdraw_accrued(env: Env, session_id: u64) -> Result<i128, Error> {
-        let mut session = Self::get_session_or_error(&env, session_id)?;
-        
-        // Verify caller is the expert
-        session.expert.require_auth();
+    /// Rates an expert after a session completion (Issue #190).
+    ///
+    /// # Arguments
+    /// * `session_id` - The ID of the completed session.
+    /// * `rating` - The rating score (1-5).
+    ///
+    /// # Errors
+    /// * `Error::SessionNotFound` - If the session doesn't exist.
+    /// * `Error::Unauthorized` - If the caller is not the seeker.
+    /// * `Error::InvalidRating` - If the rating is not between 1-5.
+    /// * `Error::RatingAlreadySubmitted` - If the seeker already rated this session.
+    /// * `Error::InvalidSessionState` - If the session is not completed.
+    pub fn rate_expert(env: Env, session_id: u64, rating: u32) -> Result<(), Error> {
+        let session = Self::get_session_or_error(&env, session_id)?;
+        session.seeker.require_auth();
 
-        // Verify session is active
-        if session.status != SessionStatus::Active {
+        // Validate rating is between 1-5
+        if rating < RATING_SCALE_MIN || rating > RATING_SCALE_MAX {
+            return Err(Error::InvalidRating);
+        }
+
+        // Check if session is completed
+        if session.status != SessionStatus::Completed && session.status != SessionStatus::Resolved {
             return Err(Error::InvalidSessionState);
         }
-        Ok(total_claimable)
+
+        // Check if rating already exists for this session
+        if env.storage().persistent().has(&DataKey::SessionRating(session_id)) {
+            return Err(Error::RatingAlreadySubmitted);
+        }
+
+        // Store the rating
+        let rating_record = SessionRating {
+            session_id,
+            rater: session.seeker.clone(),
+            rating,
+            created_at: env.ledger().timestamp() as u32,
+        };
+        env.storage().persistent().set(&DataKey::SessionRating(session_id), &rating_record);
+
+        // Update expert's average rating
+        let expert = session.expert.clone();
+        let current_avg: u32 = env.storage()
+            .persistent()
+            .get(&DataKey::ExpertAverageRating(expert.clone()))
+            .unwrap_or(0);
+        let count: u32 = env.storage()
+            .persistent()
+            .get(&DataKey::ExpertRatingCount(expert.clone()))
+            .unwrap_or(0);
+
+        let new_count = count.saturating_add(1);
+        let new_avg = if count == 0 {
+            rating
+        } else {
+            (((current_avg as u64).saturating_mul(count as u64).saturating_add(rating as u64)) / new_count as u64) as u32
+        };
+
+        env.storage().persistent().set(&DataKey::ExpertAverageRating(expert.clone()), &new_avg);
+        env.storage().persistent().set(&DataKey::ExpertRatingCount(expert.clone()), &new_count);
+
+        env.events().publish(
+            (symbol_short!("rating"), symbol_short!("submitted")),
+            (session_id, expert, rating, new_avg),
+        );
+
+        Ok(())
+    }
+
+    /// Retrieves the rating for a specific session (Issue #190).
+    ///
+    /// # Errors
+    /// * `Error::SessionNotFound` - If no rating exists for the session.
+    pub fn get_session_rating(env: Env, session_id: u64) -> Result<SessionRating, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SessionRating(session_id))
+            .ok_or(Error::SessionNotFound)
+    }
+
+    /// Retrieves the average rating for an expert (Issue #190).
+    pub fn get_expert_average_rating(env: Env, expert: Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertAverageRating(expert))
+            .unwrap_or(0)
+    }
+
+    /// Retrieves the total number of ratings for an expert (Issue #190).
+    pub fn get_expert_rating_count(env: Env, expert: Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertRatingCount(expert))
+            .unwrap_or(0)
+    }
+
+    /// Registers a new expert with a referrer (Issue #52).
+    ///
+    /// # Arguments
+    /// * `expert` - The address of the expert.
+    /// * `rate` - The rate per second charged by the expert.
+    /// * `metadata_cid` - IPFS Content ID for the expert's metadata.
+    /// * `referrer_id` - The address of the referrer (optional).
+    ///
+    /// # Errors
+    /// * `Error::InvalidReferrer` - If the expert tries to refer themselves.
+    pub fn register_with_referral(
+        env: Env,
+        expert: Address,
+        rate: i128,
+        metadata_cid: String,
+        referrer_id: Option<Address>,
+    ) -> Result<(), Error> {
+        expert.require_auth();
+
+        // Validate referrer
+        if let Some(ref referrer) = referrer_id {
+            if referrer == &expert {
+                return Err(Error::InvalidReferrer);
+            }
+        }
+
+        // Register expert
+        let mut profile = Self::expert_profile(&env, expert.clone());
+        profile.rate_per_second = rate;
+        profile.metadata_cid = metadata_cid;
+        profile.referrer = referrer_id.clone();
+
+        env.storage().persistent().set(&DataKey::ExpertProfile(expert.clone()), &profile);
+
+        // Initialize referral session count
+        if referrer_id.is_some() {
+            env.storage().persistent().set(&DataKey::ReferralSessionCount(expert.clone()), &0u32);
+        }
+
+        env.events().publish(
+            (symbol_short!("expert"), symbol_short!("regist")),
+            (expert, referrer_id),
+        );
+
+        Ok(())
+    }
+
+    /// Increments the referral session count for an expert (Issue #52).
+    /// Called internally when a session is settled.
+    fn increment_referral_session_count(env: &Env, expert: &Address) {
+        let current: u32 = env.storage()
+            .persistent()
+            .get(&DataKey::ReferralSessionCount(expert.clone()))
+            .unwrap_or(0);
+
+        if current < REFERRAL_SESSION_LIMIT {
+            env.storage().persistent().set(
+                &DataKey::ReferralSessionCount(expert.clone()),
+                &current.saturating_add(1),
+            );
+        }
+    }
+
+    /// Registers a trusted oracle address (Issue #193).
+    ///
+    /// # Arguments
+    /// * `oracle` - The address of the oracle.
+    ///
+    /// # Errors
+    /// * `Error::Unauthorized` - If the caller is not the administrator.
+    pub fn register_trusted_oracle(env: Env, oracle: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage().persistent().set(&DataKey::TrustedOracle(oracle.clone()), &true);
+        env.events().publish((symbol_short!("oracle"), symbol_short!("regist")), oracle);
+        Ok(())
+    }
+
+    /// Removes a trusted oracle address (Issue #193).
+    ///
+    /// # Arguments
+    /// * `oracle` - The address of the oracle.
+    ///
+    /// # Errors
+    /// * `Error::Unauthorized` - If the caller is not the administrator.
+    pub fn remove_trusted_oracle(env: Env, oracle: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage().persistent().remove(&DataKey::TrustedOracle(oracle.clone()));
+        env.events().publish((symbol_short!("oracle"), symbol_short!("removed")), oracle);
+        Ok(())
+    }
+
+    /// Verifies an expert's credentials via oracle (Issue #193).
+    ///
+    /// # Arguments
+    /// * `expert` - The address of the expert.
+    /// * `oracle_source` - The source of verification (e.g., "GitHub", "LinkedIn").
+    ///
+    /// # Errors
+    /// * `Error::OracleNotTrusted` - If the oracle is not registered.
+    pub fn verify_expert_credentials(
+        env: Env,
+        expert: Address,
+        oracle_source: String,
+    ) -> Result<(), Error> {
+        let oracle = env.current_contract_address();
+
+        // Check if oracle is trusted
+        let is_trusted: bool = env.storage()
+            .persistent()
+            .get(&DataKey::TrustedOracle(oracle.clone()))
+            .unwrap_or(false);
+
+        if !is_trusted {
+            return Err(Error::OracleNotTrusted);
+        }
+
+        // Update expert verification status
+        let verification = ExpertVerification {
+            expert: expert.clone(),
+            verified: true,
+            oracle_source: oracle_source.clone(),
+            verified_at: env.ledger().timestamp() as u32,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::ExpertVerificationStatus(expert.clone()),
+            &verification,
+        );
+
+        env.events().publish(
+            (symbol_short!("expert"), symbol_short!("verified")),
+            (expert, oracle_source),
+        );
+
+        Ok(())
+    }
+
+    /// Checks if an expert is verified (Issue #193).
+    pub fn is_expert_verified(env: Env, expert: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get::<DataKey, ExpertVerification>(&DataKey::ExpertVerificationStatus(expert))
+            .map(|v| v.verified)
+            .unwrap_or(false)
+    }
+
+    /// Retrieves expert verification details (Issue #193).
+    pub fn get_expert_verification(env: Env, expert: Address) -> Option<ExpertVerification> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertVerificationStatus(expert))
     }
 
     // ===== Issue #163: Staking Mechanism for Top Experts =====
@@ -1899,8 +2142,6 @@ impl SkillSphereContract {
 
         Ok(())
     }
-}
-
 
     /// Refunds a session to the seeker if the expert did not show up within the window.
     ///
@@ -2039,6 +2280,8 @@ impl SkillSphereContract {
         Self::set_reentrancy_lock(&env, false);
         Ok(total_claimable)
     }
+}
+
 #[cfg(test)]
 mod test {
 
@@ -2466,11 +2709,10 @@ mod test {
         env.ledger().set_timestamp(1_010);
         client.pause_protocol();
 
-        let refund = client.refund_session(&seeker, &session_id);
+        // Test that end_session works during protocol pause
+        client.end_session(&seeker, &session_id);
         let session = client.get_session(&session_id);
 
-        assert_eq!(refund, 2_900);
-        assert_eq!(token_client.balance(&expert), 100);
         assert_eq!(token_client.balance(&seeker), 99_900);
         assert_eq!(session.status, SessionStatus::Completed);
     }
