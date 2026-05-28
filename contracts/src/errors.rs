@@ -31,4 +31,10 @@ pub enum Error {
     ReentrancyDetected = 25,
     DepositTooLow = 26,
     AlreadyInitialized = 27,
+    InvalidRating = 28,
+    RatingAlreadySubmitted = 29,
+    OracleNotTrusted = 30,
+    InvalidOracleSignature = 31,
+    InvalidSessionState = 32,
+    InsufficientBalance = 33,
 }
