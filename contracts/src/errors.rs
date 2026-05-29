@@ -37,4 +37,8 @@ pub enum Error {
     InvalidOracleSignature = 31,
     InvalidSessionState = 32,
     InsufficientBalance = 33,
+    BurnBpsExceedsFee = 34,
+    StakeNotFound = 35,
+    NoRewardsToClaim = 36,
+    StakeBalanceInsufficient = 37,
 }
