@@ -41,4 +41,12 @@ pub enum Error {
     StakeNotFound = 35,
     NoRewardsToClaim = 36,
     StakeBalanceInsufficient = 37,
+    FixedPriceSessionAlreadyFinalised = 34,
+    SubscriptionNotFound = 35,
+    SubscriptionAlreadyCollected = 36,
+    SubscriptionExpired = 37,
+    InsuranceVaultUnset = 38,
+    InsufficientInsuranceBalance = 39,
+    ExpertOffline = 34,
+    DisputeAlreadyResolved = 35,
 }
