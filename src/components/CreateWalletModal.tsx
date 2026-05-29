@@ -43,9 +43,8 @@ export default function CreateWalletModal({ open, onClose }: Props) {
     setState("connecting");
     // fake async
     setTimeout(() => {
-      // deterministic success for MetaMask, error for Coinbase, random for WalletConnect
-      if (wallet === "MetaMask") setState("connected");
-      else if (wallet === "Coinbase Wallet") setState("error");
+      // deterministic success for Freighter, random for Albedo
+      if (wallet === "Freighter") setState("connected");
       else setState(Math.random() > 0.4 ? "connected" : "error");
     }, 1200);
   }
@@ -72,19 +71,14 @@ export default function CreateWalletModal({ open, onClose }: Props) {
           {/* Default / Options */}
           {state === "idle" && (
             <div className="space-y-3">
-              <button onClick={() => simulateConnect("MetaMask")} className="w-full flex items-center justify-between px-4 py-3 bg-[#FA7F2B] text-white border border-white/10 rounded-lg">
-                <span>MetaMask</span>
-                <span className="text-xs text-white/90">Popular</span>
+              <button onClick={() => simulateConnect("Freighter")} className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#4B0082] to-[#1E90FF] text-white border border-white/10 rounded-lg hover:opacity-90 transition-opacity">
+                <span>Freighter</span>
+                <span className="text-xs text-white/90">Recommended</span>
               </button>
 
-              <button onClick={() => simulateConnect("WalletConnect")} className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white border border-white/10 rounded-lg">
-                <span>WalletConnect</span>
-                <span className="text-xs text-white/90">QR</span>
-              </button>
-
-              <button onClick={() => simulateConnect("Coinbase Wallet")} className="w-full flex items-center justify-between px-4 py-3 bg-[#613485] text-white border border-white/10 rounded-lg">
-                <span>Coinbase Wallet</span>
-                <span className="text-xs text-white/90">Hosted</span>
+              <button onClick={() => simulateConnect("Albedo")} className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#1a1a2e] to-[#16213e] text-white border border-white/10 rounded-lg hover:opacity-90 transition-opacity">
+                <span>Albedo</span>
+                <span className="text-xs text-white/90">Secure</span>
               </button>
             </div>
           )}
