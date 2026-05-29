@@ -37,6 +37,12 @@ pub enum Error {
     InvalidOracleSignature = 31,
     InvalidSessionState = 32,
     InsufficientBalance = 33,
+    FixedPriceSessionAlreadyFinalised = 34,
+    SubscriptionNotFound = 35,
+    SubscriptionAlreadyCollected = 36,
+    SubscriptionExpired = 37,
+    InsuranceVaultUnset = 38,
+    InsufficientInsuranceBalance = 39,
     ExpertOffline = 34,
     DisputeAlreadyResolved = 35,
 }
