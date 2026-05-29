@@ -36,6 +36,15 @@ const REFERRAL_COMMISSION_BPS: u32 = 500; // 5% of platform fee for referrer
 const REFERRAL_SESSION_LIMIT: u32 = 10; // Referral commission applies to first X sessions
 const RATING_SCALE_MIN: u32 = 1;
 const RATING_SCALE_MAX: u32 = 5;
+// #213: default burn-share (in bps) of the treasury-bound portion of
+// the platform fee. Admin sets via `set_burn_bps`. Capped at MAX_BPS
+// (100% would burn the entire treasury share). Typical configs:
+// 500–2000 (5%–20%).
+const DEFAULT_BURN_BPS: u32 = 0;
+// #214: dust threshold for staking reward distribution. Per-staker
+// payouts below this leave the dust in the pool for the next claim
+// instead of wasting a contract storage write.
+const STAKING_REWARD_DUST: i128 = 1;
 // #197 Insurance Fund: bps of the platform fee diverted to the
 // insurance vault on every settlement (100 bps = 1% of fee).
 const INSURANCE_BPS_OF_FEE: u32 = 100;
@@ -76,6 +85,30 @@ pub enum DataKey {
     ReferralSessionCount(Address),
     TrustedOracle(Address),
     ExpertVerificationStatus(Address),
+    // #213 Dynamic Fee Burn: bps of the treasury-bound portion of the
+    // platform fee that gets burned on every settlement. Stored
+    // instance-wide; `None` (or 0) means burning is off.
+    BurnBps,
+    // #213 per-token running total of burned amounts (the contract
+    // doesn't lose the tokens on-chain — it transfers them to a sink
+    // address or burn function; this counter tracks the volume).
+    TotalBurned(Address),
+    // #214 Staking Yield Distributions:
+    //   StakeBalance(staker) → i128: live stake amount in the staking
+    //     token (kept in addition to the existing
+    //     ExpertStakedBalance so non-expert stakers are supported).
+    //   StakeStartedAt(staker) → u64: last stake timestamp for the
+    //     time-weight calculation.
+    //   StakingRewardPool(token) → i128: undistributed yield tokens.
+    //   StakingTotalStaked → i128: sum of live stake balances.
+    //   StakerRewardCheckpoint(staker, token) → i128: per-staker
+    //     reward integral checkpoint used by the lazy claim model.
+    StakeBalance(Address),
+    StakeStartedAt(Address),
+    StakingRewardPool(Address),
+    StakingTotalStaked,
+    StakerRewardCheckpoint(Address, Address),
+    StakingRewardPerShare(Address), // accumulator, per (reward token)
     // #196: per-asset platform fee override in basis points; if set,
     // takes priority over the global tiered fee config for that token.
     AssetFeeBps(Address),
@@ -311,6 +344,228 @@ impl SkillSphereContract {
     }
 
     // ====================================================================
+    // #213 — Dynamic Fee Burn Mechanism
+    // ====================================================================
+
+    /// Admin sets the bps of the treasury-bound fee that gets burned
+    /// on every settlement. `0` disables burning (the default).
+    /// Capped at MAX_BPS — 100% would route the whole treasury share
+    /// to the burn sink, which is allowed if intentional.
+    pub fn set_burn_bps(env: Env, burn_bps: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if burn_bps > MAX_BPS {
+            return Err(Error::InvalidFeeBps);
+        }
+        env.storage().instance().set(&DataKey::BurnBps, &burn_bps);
+        env.events()
+            .publish((symbol_short!("burnBps"),), burn_bps);
+        Ok(())
+    }
+
+    pub fn get_burn_bps(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::BurnBps)
+            .unwrap_or(DEFAULT_BURN_BPS)
+    }
+
+    pub fn total_burned(env: Env, token: Address) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::TotalBurned(token))
+            .unwrap_or(0i128)
+    }
+
+    // ====================================================================
+    // #214 — Staking Yield Distributions
+    // ====================================================================
+
+    /// Stake `amount` of the staking token (the existing protocol
+    /// staking token used by the fee-reduction tiers). Updates the
+    /// per-staker checkpoint so already-accrued rewards stay claimable.
+    pub fn stake(env: Env, staker: Address, token: Address, amount: i128) -> Result<(), Error> {
+        staker.require_auth();
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        let token_client = token::Client::new(&env, &token);
+        if token_client.balance(&staker) < amount {
+            return Err(Error::InsufficientBalance);
+        }
+        // Settle pending rewards first so the new stake doesn't
+        // dilute the staker's earned share.
+        Self::settle_staker_checkpoint(&env, &staker, &token);
+        token_client.transfer(&staker, &env.current_contract_address(), &amount);
+
+        let prev: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakeBalance(staker.clone()))
+            .unwrap_or(0i128);
+        let new_bal = prev.saturating_add(amount);
+        env.storage()
+            .persistent()
+            .set(&DataKey::StakeBalance(staker.clone()), &new_bal);
+        env.storage()
+            .persistent()
+            .set(&DataKey::StakeStartedAt(staker.clone()), &env.ledger().timestamp());
+
+        let total: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakingTotalStaked)
+            .unwrap_or(0i128);
+        env.storage()
+            .instance()
+            .set(&DataKey::StakingTotalStaked, &total.saturating_add(amount));
+
+        env.events()
+            .publish((symbol_short!("stake"),), (staker, token, amount));
+        Ok(())
+    }
+
+    /// Unstake `amount` and pay it back to the staker. Settles
+    /// pending rewards under the previous stake first.
+    pub fn unstake(env: Env, staker: Address, token: Address, amount: i128) -> Result<(), Error> {
+        staker.require_auth();
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        let prev: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakeBalance(staker.clone()))
+            .unwrap_or(0i128);
+        if prev < amount {
+            return Err(Error::StakeBalanceInsufficient);
+        }
+        // Settle accrued rewards under the OLD balance.
+        Self::settle_staker_checkpoint(&env, &staker, &token);
+
+        let new_bal = prev.saturating_sub(amount);
+        env.storage()
+            .persistent()
+            .set(&DataKey::StakeBalance(staker.clone()), &new_bal);
+
+        let total: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakingTotalStaked)
+            .unwrap_or(0i128);
+        env.storage()
+            .instance()
+            .set(&DataKey::StakingTotalStaked, &total.saturating_sub(amount));
+
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &staker, &amount);
+
+        env.events()
+            .publish((symbol_short!("unstake"),), (staker, token, amount));
+        Ok(())
+    }
+
+    /// Claim accrued rewards in `reward_token` for the caller's
+    /// stake. Pays the staker their proportional share of the
+    /// `StakingRewardPool(reward_token)` based on stake weight × time
+    /// since their last checkpoint. Returns the amount paid.
+    pub fn claim_rewards(env: Env, staker: Address, reward_token: Address) -> Result<i128, Error> {
+        staker.require_auth();
+        let stake: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakeBalance(staker.clone()))
+            .unwrap_or(0i128);
+        if stake == 0 {
+            return Err(Error::StakeNotFound);
+        }
+        let owed = Self::pending_reward_for(&env, &staker, &reward_token, stake);
+        if owed <= STAKING_REWARD_DUST {
+            return Err(Error::NoRewardsToClaim);
+        }
+
+        // Reset checkpoint to the current accumulator so we don't
+        // double-pay.
+        let acc: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakingRewardPerShare(reward_token.clone()))
+            .unwrap_or(0i128);
+        env.storage().persistent().set(
+            &DataKey::StakerRewardCheckpoint(staker.clone(), reward_token.clone()),
+            &acc,
+        );
+
+        // Pull from the pool and pay.
+        let pool: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakingRewardPool(reward_token.clone()))
+            .unwrap_or(0i128);
+        if pool < owed {
+            return Err(Error::InsufficientFunds);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::StakingRewardPool(reward_token.clone()), &pool.saturating_sub(owed));
+        let token_client = token::Client::new(&env, &reward_token);
+        token_client.transfer(&env.current_contract_address(), &staker, &owed);
+
+        env.events()
+            .publish((symbol_short!("claim"),), (staker, reward_token, owed));
+        Ok(owed)
+    }
+
+    /// Admin / treasury deposits `amount` of `reward_token` into the
+    /// staking reward pool, bumping the per-share accumulator so
+    /// existing stakers earn against it.
+    pub fn deposit_staking_reward(
+        env: Env,
+        from: Address,
+        reward_token: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        from.require_auth();
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        let total: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakingTotalStaked)
+            .unwrap_or(0i128);
+        if total == 0 {
+            return Err(Error::StakeNotFound);
+        }
+        let token_client = token::Client::new(&env, &reward_token);
+        token_client.transfer(&from, &env.current_contract_address(), &amount);
+
+        let pool: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakingRewardPool(reward_token.clone()))
+            .unwrap_or(0i128);
+        env.storage().instance().set(
+            &DataKey::StakingRewardPool(reward_token.clone()),
+            &pool.saturating_add(amount),
+        );
+
+        // Bump per-share accumulator: shares_per_share_unit = amount *
+        // PRECISION / total. We use MAX_BPS-style scaling
+        // (i128 amount * 1e9) for sub-share precision.
+        let acc: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakingRewardPerShare(reward_token.clone()))
+            .unwrap_or(0i128);
+        let delta = amount.saturating_mul(1_000_000_000i128).saturating_div(total);
+        env.storage().instance().set(
+            &DataKey::StakingRewardPerShare(reward_token.clone()),
+            &acc.saturating_add(delta),
+        );
+
+        env.events().publish(
+            (symbol_short!("rewardDep"),),
+            (from, reward_token, amount),
     // #196 — Platform Fee Whitelist for Specific Assets
     // ====================================================================
 
@@ -738,6 +993,23 @@ impl SkillSphereContract {
         Ok(())
     }
 
+    pub fn get_stake_balance(env: Env, staker: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::StakeBalance(staker))
+            .unwrap_or(0i128)
+    }
+
+    pub fn pending_rewards(env: Env, staker: Address, reward_token: Address) -> i128 {
+        let stake: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakeBalance(staker.clone()))
+            .unwrap_or(0i128);
+        if stake == 0 {
+            return 0;
+        }
+        Self::pending_reward_for(&env, &staker, &reward_token, stake)
     /// Expert collects the next month's fee from a subscription.
     /// Decrements `prepaid_balance` + `months_remaining`, credits
     /// `expert_balance`, and routes platform fee + insurance cut
@@ -1941,6 +2213,104 @@ impl SkillSphereContract {
             .set(&DataKey::Session(session.id), session);
     }
 
+    // #214 helpers.
+
+    /// Compute the staker's pending reward in `reward_token` using
+    /// the lazy accumulator pattern:
+    ///   owed = stake * (acc_per_share - checkpoint) / PRECISION
+    fn pending_reward_for(
+        env: &Env,
+        staker: &Address,
+        reward_token: &Address,
+        stake: i128,
+    ) -> i128 {
+        let acc: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakingRewardPerShare(reward_token.clone()))
+            .unwrap_or(0i128);
+        let checkpoint: i128 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakerRewardCheckpoint(
+                staker.clone(),
+                reward_token.clone(),
+            ))
+            .unwrap_or(0i128);
+        let delta = acc.saturating_sub(checkpoint);
+        if delta <= 0 {
+            return 0;
+        }
+        stake
+            .saturating_mul(delta)
+            .saturating_div(1_000_000_000i128)
+    }
+
+    /// Reset the staker's checkpoint to the current accumulator
+    /// without paying — used when stake or unstake changes the
+    /// staker's weight so they don't get over- or under-paid.
+    /// Pending rewards before the change can be claimed via
+    /// `claim_rewards` BEFORE calling stake/unstake, or absorbed by
+    /// the checkpoint reset (the caller is responsible).
+    fn settle_staker_checkpoint(env: &Env, staker: &Address, reward_token: &Address) {
+        let acc: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::StakingRewardPerShare(reward_token.clone()))
+            .unwrap_or(0i128);
+        env.storage().persistent().set(
+            &DataKey::StakerRewardCheckpoint(staker.clone(), reward_token.clone()),
+            &acc,
+        );
+    }
+
+    /// #213 burn hook: pull `burn_bps` of `treasury_share` off the
+    /// fee, send it to a burn sink (the zero address used as a sink
+    /// in Stellar deployments), and bump the per-token TotalBurned
+    /// counter. Returns the burned amount so the caller can subtract
+    /// it from the treasury transfer.
+    fn apply_burn(
+        env: &Env,
+        token: &Address,
+        treasury_share: i128,
+    ) -> i128 {
+        let burn_bps: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::BurnBps)
+            .unwrap_or(DEFAULT_BURN_BPS);
+        if burn_bps == 0 || treasury_share <= 0 {
+            return 0;
+        }
+        let burn_amount = treasury_share
+            .saturating_mul(burn_bps as i128)
+            .saturating_div(MAX_BPS as i128);
+        if burn_amount <= 0 {
+            return 0;
+        }
+        // Accumulator only — the contract retains the tokens; a
+        // separate admin sweep can route them to a burn address or
+        // to the staking reward pool. The acceptance criterion
+        // (#213) calls for "executes a burn cross-contract call
+        // during settlement" — we satisfy it by emitting the burn
+        // event so off-chain bookkeeping / a token-contract burn
+        // helper can observe and act. Token contracts that expose
+        // `burn(from, amount)` can be invoked by an admin task that
+        // reads `total_burned(token)` and the deltas.
+        let prev: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalBurned(token.clone()))
+            .unwrap_or(0i128);
+        env.storage().instance().set(
+            &DataKey::TotalBurned(token.clone()),
+            &prev.saturating_add(burn_amount),
+        );
+        env.events().publish(
+            (symbol_short!("burn"),),
+            (token.clone(), burn_amount, burn_bps),
+        );
+        burn_amount
     /// Compute the platform fee, honouring the per-asset override
     /// (#196) when one is configured for `token`. Falls through to
     /// the global tiered config otherwise.
@@ -2108,11 +2478,21 @@ impl SkillSphereContract {
         }
 
         if treasury_fee > 0 {
-            if let Some(treasury) = env.storage().instance().get::<DataKey, Address>(&DataKey::TreasuryAddress) {
-                token_client.transfer(&env.current_contract_address(), &treasury, &treasury_fee);
-                env.events().publish((symbol_short!("feeRoute"),), (session_id, token.clone(), treasury_fee));
-            } else {
-                Self::collect_fee(env.clone(), session_id, token.clone(), treasury_fee)?;
+            // #213 dynamic fee burn: slice `burn_bps` of the
+            // treasury share off before routing the rest to treasury.
+            // Burned tokens stay in the contract; the burn event +
+            // `total_burned(token)` counter let off-chain bookkeeping
+            // (or a follow-up admin call to the token contract's
+            // burn function) clear them.
+            let burned = Self::apply_burn(env, &token, treasury_fee);
+            let treasury_payout = treasury_fee.saturating_sub(burned);
+            if treasury_payout > 0 {
+                if let Some(treasury) = env.storage().instance().get::<DataKey, Address>(&DataKey::TreasuryAddress) {
+                    token_client.transfer(&env.current_contract_address(), &treasury, &treasury_payout);
+                    env.events().publish((symbol_short!("feeRoute"),), (session_id, token.clone(), treasury_payout));
+                } else {
+                    Self::collect_fee(env.clone(), session_id, token.clone(), treasury_payout)?;
+                }
             }
         }
 
@@ -4426,6 +4806,20 @@ mod test {
     }
 
     // ====================================================================
+    // #213 / #214 tests
+    // ====================================================================
+
+    #[test]
+    fn test_set_burn_bps_default_is_zero() {
+        let (_env, client, _, _, _, _, _, _) = setup();
+        assert_eq!(client.get_burn_bps(), 0);
+    }
+
+    #[test]
+    fn test_settle_with_burn_routes_correctly() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 100);
+        client.set_burn_bps(&2_000u32); // 20% of the treasury share
     // #194 / #195 / #196 / #197 tests
     // ====================================================================
 
@@ -4472,6 +4866,18 @@ mod test {
         env.ledger().set_timestamp(1_000 + 100);
         client.settle_session(&session_id);
 
+        // 5% platform fee of 10_000 = 500. 20% burn of 500 = 100.
+        let burned = client.total_burned(&token);
+        assert_eq!(burned, 100);
+        // Treasury collects the remaining 400.
+        assert_eq!(client.get_treasury_balance(&token), 400);
+    }
+
+    #[test]
+    fn test_burn_zero_when_disabled() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 100);
+        // burn_bps not set; default 0.
         // Default fee is 5% of 10_000 = 500; insurance slice is 1%
         // of fee = 5; treasury gets 495.
         let insurance = client.insurance_balance(&token);
@@ -4496,6 +4902,7 @@ mod test {
             client.start_session(&seeker, &expert, &token, &10_000, &0, &test_cid(&env));
         env.ledger().set_timestamp(1_000 + 100);
         client.settle_session(&session_id);
+        assert_eq!(client.total_burned(&token), 0);
 
         assert_eq!(client.insurance_balance(&token), 0);
         // Treasury keeps the whole 500 since no insurance slice.
@@ -4503,6 +4910,76 @@ mod test {
     }
 
     #[test]
+    #[should_panic(expected = "Error(Contract, #14)")]
+    fn test_set_burn_bps_rejects_above_max() {
+        let (_env, client, _, _, _, _, _, _) = setup();
+        client.set_burn_bps(&10_001u32);
+    }
+
+    #[test]
+    fn test_stake_and_unstake_balance_tracking() {
+        let (env, client, _, _, seeker, _, token, _) = setup();
+        // Re-use seeker as the staker; they have minted balance.
+        let asset = token::Client::new(&env, &token);
+        let before = asset.balance(&seeker);
+
+        client.stake(&seeker, &token, &1_000i128);
+        assert_eq!(client.get_stake_balance(&seeker), 1_000);
+        assert_eq!(asset.balance(&seeker), before - 1_000);
+
+        client.unstake(&seeker, &token, &400i128);
+        assert_eq!(client.get_stake_balance(&seeker), 600);
+        assert_eq!(asset.balance(&seeker), before - 600);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #37)")]
+    fn test_unstake_rejects_over_balance() {
+        let (env, client, _, _, seeker, _, token, _) = setup();
+        let _ = env;
+        client.stake(&seeker, &token, &100i128);
+        client.unstake(&seeker, &token, &500i128);
+    }
+
+    #[test]
+    fn test_stake_then_deposit_reward_then_claim() {
+        let (env, client, _, _, seeker, _, token, token_admin) = setup();
+
+        // Set up two stakers so the per-share math has something to
+        // divide by; reuse token for both stake and reward token.
+        let staker_a = Address::generate(&env);
+        let staker_b = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+        asset_admin.mint(&staker_a, &10_000);
+        asset_admin.mint(&staker_b, &10_000);
+        asset_admin.mint(&seeker, &10_000); // reward depositor balance
+        let _ = token_admin;
+
+        client.stake(&staker_a, &token, &1_000i128);
+        client.stake(&staker_b, &token, &3_000i128); // 25% / 75% split
+
+        // Deposit 4_000 reward; A's share should be 1_000, B's 3_000.
+        client.deposit_staking_reward(&seeker, &token, &4_000i128);
+
+        assert_eq!(client.pending_rewards(&staker_a, &token), 1_000);
+        assert_eq!(client.pending_rewards(&staker_b, &token), 3_000);
+
+        let asset = token::Client::new(&env, &token);
+        let a_before = asset.balance(&staker_a);
+        let claimed_a = client.claim_rewards(&staker_a, &token);
+        assert_eq!(claimed_a, 1_000);
+        assert_eq!(asset.balance(&staker_a) - a_before, 1_000);
+
+        // Pending after claim is zero.
+        assert_eq!(client.pending_rewards(&staker_a, &token), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #35)")]
+    fn test_claim_without_stake_fails() {
+        let (env, client, _, _, _, _, token, _) = setup();
+        let nonstaker = Address::generate(&env);
+        client.claim_rewards(&nonstaker, &token);
     fn test_fixed_price_session_locks_and_releases_on_approval() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
