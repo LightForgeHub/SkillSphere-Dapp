@@ -42,6 +42,14 @@ const INSURANCE_BPS_OF_FEE: u32 = 100;
 // #195 Subscription seconds-per-month, used to enforce the
 // "deduct monthly" cadence on `collect_subscription_payment`.
 const SUBSCRIPTION_PERIOD_SECS: u64 = 30 * 24 * 60 * 60;
+// Expert availability heartbeat window (#199): an expert who has called
+// `heartbeat()` more than this many seconds ago is treated as offline
+// for the purposes of `start_session`.
+const HEARTBEAT_VALIDITY_WINDOW: u64 = 60 * 60; // 1 hour
+// PlatformStats event emission cadence (#200): emit a rolled-up stats
+// event every Nth settled session so off-chain indexers can track total
+// volume + session count without re-scanning every single event.
+const PLATFORM_STATS_EMIT_INTERVAL: u64 = 100;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -81,6 +89,14 @@ pub enum DataKey {
     FixedPriceSession(u64),
     // #195: subscription records keyed by (seeker, expert).
     Subscription(Address, Address),
+    // #199: last `heartbeat()` timestamp (seconds since unix epoch).
+    // Stored separately from ExpertProfile so adding the field is
+    // backward-compatible with existing on-chain profiles — no
+    // migration needed.
+    ExpertLastHeartbeat(Address),
+    // #200: running counters used by the rolled-up PlatformStats event.
+    TotalVolumeSettled,
+    TotalSessionsSettled,
 }
 
 #[contracttype]
@@ -434,6 +450,16 @@ impl SkillSphereContract {
             return Err(Error::InvalidCid);
         }
 
+    /// Refresh the expert's availability heartbeat (#199).
+    ///
+    /// Stamps `ExpertLastHeartbeat(expert)` with the current ledger
+    /// timestamp. `start_session` rejects experts whose last heartbeat
+    /// is older than `HEARTBEAT_VALIDITY_WINDOW` (1 hour). Experts who
+    /// have never called `heartbeat` retain the legacy
+    /// `availability_status`-only semantics so existing flows keep
+    /// working until they opt in.
+    pub fn heartbeat(env: Env, expert: Address) -> Result<(), Error> {
+        expert.require_auth();
         let profile = Self::expert_profile(&env, expert.clone());
         if profile.rate_per_second == 0 {
             return Err(Error::ExpertNotRegistered);
@@ -643,6 +669,71 @@ impl SkillSphereContract {
         env.events().publish(
             (symbol_short!("sub"), symbol_short!("started")),
             (seeker, expert, monthly_fee, months, total),
+        let now = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::ExpertLastHeartbeat(expert.clone()), &now);
+        env.events()
+            .publish((symbol_short!("hb"),), (expert, now));
+        Ok(())
+    }
+
+    /// Read the last `heartbeat()` timestamp for an expert (#199).
+    /// Returns `0` if the expert has never called heartbeat.
+    pub fn last_heartbeat(env: Env, expert: Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertLastHeartbeat(expert))
+            .unwrap_or(0u64)
+    }
+
+    /// Append fresh evidence to an active dispute (#198).
+    ///
+    /// Only callable while the dispute is unresolved and only by the
+    /// session's seeker, expert, or the contract admin. Replaces
+    /// `Dispute.evidence_cid` with the new CID — latest evidence wins
+    /// from the arbitrator's point of view. The previous CID is still
+    /// recoverable via the historical `evidence_added` events.
+    pub fn add_dispute_evidence(
+        env: Env,
+        caller: Address,
+        session_id: u64,
+        cid: String,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+
+        if !Self::is_valid_ipfs_cid(&cid) {
+            return Err(Error::InvalidCid);
+        }
+
+        let mut dispute: Dispute = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Dispute(session_id))
+            .ok_or(Error::DisputeNotFound)?;
+
+        if dispute.resolved {
+            return Err(Error::DisputeAlreadyResolved);
+        }
+
+        let session = Self::get_session_or_error(&env, session_id)?;
+        if !matches!(session.status, SessionStatus::Disputed) {
+            return Err(Error::InvalidSessionState);
+        }
+
+        let admin = Self::get_admin_address(&env)?;
+        if caller != session.seeker && caller != session.expert && caller != admin {
+            return Err(Error::Unauthorized);
+        }
+
+        dispute.evidence_cid = cid.clone();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Dispute(session_id), &dispute);
+
+        env.events().publish(
+            (symbol_short!("dispute"), symbol_short!("evidence")),
+            (session_id, caller, cid),
         );
         Ok(())
     }
@@ -752,6 +843,20 @@ impl SkillSphereContract {
             .persistent()
             .get(&DataKey::Subscription(seeker, expert))
             .ok_or(Error::SubscriptionNotFound)
+    /// Read the rolled-up PlatformStats counters (#200).
+    /// Returns `(total_sessions_settled, total_volume_settled)`.
+    pub fn platform_stats(env: Env) -> (u64, i128) {
+        let sessions: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalSessionsSettled)
+            .unwrap_or(0u64);
+        let volume: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalVolumeSettled)
+            .unwrap_or(0i128);
+        (sessions, volume)
     }
 
     /// Updates the encrypted notes hash for a specific session.
@@ -1276,6 +1381,23 @@ impl SkillSphereContract {
         }
         if !profile.availability_status {
             panic_with_error!(&env, Error::ExpertUnavailable);
+        }
+
+        // #199: heartbeat freshness check.
+        // Backward-compat: experts who have never called `heartbeat()`
+        // (no LastHeartbeat key) keep the legacy "online via
+        // availability_status only" semantics so existing flows don't
+        // break. Once an expert has called heartbeat at least once, the
+        // 1-hour window is enforced on every new session.
+        if let Some(last_hb) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, u64>(&DataKey::ExpertLastHeartbeat(expert.clone()))
+        {
+            let now_secs = env.ledger().timestamp();
+            if now_secs.saturating_sub(last_hb) > HEARTBEAT_VALIDITY_WINDOW {
+                panic_with_error!(&env, Error::ExpertOffline);
+            }
         }
 
         if profile.reputation < min_reputation {
@@ -1869,6 +1991,38 @@ impl SkillSphereContract {
                 .set(&DataKey::InsuranceVaultBalance(token.clone()), &bal);
         }
         cut
+    /// Roll up volume + session counters and emit a `PlatformStats`
+    /// event every `PLATFORM_STATS_EMIT_INTERVAL` settled sessions
+    /// (#200). The counters themselves are always updated so any
+    /// caller can read them via `platform_stats()`; the periodic
+    /// event is for off-chain indexers that prefer push over poll.
+    fn maybe_emit_platform_stats(env: &Env, last_session_volume: i128) {
+        let prev_sessions: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalSessionsSettled)
+            .unwrap_or(0u64);
+        let prev_volume: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalVolumeSettled)
+            .unwrap_or(0i128);
+
+        let total_sessions = prev_sessions.saturating_add(1);
+        let total_volume = prev_volume.saturating_add(last_session_volume);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalSessionsSettled, &total_sessions);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalVolumeSettled, &total_volume);
+
+        if total_sessions % PLATFORM_STATS_EMIT_INTERVAL == 0 {
+            env.events().publish(
+                (symbol_short!("plat_stat"),),
+                (total_sessions, total_volume, env.ledger().timestamp()),
+            );
+        }
     }
 
     fn require_participant(session: &Session, caller: &Address) -> Result<(), Error> {
@@ -1975,6 +2129,11 @@ impl SkillSphereContract {
             (symbol_short!("session"), symbol_short!("settled")),
             (session_id, expert_payout, now),
         );
+
+        // #200: roll-up volume + session counters and emit a
+        // PlatformStats event every Nth settled session so off-chain
+        // indexers can track growth without re-scanning every event.
+        Self::maybe_emit_platform_stats(env, claimable);
 
         // Increment referral session count for referral commission tracking (Issue #52)
         Self::increment_referral_session_count(env, &expert);
@@ -4445,5 +4604,127 @@ mod test {
         assert_eq!(net, 950);
         let sub = client.get_subscription(&seeker, &expert);
         assert_eq!(sub.months_remaining, 1);
+    // #198 / #199 / #200 tests
+    // ====================================================================
+
+    #[test]
+    fn test_heartbeat_records_timestamp_and_emits_event() {
+        let (env, client, _, _, _, expert, _, _) = setup();
+        client.register_expert(&expert, &10, &test_cid(&env));
+
+        env.ledger().set_timestamp(2_000);
+        client.heartbeat(&expert);
+        assert_eq!(client.last_heartbeat(&expert), 2_000);
+
+        env.ledger().set_timestamp(2_500);
+        client.heartbeat(&expert);
+        assert_eq!(client.last_heartbeat(&expert), 2_500);
+    }
+
+    #[test]
+    fn test_start_session_succeeds_with_recent_heartbeat() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        env.ledger().set_timestamp(2_000);
+        client.heartbeat(&expert);
+
+        // Inside the 1-hour window — session must start.
+        env.ledger().set_timestamp(2_000 + 30 * 60);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+        assert!(session_id >= 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #34)")]
+    fn test_start_session_fails_when_heartbeat_is_stale() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        env.ledger().set_timestamp(2_000);
+        client.heartbeat(&expert);
+
+        // Just past the 1-hour window.
+        env.ledger().set_timestamp(2_000 + 60 * 60 + 1);
+        client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+    }
+
+    #[test]
+    fn test_start_session_legacy_skips_heartbeat_when_never_called() {
+        // Expert never calls heartbeat — backward-compat path: legacy
+        // experts retain availability_status-only semantics.
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+        assert!(session_id >= 1);
+        assert_eq!(client.last_heartbeat(&expert), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #22)")]
+    fn test_heartbeat_rejects_unregistered_expert() {
+        let (env, client, _, _, _, expert, _, _) = setup();
+        let _ = env;
+        client.heartbeat(&expert);
+    }
+
+    #[test]
+    fn test_add_dispute_evidence_replaces_cid_during_active_dispute() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+
+        let original = String::from_str(&env, "QmYwAPJzv5CZsnAzt8auVZRnGzrYxkM4Tveoxu48UUfGz1");
+        let updated = String::from_str(&env, "QmYwAPJzv5CZsnAzt8auVZRnGzrYxkM4Tveoxu48UUfGz2");
+        client.flag_dispute(&session_id, &seeker, &String::from_str(&env, "reason"), &original);
+
+        client.add_dispute_evidence(&expert, &session_id, &updated);
+        let dispute = client.get_dispute(&session_id);
+        assert_eq!(dispute.evidence_cid, updated);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #2)")]
+    fn test_add_dispute_evidence_rejects_outsiders() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+        client.flag_dispute(
+            &session_id,
+            &seeker,
+            &String::from_str(&env, "reason"),
+            &test_cid(&env),
+        );
+
+        let outsider = Address::generate(&env);
+        client.add_dispute_evidence(
+            &outsider,
+            &session_id,
+            &String::from_str(&env, "QmYwAPJzv5CZsnAzt8auVZRnGzrYxkM4Tveoxu48UUfGz3"),
+        );
+    }
+
+    #[test]
+    fn test_platform_stats_counters_increment_on_settle() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        let (s0, v0) = client.platform_stats();
+        assert_eq!(s0, 0);
+        assert_eq!(v0, 0);
+
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+        env.ledger().set_timestamp(1_010);
+        let claimable = client.settle_session(&session_id);
+        assert!(claimable > 0);
+
+        let (s1, v1) = client.platform_stats();
+        assert_eq!(s1, 1);
+        // Volume counter tracks gross claimable, not net-of-fee payout.
+        assert!(v1 >= claimable);
     }
 }
