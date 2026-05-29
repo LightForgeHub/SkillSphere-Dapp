@@ -23,7 +23,7 @@ pub enum Error {
     InvalidSplitBps = 17,
     DisputeWindowActive = 18,
     InvalidFeeConfig = 19,
-    InsufficientTreasuryBalance = 20,
+    InsuffTreasuryBal = 20,
     AmountBelowMinimum = 21,
     ExpertNotRegistered = 22,
     ExpertUnavailable = 23,
@@ -32,21 +32,33 @@ pub enum Error {
     DepositTooLow = 26,
     AlreadyInitialized = 27,
     InvalidRating = 28,
-    RatingAlreadySubmitted = 29,
+    RatingSubmitted = 29,
     OracleNotTrusted = 30,
-    InvalidOracleSignature = 31,
+    InvalidOracleSig = 31,
     InvalidSessionState = 32,
     InsufficientBalance = 33,
+
+    // #213 / #214
     BurnBpsExceedsFee = 34,
     StakeNotFound = 35,
     NoRewardsToClaim = 36,
-    StakeBalanceInsufficient = 37,
-    FixedPriceSessionAlreadyFinalised = 34,
-    SubscriptionNotFound = 35,
-    SubscriptionAlreadyCollected = 36,
-    SubscriptionExpired = 37,
-    InsuranceVaultUnset = 38,
-    InsufficientInsuranceBalance = 39,
-    ExpertOffline = 34,
-    DisputeAlreadyResolved = 35,
+    InsuffStakeBalance = 37,
+
+    // #194 / #195 / #196 / #197
+    FpAlreadyFinalised = 38,
+    SubNotFound = 39,
+    SubAlreadyCollected = 40,
+    SubscriptionExpired = 41,
+    ContractUnset = 42,
+    InsuffInsuranceBal = 43,
+
+    // #198 / #199 / #200
+    ExpertOffline = 44,
+    DisputeResolved = 45,
+
+    // #202 – Soulbound Skill Badges
+    BadgeAlreadyMinted = 46,
+    HoursThresholdNotMet = 47,
+    SessionFrozen = 48,
+    SwapFailed = 49,
 }

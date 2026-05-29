@@ -1,7 +1,12 @@
 #![no_std]
 
 mod errors;
+mod reputation;
+mod dex;
+mod governance;
 pub use errors::Error;
+pub use reputation::BadgeRecord;
+pub use dex::SwapPath;
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
@@ -59,6 +64,8 @@ const HEARTBEAT_VALIDITY_WINDOW: u64 = 60 * 60; // 1 hour
 // event every Nth settled session so off-chain indexers can track total
 // volume + session count without re-scanning every single event.
 const PLATFORM_STATS_EMIT_INTERVAL: u64 = 100;
+// #203: seconds between mandatory seeker re-verifications for long-term escrows.
+const REVERIFY_PERIOD_SECS: u64 = 30 * 24 * 60 * 60;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -130,6 +137,18 @@ pub enum DataKey {
     // #200: running counters used by the rolled-up PlatformStats event.
     TotalVolumeSettled,
     TotalSessionsSettled,
+    // #202: Soulbound Skill Badges
+    SbtContractAddress,
+    ExpertBadge(Address),
+    ExpertTotalSeconds(Address),
+    // #203: Periodic Re-Verification for Long-Term Escrows
+    SessionLastVerified(u64),
+    SessionFrozenFlag(u64),
+    // #204: Community Treasury Voting Power
+    UserTotalSpent(Address),
+    UserTotalEarned(Address),
+    // #205: DEX Integration
+    DexContractAddress,
 }
 
 #[contracttype]
@@ -437,7 +456,7 @@ impl SkillSphereContract {
             .get(&DataKey::StakeBalance(staker.clone()))
             .unwrap_or(0i128);
         if prev < amount {
-            return Err(Error::StakeBalanceInsufficient);
+            return Err(Error::InsuffStakeBalance);
         }
         // Settle accrued rewards under the OLD balance.
         Self::settle_staker_checkpoint(&env, &staker, &token);
@@ -566,6 +585,10 @@ impl SkillSphereContract {
         env.events().publish(
             (symbol_short!("rewardDep"),),
             (from, reward_token, amount),
+        );
+        Ok(())
+    }
+
     // #196 — Platform Fee Whitelist for Specific Assets
     // ====================================================================
 
@@ -653,14 +676,14 @@ impl SkillSphereContract {
             .storage()
             .instance()
             .get(&DataKey::InsuranceVaultAddress)
-            .ok_or(Error::InsuranceVaultUnset)?;
+            .ok_or(Error::ContractUnset)?;
         let mut balance: i128 = env
             .storage()
             .instance()
             .get(&DataKey::InsuranceVaultBalance(token.clone()))
             .unwrap_or(0i128);
         if balance < amount {
-            return Err(Error::InsufficientInsuranceBalance);
+            return Err(Error::InsuffInsuranceBal);
         }
         balance -= amount;
         env.storage()
@@ -705,22 +728,7 @@ impl SkillSphereContract {
             return Err(Error::InvalidCid);
         }
 
-    /// Refresh the expert's availability heartbeat (#199).
-    ///
-    /// Stamps `ExpertLastHeartbeat(expert)` with the current ledger
-    /// timestamp. `start_session` rejects experts whose last heartbeat
-    /// is older than `HEARTBEAT_VALIDITY_WINDOW` (1 hour). Experts who
-    /// have never called `heartbeat` retain the legacy
-    /// `availability_status`-only semantics so existing flows keep
-    /// working until they opt in.
-    pub fn heartbeat(env: Env, expert: Address) -> Result<(), Error> {
-        expert.require_auth();
-        let profile = Self::expert_profile(&env, expert.clone());
-        if profile.rate_per_second == 0 {
-            return Err(Error::ExpertNotRegistered);
-        }
-
-        let token_client = token::Client::new(&env, &token);
+    let token_client = token::Client::new(&env, &token);
         if token_client.balance(&seeker) < amount {
             return Err(Error::InsufficientBalance);
         }
@@ -750,6 +758,29 @@ impl SkillSphereContract {
         Ok(session_id)
     }
 
+    /// Refresh the expert's availability heartbeat (#199).
+    ///
+    /// Stamps `ExpertLastHeartbeat(expert)` with the current ledger
+    /// timestamp. `start_session` rejects experts whose last heartbeat
+    /// is older than `HEARTBEAT_VALIDITY_WINDOW` (1 hour). Experts who
+    /// have never called `heartbeat` retain the legacy
+    /// `availability_status`-only semantics so existing flows keep
+    /// working until they opt in.
+    pub fn heartbeat(env: Env, expert: Address) -> Result<(), Error> {
+        expert.require_auth();
+        let profile = Self::expert_profile(&env, expert.clone());
+        if profile.rate_per_second == 0 {
+            return Err(Error::ExpertNotRegistered);
+        }
+        let now = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::ExpertLastHeartbeat(expert.clone()), &now);
+        env.events()
+            .publish((symbol_short!("hb"),), (expert, now));
+        Ok(())
+    }
+
     /// Seeker approves the milestone. Pays the expert `amount` minus
     /// the platform fee in one shot. Triggers the same fee-routing
     /// and insurance-diversion path as streaming sessions.
@@ -769,7 +800,7 @@ impl SkillSphereContract {
             return Err(Error::Unauthorized);
         }
         if !matches!(fp.status, FixedPriceStatus::Locked) {
-            return Err(Error::FixedPriceSessionAlreadyFinalised);
+            return Err(Error::FpAlreadyFinalised);
         }
 
         let amount = fp.amount;
@@ -834,7 +865,7 @@ impl SkillSphereContract {
             return Err(Error::Unauthorized);
         }
         if !matches!(fp.status, FixedPriceStatus::Locked) {
-            return Err(Error::FixedPriceSessionAlreadyFinalised);
+            return Err(Error::FpAlreadyFinalised);
         }
         fp.status = FixedPriceStatus::Disputed;
         env.storage()
@@ -924,12 +955,7 @@ impl SkillSphereContract {
         env.events().publish(
             (symbol_short!("sub"), symbol_short!("started")),
             (seeker, expert, monthly_fee, months, total),
-        let now = env.ledger().timestamp();
-        env.storage()
-            .persistent()
-            .set(&DataKey::ExpertLastHeartbeat(expert.clone()), &now);
-        env.events()
-            .publish((symbol_short!("hb"),), (expert, now));
+        );
         Ok(())
     }
 
@@ -968,7 +994,7 @@ impl SkillSphereContract {
             .ok_or(Error::DisputeNotFound)?;
 
         if dispute.resolved {
-            return Err(Error::DisputeAlreadyResolved);
+            return Err(Error::DisputeResolved);
         }
 
         let session = Self::get_session_or_error(&env, session_id)?;
@@ -1010,6 +1036,8 @@ impl SkillSphereContract {
             return 0;
         }
         Self::pending_reward_for(&env, &staker, &reward_token, stake)
+    }
+
     /// Expert collects the next month's fee from a subscription.
     /// Decrements `prepaid_balance` + `months_remaining`, credits
     /// `expert_balance`, and routes platform fee + insurance cut
@@ -1025,14 +1053,14 @@ impl SkillSphereContract {
             .storage()
             .persistent()
             .get(&DataKey::Subscription(seeker.clone(), expert.clone()))
-            .ok_or(Error::SubscriptionNotFound)?;
+            .ok_or(Error::SubNotFound)?;
         if sub.months_remaining == 0 {
             return Err(Error::SubscriptionExpired);
         }
         let now = env.ledger().timestamp();
         let elapsed = now.saturating_sub(sub.last_collected_at);
         if sub.last_collected_at > 0 && elapsed < SUBSCRIPTION_PERIOD_SECS {
-            return Err(Error::SubscriptionAlreadyCollected);
+            return Err(Error::SubAlreadyCollected);
         }
 
         let fee = sub.monthly_fee;
@@ -1087,7 +1115,7 @@ impl SkillSphereContract {
             .storage()
             .persistent()
             .get(&DataKey::Subscription(seeker.clone(), expert.clone()))
-            .ok_or(Error::SubscriptionNotFound)?;
+            .ok_or(Error::SubNotFound)?;
         let amount = sub.expert_balance;
         if amount == 0 {
             return Ok(0);
@@ -1114,7 +1142,9 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .get(&DataKey::Subscription(seeker, expert))
-            .ok_or(Error::SubscriptionNotFound)
+            .ok_or(Error::SubNotFound)
+    }
+
     /// Read the rolled-up PlatformStats counters (#200).
     /// Returns `(total_sessions_settled, total_volume_settled)`.
     pub fn platform_stats(env: Env) -> (u64, i128) {
@@ -1483,7 +1513,7 @@ impl SkillSphereContract {
 
         let current_balance = Self::get_treasury_balance(env.clone(), token.clone());
         if current_balance < amount {
-            return Err(Error::InsufficientTreasuryBalance);
+            return Err(Error::InsuffTreasuryBal);
         }
 
         let new_balance = current_balance.saturating_sub(amount);
@@ -1713,6 +1743,11 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::Session(session_id), &session);
+
+        // #203: stamp the initial re-verification timestamp on session creation.
+        env.storage()
+            .persistent()
+            .set(&DataKey::SessionLastVerified(session_id), &(now as u64));
 
         env.events().publish(
             (symbol_short!("session"), symbol_short!("started")),
@@ -2311,6 +2346,8 @@ impl SkillSphereContract {
             (token.clone(), burn_amount, burn_bps),
         );
         burn_amount
+    }
+
     /// Compute the platform fee, honouring the per-asset override
     /// (#196) when one is configured for `token`. Falls through to
     /// the global tiered config otherwise.
@@ -2361,6 +2398,7 @@ impl SkillSphereContract {
                 .set(&DataKey::InsuranceVaultBalance(token.clone()), &bal);
         }
         cut
+    }
     /// Roll up volume + session counters and emit a `PlatformStats`
     /// event every `PLATFORM_STATS_EMIT_INTERVAL` settled sessions
     /// (#200). The counters themselves are always updated so any
@@ -2418,9 +2456,23 @@ impl SkillSphereContract {
             return Err(Error::InvalidSessionState);
         }
 
+        // #203: freeze guard — block settlement if the seeker missed the 30-day check-in.
+        let is_frozen: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::SessionFrozenFlag(session.id))
+            .unwrap_or(false);
+        if is_frozen {
+            Self::set_reentrancy_lock(env, false);
+            return Err(Error::SessionFrozen);
+        }
+
         let now = env.ledger().timestamp();
         let expiry = Self::expiry_timestamp_for_session(&session);
         let effective_time = Self::bounded_time(&session, now);
+        // #202: capture elapsed seconds before effects modify last_settlement_timestamp.
+        let settled_seconds =
+            effective_time.saturating_sub(session.last_settlement_timestamp as u64);
         let claimable = Self::claimable_amount_for_session(&session, effective_time);
   
         if claimable <= 0 {
@@ -2517,6 +2569,23 @@ impl SkillSphereContract {
 
         // Increment referral session count for referral commission tracking (Issue #52)
         Self::increment_referral_session_count(env, &expert);
+
+        // #204: accrue governance voting-power counters.
+        governance::accrue_spent(env, &session.seeker, claimable);
+        governance::accrue_earned(env, &expert, expert_payout);
+
+        // #202: increment the expert's cumulative settled-seconds counter.
+        {
+            let prev_secs: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ExpertTotalSeconds(expert.clone()))
+                .unwrap_or(0u64);
+            env.storage().persistent().set(
+                &DataKey::ExpertTotalSeconds(expert.clone()),
+                &prev_secs.saturating_add(settled_seconds),
+            );
+        }
 
         Self::set_reentrancy_lock(env, false);
         Ok(expert_payout)
@@ -2837,7 +2906,7 @@ impl SkillSphereContract {
 
         // Check if rating already exists for this session
         if env.storage().persistent().has(&DataKey::SessionRating(session_id)) {
-            return Err(Error::RatingAlreadySubmitted);
+            return Err(Error::RatingSubmitted);
         }
 
         // Store the rating
@@ -3245,7 +3314,7 @@ impl SkillSphereContract {
 
         // Get treasury address
         let treasury = env.storage().instance().get::<DataKey, Address>(&DataKey::TreasuryAddress)
-            .ok_or(Error::InsufficientTreasuryBalance)?;
+            .ok_or(Error::InsuffTreasuryBal)?;
 
         // Transfer slashed tokens to treasury
         let token = env.current_contract_address();
@@ -3406,6 +3475,285 @@ impl SkillSphereContract {
 
         Self::set_reentrancy_lock(&env, false);
         Ok(total_claimable)
+    }
+
+    // ====================================================================
+    // #202 — Soulbound Skill Badges
+    // ====================================================================
+
+    /// Admin sets the address of the external SBT contract that receives
+    /// `mint_badge` cross-contract calls.
+    pub fn set_sbt_contract(env: Env, sbt_addr: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::SbtContractAddress, &sbt_addr);
+        env.events()
+            .publish((symbol_short!("sbtSet"),), sbt_addr);
+        Ok(())
+    }
+
+    /// Mints a soulbound badge for `expert` once they have accumulated ≥ 100 h
+    /// of settled session time.  Reverts if already minted or threshold not met.
+    pub fn mint_badge(env: Env, expert: Address) -> Result<BadgeRecord, Error> {
+        expert.require_auth();
+
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::ExpertBadge(expert.clone()))
+        {
+            return Err(Error::BadgeAlreadyMinted);
+        }
+
+        let total_secs: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ExpertTotalSeconds(expert.clone()))
+            .unwrap_or(0u64);
+        if total_secs < reputation::BADGE_HOURS_THRESHOLD_SECS {
+            return Err(Error::HoursThresholdNotMet);
+        }
+
+        let sbt_contract: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::SbtContractAddress)
+            .ok_or(Error::ContractUnset)?;
+
+        let badge_id: u64 = total_secs; // deterministic: total seconds at mint
+        let now = env.ledger().timestamp();
+
+        reputation::cross_contract_mint_badge(&env, &sbt_contract, &expert, badge_id);
+
+        let record = BadgeRecord {
+            expert: expert.clone(),
+            seconds_at_mint: total_secs,
+            minted_at: now,
+            badge_token_id: badge_id,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::ExpertBadge(expert.clone()), &record);
+
+        env.events()
+            .publish((symbol_short!("badge"),), (expert, badge_id, now));
+        Ok(record)
+    }
+
+    /// Returns the badge record for `expert`, or `None` if not yet minted.
+    pub fn get_badge(env: Env, expert: Address) -> Option<BadgeRecord> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertBadge(expert))
+    }
+
+    /// Returns the total settled seconds accumulated by `expert` towards the badge.
+    pub fn get_expert_total_seconds(env: Env, expert: Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertTotalSeconds(expert))
+            .unwrap_or(0u64)
+    }
+
+    // ====================================================================
+    // #203 — Periodic Re-Verification for Long-Term Escrows
+    // ====================================================================
+
+    /// Seeker re-verifies an ongoing session, refreshing the 30-day clock and
+    /// clearing any freeze flag previously set by `check_and_freeze`.
+    pub fn reverify_session(env: Env, seeker: Address, session_id: u64) -> Result<(), Error> {
+        seeker.require_auth();
+        let session = Self::get_session_or_error(&env, session_id)?;
+        if seeker != session.seeker {
+            return Err(Error::Unauthorized);
+        }
+        let now = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::SessionLastVerified(session_id), &now);
+        env.storage()
+            .persistent()
+            .set(&DataKey::SessionFrozenFlag(session_id), &false);
+        env.events()
+            .publish((symbol_short!("reverify"),), (session_id, now));
+        Ok(())
+    }
+
+    /// Permissionless: freezes a session if the seeker missed the 30-day
+    /// re-verification window.  Anyone may call this to enforce the invariant.
+    pub fn check_and_freeze(env: Env, session_id: u64) -> Result<(), Error> {
+        let _session = Self::get_session_or_error(&env, session_id)?;
+        let last_verified: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::SessionLastVerified(session_id))
+            .unwrap_or(0u64);
+        let now = env.ledger().timestamp();
+        if now.saturating_sub(last_verified) > REVERIFY_PERIOD_SECS {
+            env.storage()
+                .persistent()
+                .set(&DataKey::SessionFrozenFlag(session_id), &true);
+            env.events()
+                .publish((symbol_short!("frozen"),), (session_id, now));
+        }
+        Ok(())
+    }
+
+    /// Returns `true` when the session has been frozen due to a missed check-in.
+    pub fn get_session_frozen(env: Env, session_id: u64) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SessionFrozenFlag(session_id))
+            .unwrap_or(false)
+    }
+
+    // ====================================================================
+    // #204 — Community Treasury Voting Power
+    // ====================================================================
+
+    /// Returns `total_spent(user) + total_earned(user)` as the user's
+    /// governance voting weight based on session volume.
+    pub fn voting_power(env: Env, user: Address) -> i128 {
+        governance::total_spent(&env, &user)
+            .saturating_add(governance::total_earned(&env, &user))
+    }
+
+    /// Returns the cumulative tokens `user` has spent as a seeker.
+    pub fn get_total_spent(env: Env, user: Address) -> i128 {
+        governance::total_spent(&env, &user)
+    }
+
+    /// Returns the cumulative tokens `user` has earned as an expert.
+    pub fn get_total_earned(env: Env, user: Address) -> i128 {
+        governance::total_earned(&env, &user)
+    }
+
+    // ====================================================================
+    // #205 — Cross-Contract Token Swaps (DEX Integration)
+    // ====================================================================
+
+    /// Admin sets the DEX router address (Phoenix / Soroswap).
+    pub fn set_dex_contract(env: Env, dex_addr: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::DexContractAddress, &dex_addr);
+        env.events()
+            .publish((symbol_short!("dexSet"),), dex_addr);
+        Ok(())
+    }
+
+    /// Returns the configured DEX router address, if any.
+    pub fn get_dex_contract(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::DexContractAddress)
+    }
+
+    /// Starts a streaming session where the seeker pays in `offer_token` but
+    /// the expert is paid in `ask_token`.  The DEX swap happens atomically.
+    ///
+    /// # Arguments
+    /// * `seeker`        — must auth; holds `offer_token`
+    /// * `expert`        — registered, available expert
+    /// * `offer_token`   — token the seeker sends (e.g. XLM)
+    /// * `ask_token`     — token the session is denominated in (e.g. USDC)
+    /// * `path`          — intermediate asset hops (empty = direct pair)
+    /// * `offer_amount`  — amount of `offer_token` to spend
+    /// * `metadata_cid`  — IPFS CID for session metadata
+    pub fn start_session_with_swap(
+        env: Env,
+        seeker: Address,
+        expert: Address,
+        offer_token: Address,
+        ask_token: Address,
+        path: Vec<Address>,
+        offer_amount: i128,
+        metadata_cid: String,
+    ) -> Result<u64, Error> {
+        seeker.require_auth();
+        Self::ensure_protocol_active(&env)?;
+
+        if offer_amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        if !Self::is_valid_ipfs_cid(&metadata_cid) {
+            return Err(Error::InvalidCid);
+        }
+
+        let profile = Self::expert_profile(&env, expert.clone());
+        if profile.rate_per_second == 0 {
+            return Err(Error::ExpertNotRegistered);
+        }
+        if !profile.availability_status {
+            return Err(Error::ExpertUnavailable);
+        }
+
+        let dex_contract: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::DexContractAddress)
+            .ok_or(Error::ContractUnset)?;
+
+        // Transfer offer_token from seeker into the contract escrow.
+        let offer_client = token::Client::new(&env, &offer_token);
+        if offer_client.balance(&seeker) < offer_amount {
+            return Err(Error::InsufficientBalance);
+        }
+        offer_client.transfer(&seeker, &env.current_contract_address(), &offer_amount);
+
+        // Cross-contract swap: contract sends offer_token, receives ask_token.
+        let ask_amount = dex::cross_contract_swap(
+            &env,
+            &dex_contract,
+            &offer_token,
+            &ask_token,
+            &path,
+            offer_amount,
+        );
+        if ask_amount <= 0 {
+            return Err(Error::SwapFailed);
+        }
+
+        let session_id = Self::next_session_id(&env);
+        let now = env.ledger().timestamp() as u32;
+
+        let session = Session {
+            id: session_id,
+            seeker: seeker.clone(),
+            expert: expert.clone(),
+            token: ask_token.clone(),
+            rate_per_second: profile.rate_per_second,
+            balance: ask_amount,
+            last_settlement_timestamp: now,
+            start_timestamp: now,
+            accrued_amount: 0,
+            status: SessionStatus::Active,
+            metadata_cid: metadata_cid.clone(),
+            encrypted_notes_hash: None,
+            paused_at: None,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::Session(session_id), &session);
+
+        // #203: stamp initial re-verification timestamp.
+        env.storage()
+            .persistent()
+            .set(&DataKey::SessionLastVerified(session_id), &(now as u64));
+
+        env.events().publish(
+            (symbol_short!("swap"), symbol_short!("started")),
+            (
+                session_id,
+                seeker,
+                expert,
+                offer_token,
+                ask_token,
+                offer_amount,
+                ask_amount,
+            ),
+        );
+        Ok(session_id)
     }
 }
 
@@ -4820,6 +5168,97 @@ mod test {
         let (env, client, _, _, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 100);
         client.set_burn_bps(&2_000u32); // 20% of the treasury share
+
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &10_000, &0, &test_cid(&env));
+        env.ledger().set_timestamp(1_000 + 100);
+        client.settle_session(&session_id);
+
+        // 5% platform fee of 10_000 = 500. 20% burn of 500 = 100.
+        let burned = client.total_burned(&token);
+        assert_eq!(burned, 100);
+        // Treasury collects the remaining 400.
+        assert_eq!(client.get_treasury_balance(&token), 400);
+    }
+
+    #[test]
+    fn test_burn_zero_when_disabled() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 100);
+        // burn_bps not set; default 0.
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &10_000, &0, &test_cid(&env));
+        env.ledger().set_timestamp(1_000 + 100);
+        client.settle_session(&session_id);
+        assert_eq!(client.total_burned(&token), 0);
+        assert_eq!(client.get_treasury_balance(&token), 500);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #14)")]
+    fn test_set_burn_bps_rejects_above_max() {
+        let (_env, client, _, _, _, _, _, _) = setup();
+        client.set_burn_bps(&10_001u32);
+    }
+
+    #[test]
+    fn test_stake_and_unstake_balance_tracking() {
+        let (env, client, _, _, seeker, _, token, _) = setup();
+        // Re-use seeker as the staker; they have minted balance.
+        let asset = token::Client::new(&env, &token);
+        let before = asset.balance(&seeker);
+
+        client.stake(&seeker, &token, &1_000i128);
+        assert_eq!(client.get_stake_balance(&seeker), 1_000);
+        assert_eq!(asset.balance(&seeker), before - 1_000);
+
+        client.unstake(&seeker, &token, &400i128);
+        assert_eq!(client.get_stake_balance(&seeker), 600);
+        assert_eq!(asset.balance(&seeker), before - 600);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #37)")]
+    fn test_unstake_rejects_over_balance() {
+        let (env, client, _, _, seeker, _, token, _) = setup();
+        let _ = env;
+        client.stake(&seeker, &token, &100i128);
+        client.unstake(&seeker, &token, &500i128);
+    }
+
+    #[test]
+    fn test_stake_then_deposit_reward_then_claim() {
+        let (env, client, _, _, seeker, _, token, token_admin) = setup();
+
+        // Set up two stakers so the per-share math has something to
+        // divide by; reuse token for both stake and reward token.
+        let staker_a = Address::generate(&env);
+        let staker_b = Address::generate(&env);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+        asset_admin.mint(&staker_a, &10_000);
+        asset_admin.mint(&staker_b, &10_000);
+        asset_admin.mint(&seeker, &10_000); // reward depositor balance
+        let _ = token_admin;
+
+        client.stake(&staker_a, &token, &1_000i128);
+        client.stake(&staker_b, &token, &3_000i128); // 25% / 75% split
+
+        // Deposit 4_000 reward; A's share should be 1_000, B's 3_000.
+        client.deposit_staking_reward(&seeker, &token, &4_000i128);
+
+        assert_eq!(client.pending_rewards(&staker_a, &token), 1_000);
+        assert_eq!(client.pending_rewards(&staker_b, &token), 3_000);
+
+        let asset = token::Client::new(&env, &token);
+        let a_before = asset.balance(&staker_a);
+        let claimed_a = client.claim_rewards(&staker_a, &token);
+        assert_eq!(claimed_a, 1_000);
+        assert_eq!(asset.balance(&staker_a) - a_before, 1_000);
+
+        // Pending after claim is zero.
+        assert_eq!(client.pending_rewards(&staker_a, &token), 0);
+    }
+
     // #194 / #195 / #196 / #197 tests
     // ====================================================================
 
@@ -4980,6 +5419,7 @@ mod test {
         let (env, client, _, _, _, _, token, _) = setup();
         let nonstaker = Address::generate(&env);
         client.claim_rewards(&nonstaker, &token);
+    }
     fn test_fixed_price_session_locks_and_releases_on_approval() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
@@ -5002,7 +5442,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #34)")]
+    #[should_panic(expected = "Error(Contract, #38)")]
     fn test_fixed_price_double_approve_fails() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
@@ -5056,7 +5496,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #36)")]
+    #[should_panic(expected = "Error(Contract, #40)")]
     fn test_subscription_collect_twice_in_same_period_fails() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
@@ -5081,6 +5521,7 @@ mod test {
         assert_eq!(net, 950);
         let sub = client.get_subscription(&seeker, &expert);
         assert_eq!(sub.months_remaining, 1);
+    }
     // #198 / #199 / #200 tests
     // ====================================================================
 
@@ -5113,7 +5554,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #34)")]
+    #[should_panic(expected = "Error(Contract, #44)")]
     fn test_start_session_fails_when_heartbeat_is_stale() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
