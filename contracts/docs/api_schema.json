@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "SkillSphereContract",
+  "version": "0.1.0",
+  "description": "Public ABI for the SkillSphere Soroban contract. Generated to satisfy issue #209 (Automated Contract Documentation). Update this file alongside the contract's `#[contractimpl]` block; the matching CI check in `.github/workflows/api-schema.yml` (to be added) keeps the two in sync.",
+  "primitives": {
+    "Address": "Stellar account or contract address",
+    "BytesN": "Fixed-length byte string",
+    "String": "UTF-8 string",
+    "i128": "128-bit signed integer (token amounts)",
+    "u64": "64-bit unsigned integer (session/dispute ids)",
+    "u32": "32-bit unsigned integer (basis points, counts, timestamps)"
+  },
+  "types": {
+    "FeeConfig": {
+      "first_tier_limit": "i128",
+      "first_tier_bps": "u32",
+      "second_tier_bps": "u32"
+    },
+    "ExpertProfile": {
+      "rate_per_second": "i128",
+      "metadata_cid": "String",
+      "referrer": "Option<Address>",
+      "staked_balance": "i128",
+      "reputation": "u32",
+      "availability_status": "bool"
+    },
+    "Session": {
+      "id": "u64",
+      "seeker": "Address",
+      "expert": "Address",
+      "token": "Address",
+      "rate_per_second": "i128",
+      "balance": "i128",
+      "last_settlement_timestamp": "u32",
+      "start_timestamp": "u32",
+      "accrued_amount": "i128",
+      "status": "SessionStatus",
+      "metadata_cid": "String",
+      "encrypted_notes_hash": "Option<String>",
+      "paused_at": "Option<u64>"
+    },
+    "SessionStatus": {
+      "type": "enum",
+      "variants": ["Active", "Paused", "Completed", "Disputed", "Resolved"]
+    },
+    "CommitRecord": {
+      "committer": "Address",
+      "created_at": "u32"
+    },
+    "ExpertPriceFeedConfig": {
+      "oracle_contract": "Address",
+      "asset_pair": "String",
+      "multiplier_bps": "u32",
+      "max_staleness_seconds": "u32",
+      "fallback_rate_per_second": "i128"
+    }
+  },
+  "functions": {
+    "initialize": {
+      "params": [{"name": "admin", "type": "Address"}],
+      "returns": "void",
+      "description": "One-time admin bootstrap. Re-entry is rejected with `AlreadyInitialized`."
+    },
+    "register_expert": {
+      "params": [
+        {"name": "expert", "type": "Address"},
+        {"name": "rate", "type": "i128"},
+        {"name": "metadata_cid", "type": "String"}
+      ],
+      "returns": "void"
+    },
+    "set_availability": {
+      "params": [
+        {"name": "expert", "type": "Address"},
+        {"name": "status", "type": "bool"}
+      ],
+      "returns": "void"
+    },
+    "start_session": {
+      "params": [
+        {"name": "seeker", "type": "Address"},
+        {"name": "expert", "type": "Address"},
+        {"name": "token", "type": "Address"},
+        {"name": "rate_per_second", "type": "i128"},
+        {"name": "deposit", "type": "i128"},
+        {"name": "metadata_cid", "type": "String"}
+      ],
+      "returns": "Result<u64, Error>",
+      "events": ["session/start"],
+      "errors": ["ProtocolPaused", "ExpertNotRegistered", "DepositTooLow"]
+    },
+    "settle_session": {
+      "params": [{"name": "session_id", "type": "u64"}],
+      "returns": "Result<i128, Error>"
+    },
+    "end_session": {
+      "params": [
+        {"name": "caller", "type": "Address"},
+        {"name": "session_id", "type": "u64"}
+      ],
+      "returns": "Result<(), Error>"
+    },
+    "stake": {
+      "params": [
+        {"name": "staker", "type": "Address"},
+        {"name": "token", "type": "Address"},
+        {"name": "amount", "type": "i128"}
+      ],
+      "returns": "Result<(), Error>"
+    },
+    "claim_rewards": {
+      "params": [
+        {"name": "staker", "type": "Address"},
+        {"name": "reward_token", "type": "Address"}
+      ],
+      "returns": "Result<i128, Error>"
+    },
+    "pause_protocol": {
+      "params": [],
+      "returns": "Result<(), Error>",
+      "auth": "admin",
+      "description": "Issue #208 — admin-only emergency pause. Non-emergency functions check `is_paused`."
+    },
+    "unpause_protocol": {
+      "params": [],
+      "returns": "Result<(), Error>",
+      "auth": "admin"
+    },
+    "is_protocol_paused": {
+      "params": [],
+      "returns": "bool"
+    },
+    "is_paused": {
+      "params": [],
+      "returns": "bool",
+      "description": "Public alias for `is_protocol_paused` (issue #208)."
+    },
+    "commit_session_handshake": {
+      "params": [
+        {"name": "committer", "type": "Address"},
+        {"name": "commitment", "type": "BytesN<32>"}
+      ],
+      "returns": "Result<(), Error>",
+      "events": ["session/commit"],
+      "description": "Issue #206 — register a commitment hash. Real seeker/expert identities stay private until `reveal_session_handshake` is called."
+    },
+    "reveal_session_handshake": {
+      "params": [
+        {"name": "committer", "type": "Address"},
+        {"name": "salt", "type": "BytesN<32>"},
+        {"name": "seeker", "type": "Address"},
+        {"name": "expert", "type": "Address"}
+      ],
+      "returns": "Result<(), Error>",
+      "events": ["session/reveal"],
+      "errors": ["SessionNotFound", "InvalidSessionState"],
+      "description": "Issue #206 — reveal a previously committed handshake. Contract re-derives `sha256(salt || seeker || expert)` and matches against the stored commitment."
+    },
+    "get_session_commit": {
+      "params": [{"name": "commitment", "type": "BytesN<32>"}],
+      "returns": "Option<CommitRecord>"
+    },
+    "set_expert_price_feed": {
+      "params": [
+        {"name": "expert", "type": "Address"},
+        {"name": "config", "type": "ExpertPriceFeedConfig"}
+      ],
+      "returns": "Result<(), Error>",
+      "auth": "expert",
+      "description": "Issue #207 — opt the expert into dynamic pricing backed by a price oracle. Multiplier is capped at 100_000 bps (10x spot)."
+    },
+    "clear_expert_price_feed": {
+      "params": [{"name": "expert", "type": "Address"}],
+      "returns": "Result<(), Error>",
+      "auth": "expert"
+    },
+    "get_dynamic_rate": {
+      "params": [{"name": "expert", "type": "Address"}],
+      "returns": "Result<i128, Error>",
+      "errors": ["OracleNotTrusted"],
+      "description": "Issue #207 — return the expert's effective rate. If a price feed is registered, query the oracle and scale by the configured multiplier; otherwise fall back to the static rate from the expert's profile."
+    },
+    "register_trusted_oracle": {
+      "params": [{"name": "oracle", "type": "Address"}],
+      "returns": "Result<(), Error>",
+      "auth": "admin"
+    },
+    "verify_expert_credentials": {
+      "params": [
+        {"name": "expert", "type": "Address"},
+        {"name": "oracle_source", "type": "String"}
+      ],
+      "returns": "Result<(), Error>"
+    },
+    "_NOTE": "This file documents the core entrypoints listed under issue #209's acceptance criteria. The full contract exposes ~120 public functions; mirroring every signature here would duplicate `lib.rs`. The intent is a stable, machine-readable index of the contract surface that off-chain tooling can render as Swagger-style docs."
+  },
+  "events": {
+    "session/start": ["session_id: u64", "seeker: Address", "expert: Address"],
+    "session/commit": ["commitment: BytesN<32>", "committer: Address"],
+    "session/reveal": ["committer: Address", "seeker: Address", "expert: Address"],
+    "expert/feedset": ["expert: Address"],
+    "expert/feedrm": ["expert: Address"],
+    "oracle/regist": ["oracle: Address"],
+    "oracle/removed": ["oracle: Address"]
+  },
+  "issues": {
+    "206": "commit_session_handshake + reveal_session_handshake + get_session_commit (commit-reveal pattern)",
+    "207": "set_expert_price_feed + clear_expert_price_feed + get_dynamic_rate + PriceOracle cross-contract trait",
+    "208": "pause_protocol + unpause_protocol + is_protocol_paused + is_paused (broadened coverage to the new commit-reveal and price-feed setters)",
+    "209": "this file"
+  }
+}

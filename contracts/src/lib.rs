@@ -9,9 +9,24 @@ pub use reputation::BadgeRecord;
 pub use dex::SwapPath;
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
-    String, Vec,
+    contract, contractclient, contractimpl, contracttype, symbol_short, token,
+    xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
 };
+
+/// Cross-contract interface for the dynamic-pricing oracle (issue #207).
+///
+/// An external oracle contract — Reflector, Band-style relay, etc. —
+/// implements this surface and reports back `(price, last_updated_at)`
+/// for a given asset-pair symbol. `price` is a fixed-point integer in
+/// the oracle's chosen precision; `last_updated_at` is the ledger
+/// timestamp at which the price was published. The SkillSphere
+/// contract treats `last_updated_at` as the staleness signal.
+#[contractclient(name = "PriceOracleClient")]
+pub trait PriceOracle {
+    /// Return `(price, last_updated_at_seconds)` for the asset pair, or
+    /// panic if the pair is unknown.
+    fn get_price(env: Env, asset_pair: String) -> (i128, u32);
+}
 
 // Macro for panicking with an error
 macro_rules! panic_with_error {
@@ -149,6 +164,23 @@ pub enum DataKey {
     UserTotalEarned(Address),
     // #205: DEX Integration
     DexContractAddress,
+    // #206: Privacy-preserving session handshakes (commit-reveal).
+    // Key: commitment_hash → CommitRecord { committer, created_at }.
+    // The seeker / expert identities are not stored on chain until the
+    // commitment is revealed; until that point only the hash is public.
+    SessionCommit(BytesN<32>),
+    // #207: per-expert dynamic-pricing configuration.
+    //   ExpertPriceFeed(expert) → ExpertPriceFeedConfig {
+    //       oracle_contract, asset_pair, multiplier_bps,
+    //       max_staleness_seconds, fallback_rate_per_second
+    //   }
+    // When set, `get_dynamic_rate(expert)` reads from `oracle_contract`
+    // (via the `PriceOracleClient` trait below), scales by
+    // `multiplier_bps`, and rejects prices older than
+    // `max_staleness_seconds`. `fallback_rate_per_second` is used by
+    // call sites that opt into a "if oracle unavailable, fall back to
+    // a static rate" policy.
+    ExpertPriceFeed(Address),
 }
 
 #[contracttype]
@@ -159,6 +191,48 @@ pub enum SessionStatus {
     Completed,
     Disputed,
     Resolved,
+}
+
+/// Per-commitment metadata for the privacy-preserving session-handshake
+/// flow (issue #206). The seeker / expert identities are *not* stored
+/// here — only `committer` is, so an indexer that scrapes events can
+/// see "someone committed to a session at T" without learning who is
+/// meeting whom until the reveal lands.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CommitRecord {
+    /// Address that registered the commitment and is authorised to
+    /// reveal it.
+    pub committer: Address,
+    /// Ledger timestamp at which the commitment was registered.
+    pub created_at: u32,
+}
+
+/// Per-expert dynamic-pricing configuration (issue #207).
+///
+/// When stored under `DataKey::ExpertPriceFeed(expert)`, the expert's
+/// effective rate is computed as
+/// `(oracle_price * multiplier_bps / 10_000)`. Callers that need a
+/// "use static rate if oracle is misbehaving" policy should read
+/// `fallback_rate_per_second` and fall back themselves.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExpertPriceFeedConfig {
+    /// Address of the price-oracle contract implementing the
+    /// `PriceOracleClient` interface below.
+    pub oracle_contract: Address,
+    /// Asset-pair symbol the oracle should be queried for
+    /// (e.g. `"XLM/USD"`).
+    pub asset_pair: String,
+    /// Scale factor applied to the oracle price, in basis points
+    /// (`10_000 = 1.0×`). Lets an expert charge "1.5× spot price" by
+    /// setting `15_000`.
+    pub multiplier_bps: u32,
+    /// Reject the oracle price if it is older than this many seconds.
+    pub max_staleness_seconds: u32,
+    /// Static rate used by callers that opt into a fallback when the
+    /// oracle is misconfigured / stale.
+    pub fallback_rate_per_second: i128,
 }
 
 #[contracttype]
@@ -3754,6 +3828,200 @@ impl SkillSphereContract {
             ),
         );
         Ok(session_id)
+    }
+
+    // ── Privacy-preserving session handshakes (issue #206) ───────────────
+
+    /// Register a commit-reveal commitment to a session.
+    ///
+    /// The seeker / expert pair is not visible on-chain until
+    /// `reveal_session_handshake` is called with the same `salt`. Until
+    /// then a public observer only sees the commitment hash and the
+    /// committer's address — so a snoop on the indexer cannot tell who
+    /// is meeting whom in advance, which prevents grief / harassment
+    /// based on pending session identity.
+    ///
+    /// `commitment` should be `sha256(salt || seeker_bytes || expert_bytes)`
+    /// computed off-chain. The contract does not verify the construction
+    /// here; the verification happens at reveal time.
+    pub fn commit_session_handshake(
+        env: Env,
+        committer: Address,
+        commitment: BytesN<32>,
+    ) -> Result<(), Error> {
+        committer.require_auth();
+        if Self::protocol_paused(&env) {
+            return Err(Error::ProtocolPaused);
+        }
+        let key = DataKey::SessionCommit(commitment.clone());
+        if env.storage().persistent().has(&key) {
+            // Re-using a commitment is rejected so an observer cannot
+            // "overwrite" a stranger's commitment record.
+            return Err(Error::AlreadyInitialized);
+        }
+        let record = CommitRecord {
+            committer: committer.clone(),
+            created_at: env.ledger().timestamp() as u32,
+        };
+        env.storage().persistent().set(&key, &record);
+        env.events().publish(
+            (symbol_short!("session"), symbol_short!("commit")),
+            (commitment, committer),
+        );
+        Ok(())
+    }
+
+    /// Reveal a previously-registered commitment by supplying the salt
+    /// and the (seeker, expert) tuple that produced it. The contract
+    /// re-derives the SHA-256 hash and compares against the stored
+    /// commitment; on success the commitment is consumed (removed from
+    /// storage) and a `session/reveal` event is published carrying the
+    /// real identities.
+    pub fn reveal_session_handshake(
+        env: Env,
+        committer: Address,
+        salt: BytesN<32>,
+        seeker: Address,
+        expert: Address,
+    ) -> Result<(), Error> {
+        committer.require_auth();
+        if Self::protocol_paused(&env) {
+            return Err(Error::ProtocolPaused);
+        }
+
+        // Re-derive the expected commitment from the supplied tuple.
+        let mut preimage = Bytes::new(&env);
+        preimage.append(&salt.clone().into());
+        preimage.append(&seeker.clone().to_xdr(&env));
+        preimage.append(&expert.clone().to_xdr(&env));
+        let computed = env.crypto().sha256(&preimage);
+        let key = DataKey::SessionCommit(computed.clone().into());
+
+        let record: CommitRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::SessionNotFound)?;
+
+        if record.committer != committer {
+            return Err(Error::InvalidSessionState);
+        }
+
+        env.storage().persistent().remove(&key);
+        env.events().publish(
+            (symbol_short!("session"), symbol_short!("reveal")),
+            (committer, seeker, expert),
+        );
+        Ok(())
+    }
+
+    /// Read-only commitment lookup. Used by clients to detect that a
+    /// commitment has already landed (e.g. transaction was confirmed
+    /// after a network blip) before resubmitting.
+    pub fn get_session_commit(env: Env, commitment: BytesN<32>) -> Option<CommitRecord> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SessionCommit(commitment))
+    }
+
+    // ── Dynamic pricing oracles (issue #207) ─────────────────────────────
+
+    /// Expert-only: opt in to dynamic pricing by registering an oracle
+    /// price-feed configuration. The expert keeps full control — they
+    /// can call `clear_expert_price_feed` to fall back to the static
+    /// `rate_per_second` recorded on their profile.
+    pub fn set_expert_price_feed(
+        env: Env,
+        expert: Address,
+        config: ExpertPriceFeedConfig,
+    ) -> Result<(), Error> {
+        expert.require_auth();
+        if Self::protocol_paused(&env) {
+            return Err(Error::ProtocolPaused);
+        }
+        if config.multiplier_bps == 0 || config.multiplier_bps > 100_000 {
+            // Cap at 10× spot to prevent a misconfigured feed from
+            // draining a session deposit in seconds.
+            return Err(Error::InvalidFeeBps);
+        }
+        if config.max_staleness_seconds == 0 {
+            return Err(Error::InvalidFeeConfig);
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::ExpertPriceFeed(expert.clone()), &config);
+        env.events().publish(
+            (symbol_short!("expert"), symbol_short!("feedset")),
+            expert,
+        );
+        Ok(())
+    }
+
+    /// Expert-only: remove a previously-registered price feed and revert
+    /// to the static rate on the profile.
+    pub fn clear_expert_price_feed(env: Env, expert: Address) -> Result<(), Error> {
+        expert.require_auth();
+        env.storage()
+            .persistent()
+            .remove(&DataKey::ExpertPriceFeed(expert.clone()));
+        env.events().publish(
+            (symbol_short!("expert"), symbol_short!("feedrm")),
+            expert,
+        );
+        Ok(())
+    }
+
+    /// Read-only: return the per-second rate the expert should charge
+    /// right now. If a price feed is configured, the oracle is queried
+    /// and scaled by the configured multiplier; staleness is enforced
+    /// against `max_staleness_seconds`. If no feed is configured the
+    /// expert's static profile rate is returned.
+    pub fn get_dynamic_rate(env: Env, expert: Address) -> Result<i128, Error> {
+        let cfg_opt: Option<ExpertPriceFeedConfig> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ExpertPriceFeed(expert.clone()));
+
+        let cfg = match cfg_opt {
+            Some(c) => c,
+            None => {
+                // No feed configured — return the static rate from the
+                // expert's profile.
+                let profile = Self::expert_profile(&env, expert);
+                return Ok(profile.rate_per_second);
+            }
+        };
+
+        let client = PriceOracleClient::new(&env, &cfg.oracle_contract);
+        let (price, last_updated_at) = client.get_price(&cfg.asset_pair);
+
+        let now = env.ledger().timestamp() as u32;
+        if now.saturating_sub(last_updated_at) > cfg.max_staleness_seconds {
+            return Err(Error::OracleNotTrusted);
+        }
+
+        // rate = price * multiplier / 10_000. Saturating math keeps us
+        // from panicking on a misbehaving oracle that returns i128::MAX.
+        let scaled = price
+            .saturating_mul(cfg.multiplier_bps as i128)
+            .saturating_div(10_000);
+        Ok(scaled)
+    }
+
+    // ── Broader pause coverage (issue #208) ──────────────────────────────
+    //
+    // `pause_protocol` / `unpause_protocol` / `is_protocol_paused` were
+    // already implemented for issue #208's earlier ratchet. This PR
+    // extends the coverage so the new commit-reveal and price-feed
+    // setter functions also short-circuit while paused (see the
+    // ProtocolPaused check at the top of each new function above).
+    // Existing functions that already guard themselves include
+    // `start_session`, `stake`, and the various claim paths. The
+    // public accessor `is_protocol_paused` is re-exposed here as a
+    // doc anchor for consumers wiring an off-chain "protocol up?"
+    // status badge.
+    pub fn is_paused(env: Env) -> bool {
+        Self::protocol_paused(&env)
     }
 }
 
