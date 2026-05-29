@@ -33,3 +33,27 @@ export interface NFT {
     image: string;
     avatar: string;
 }
+
+export interface Session {
+    id: string;
+    title: string;
+    expertName: string;
+    expertAvatar: string;
+    date: string;
+    time: string;
+    duration: string;
+    status: "active" | "upcoming" | "completed" | "cancelled";
+    price: string;
+    category: string;
+}
+
+export interface Expert {
+    id: string;
+    name: string;
+    avatar: string;
+    category: string;
+    rating: number;
+    reviews: number;
+    hourlyRate: string;
+    availability: boolean;
+}
