@@ -36,6 +36,12 @@ const REFERRAL_COMMISSION_BPS: u32 = 500; // 5% of platform fee for referrer
 const REFERRAL_SESSION_LIMIT: u32 = 10; // Referral commission applies to first X sessions
 const RATING_SCALE_MIN: u32 = 1;
 const RATING_SCALE_MAX: u32 = 5;
+// #197 Insurance Fund: bps of the platform fee diverted to the
+// insurance vault on every settlement (100 bps = 1% of fee).
+const INSURANCE_BPS_OF_FEE: u32 = 100;
+// #195 Subscription seconds-per-month, used to enforce the
+// "deduct monthly" cadence on `collect_subscription_payment`.
+const SUBSCRIPTION_PERIOD_SECS: u64 = 30 * 24 * 60 * 60;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -62,6 +68,19 @@ pub enum DataKey {
     ReferralSessionCount(Address),
     TrustedOracle(Address),
     ExpertVerificationStatus(Address),
+    // #196: per-asset platform fee override in basis points; if set,
+    // takes priority over the global tiered fee config for that token.
+    AssetFeeBps(Address),
+    // #197: insurance vault account address + per-token vault balances
+    // accrued from settlement diversions.
+    InsuranceVaultAddress,
+    InsuranceVaultBalance(Address),
+    // #194: fixed-price escrow sessions keyed by session_id from
+    // NextSessionId. Stored separately from streaming sessions so the
+    // streaming math path is never invoked on them.
+    FixedPriceSession(u64),
+    // #195: subscription records keyed by (seeker, expert).
+    Subscription(Address, Address),
 }
 
 #[contracttype]
@@ -150,6 +169,54 @@ pub struct ExpertVerification {
     pub verified_at: u32,
 }
 
+/// Fixed-price escrow session for milestone-based work (#194).
+///
+/// Funds are locked at `initialize_fixed_price_session` and only
+/// released by `approve_fixed_price_session` (full payout to the
+/// expert minus platform fee) or by the existing dispute resolution
+/// pathway. No streaming math runs.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FixedPriceStatus {
+    Locked,
+    Released,
+    Disputed,
+    Refunded,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FixedPriceSession {
+    pub id: u64,
+    pub seeker: Address,
+    pub expert: Address,
+    pub token: Address,
+    pub amount: i128,
+    pub created_at: u64,
+    pub metadata_cid: String,
+    pub status: FixedPriceStatus,
+}
+
+/// Expert subscription retainer (#195).
+///
+/// `monthly_fee` is collected once per `SUBSCRIPTION_PERIOD_SECS`,
+/// up to `months_remaining` times. `prepaid_balance` is the up-front
+/// escrow the seeker funded; `expert_balance` is the expert's
+/// virtual balance to be claimed via `claim_subscription_balance`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Subscription {
+    pub seeker: Address,
+    pub expert: Address,
+    pub token: Address,
+    pub monthly_fee: i128,
+    pub months_remaining: u32,
+    pub last_collected_at: u64,
+    pub started_at: u64,
+    pub prepaid_balance: i128,
+    pub expert_balance: i128,
+}
+
 #[contract]
 pub struct SkillSphereContract;
 
@@ -225,6 +292,466 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::ExpertProfile(expert), &profile);
+    }
+
+    // ====================================================================
+    // #196 — Platform Fee Whitelist for Specific Assets
+    // ====================================================================
+
+    /// Admin sets a per-asset fee override in basis points. If set,
+    /// this overrides the global tiered fee config for sessions
+    /// funded in that token. Pass `MAX_BPS` worth of caution: callers
+    /// can clear an override by removing the storage key via
+    /// `clear_asset_fee_bps`.
+    pub fn set_asset_fee_bps(env: Env, asset: Address, fee_bps: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if fee_bps > MAX_BPS {
+            return Err(Error::InvalidFeeBps);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::AssetFeeBps(asset.clone()), &fee_bps);
+        env.events()
+            .publish((symbol_short!("assetFee"),), (asset, fee_bps));
+        Ok(())
+    }
+
+    /// Admin removes a previously-set per-asset fee override. The
+    /// asset then falls back to the global tiered fee config.
+    pub fn clear_asset_fee_bps(env: Env, asset: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .remove(&DataKey::AssetFeeBps(asset.clone()));
+        env.events()
+            .publish((symbol_short!("assetFee"),), (asset, 0u32));
+        Ok(())
+    }
+
+    /// Read the current per-asset fee bps override, if any.
+    pub fn get_asset_fee_bps(env: Env, asset: Address) -> Option<u32> {
+        env.storage().instance().get(&DataKey::AssetFeeBps(asset))
+    }
+
+    // ====================================================================
+    // #197 — Protocol Insurance Fund
+    // ====================================================================
+
+    /// Admin sets the insurance vault address. Required before any
+    /// settlement can route fee into the insurance fund — sessions
+    /// settled while no vault is configured skip the diversion (so
+    /// upgrading deployments don't break).
+    pub fn set_insurance_vault(env: Env, vault: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::InsuranceVaultAddress, &vault);
+        env.events()
+            .publish((symbol_short!("insVault"),), vault);
+        Ok(())
+    }
+
+    /// Read the configured insurance vault address.
+    pub fn get_insurance_vault(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::InsuranceVaultAddress)
+    }
+
+    /// Read the insurance fund's accrued balance for a specific token.
+    pub fn insurance_balance(env: Env, token: Address) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::InsuranceVaultBalance(token))
+            .unwrap_or(0i128)
+    }
+
+    /// Admin-only withdrawal from the insurance fund for verified
+    /// claims. Decrements the per-token vault balance and transfers
+    /// `amount` to `recipient`. Fails if the vault is unset or the
+    /// per-token balance is short.
+    pub fn withdraw_insurance(
+        env: Env,
+        token: Address,
+        recipient: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        let vault: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::InsuranceVaultAddress)
+            .ok_or(Error::InsuranceVaultUnset)?;
+        let mut balance: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::InsuranceVaultBalance(token.clone()))
+            .unwrap_or(0i128);
+        if balance < amount {
+            return Err(Error::InsufficientInsuranceBalance);
+        }
+        balance -= amount;
+        env.storage()
+            .instance()
+            .set(&DataKey::InsuranceVaultBalance(token.clone()), &balance);
+
+        // The vault holds the actual tokens via the contract escrow;
+        // transfer to recipient out of the contract.
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&env.current_contract_address(), &recipient, &amount);
+
+        env.events().publish(
+            (symbol_short!("insWithdr"),),
+            (vault, token, recipient, amount),
+        );
+        Ok(())
+    }
+
+    // ====================================================================
+    // #194 — Fixed-Price Escrow for Milestone Tasks
+    // ====================================================================
+
+    /// Lock `amount` of `token` from `seeker` as a milestone escrow
+    /// for `expert`. Funds remain in the contract until
+    /// `approve_fixed_price_session` releases them or
+    /// `dispute_fixed_price_session` puts the session into dispute.
+    /// Returns the new fixed-price session id.
+    pub fn initialize_fixed_price_session(
+        env: Env,
+        seeker: Address,
+        expert: Address,
+        token: Address,
+        amount: i128,
+        metadata_cid: String,
+    ) -> Result<u64, Error> {
+        seeker.require_auth();
+        Self::ensure_protocol_active(&env)?;
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        if !Self::is_valid_ipfs_cid(&metadata_cid) {
+            return Err(Error::InvalidCid);
+        }
+
+        let profile = Self::expert_profile(&env, expert.clone());
+        if profile.rate_per_second == 0 {
+            return Err(Error::ExpertNotRegistered);
+        }
+
+        let token_client = token::Client::new(&env, &token);
+        if token_client.balance(&seeker) < amount {
+            return Err(Error::InsufficientBalance);
+        }
+        token_client.transfer(&seeker, &env.current_contract_address(), &amount);
+
+        let session_id = Self::next_session_id(&env);
+        let now = env.ledger().timestamp();
+
+        let session = FixedPriceSession {
+            id: session_id,
+            seeker: seeker.clone(),
+            expert: expert.clone(),
+            token: token.clone(),
+            amount,
+            created_at: now,
+            metadata_cid: metadata_cid.clone(),
+            status: FixedPriceStatus::Locked,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::FixedPriceSession(session_id), &session);
+
+        env.events().publish(
+            (symbol_short!("fp"), symbol_short!("started")),
+            (session_id, seeker, expert, token, amount),
+        );
+        Ok(session_id)
+    }
+
+    /// Seeker approves the milestone. Pays the expert `amount` minus
+    /// the platform fee in one shot. Triggers the same fee-routing
+    /// and insurance-diversion path as streaming sessions.
+    pub fn approve_fixed_price_session(
+        env: Env,
+        seeker: Address,
+        session_id: u64,
+    ) -> Result<i128, Error> {
+        seeker.require_auth();
+        let mut fp: FixedPriceSession = env
+            .storage()
+            .persistent()
+            .get(&DataKey::FixedPriceSession(session_id))
+            .ok_or(Error::SessionNotFound)?;
+
+        if seeker != fp.seeker {
+            return Err(Error::Unauthorized);
+        }
+        if !matches!(fp.status, FixedPriceStatus::Locked) {
+            return Err(Error::FixedPriceSessionAlreadyFinalised);
+        }
+
+        let amount = fp.amount;
+        let platform_fee = Self::platform_fee_for_token(&env, &fp.token, amount)?;
+        let insurance_cut = Self::route_insurance_cut(&env, &fp.token, platform_fee);
+        let treasury_fee = platform_fee.saturating_sub(insurance_cut);
+        let expert_payout = amount.saturating_sub(platform_fee);
+
+        let token_client = token::Client::new(&env, &fp.token);
+        if treasury_fee > 0 {
+            if let Some(treasury) =
+                env.storage().instance().get::<DataKey, Address>(&DataKey::TreasuryAddress)
+            {
+                token_client.transfer(
+                    &env.current_contract_address(),
+                    &treasury,
+                    &treasury_fee,
+                );
+            }
+        }
+        if expert_payout > 0 {
+            token_client.transfer(&env.current_contract_address(), &fp.expert, &expert_payout);
+        }
+
+        fp.status = FixedPriceStatus::Released;
+        env.storage()
+            .persistent()
+            .set(&DataKey::FixedPriceSession(session_id), &fp);
+
+        env.events().publish(
+            (symbol_short!("fp"), symbol_short!("approved")),
+            (session_id, expert_payout, platform_fee, insurance_cut),
+        );
+        Ok(expert_payout)
+    }
+
+    /// Flag a fixed-price session as disputed. Funds remain locked
+    /// until admin resolution. Mirrors `flag_dispute` for streaming
+    /// sessions; the existing `resolve_dispute_with_split` flow
+    /// handles release.
+    pub fn dispute_fixed_price_session(
+        env: Env,
+        session_id: u64,
+        seeker: Address,
+        reason: String,
+        evidence_cid: String,
+    ) -> Result<(), Error> {
+        seeker.require_auth();
+        if reason.is_empty() {
+            return Err(Error::EmptyDisputeReason);
+        }
+        if !Self::is_valid_ipfs_cid(&evidence_cid) {
+            return Err(Error::InvalidCid);
+        }
+
+        let mut fp: FixedPriceSession = env
+            .storage()
+            .persistent()
+            .get(&DataKey::FixedPriceSession(session_id))
+            .ok_or(Error::SessionNotFound)?;
+        if seeker != fp.seeker {
+            return Err(Error::Unauthorized);
+        }
+        if !matches!(fp.status, FixedPriceStatus::Locked) {
+            return Err(Error::FixedPriceSessionAlreadyFinalised);
+        }
+        fp.status = FixedPriceStatus::Disputed;
+        env.storage()
+            .persistent()
+            .set(&DataKey::FixedPriceSession(session_id), &fp);
+
+        let dispute = Dispute {
+            session_id,
+            reason,
+            evidence_cid: evidence_cid.clone(),
+            created_at: env.ledger().timestamp() as u32,
+            resolved: false,
+            seeker_award_bps: 0,
+            expert_award_bps: 0,
+            auto_resolved: false,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::Dispute(session_id), &dispute);
+
+        env.events().publish(
+            (symbol_short!("fp"), symbol_short!("disputed")),
+            (session_id, seeker, evidence_cid),
+        );
+        Ok(())
+    }
+
+    /// Read a fixed-price session by id.
+    pub fn get_fixed_price_session(env: Env, session_id: u64) -> Result<FixedPriceSession, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::FixedPriceSession(session_id))
+            .ok_or(Error::SessionNotFound)
+    }
+
+    // ====================================================================
+    // #195 — Expert Subscription Retainers
+    // ====================================================================
+
+    /// Create a subscription: seeker prepays `monthly_fee *
+    /// months` up front to the contract; the expert collects one
+    /// month's fee at a time via `collect_subscription_payment`.
+    pub fn subscribe(
+        env: Env,
+        seeker: Address,
+        expert: Address,
+        token: Address,
+        monthly_fee: i128,
+        months: u32,
+    ) -> Result<(), Error> {
+        seeker.require_auth();
+        Self::ensure_protocol_active(&env)?;
+        if monthly_fee <= 0 || months == 0 {
+            return Err(Error::InvalidAmount);
+        }
+        let profile = Self::expert_profile(&env, expert.clone());
+        if profile.rate_per_second == 0 {
+            return Err(Error::ExpertNotRegistered);
+        }
+
+        let total = monthly_fee.saturating_mul(months as i128);
+        let token_client = token::Client::new(&env, &token);
+        if token_client.balance(&seeker) < total {
+            return Err(Error::InsufficientBalance);
+        }
+        token_client.transfer(&seeker, &env.current_contract_address(), &total);
+
+        let now = env.ledger().timestamp();
+        let sub = Subscription {
+            seeker: seeker.clone(),
+            expert: expert.clone(),
+            token: token.clone(),
+            monthly_fee,
+            months_remaining: months,
+            // `last_collected_at = 0` so the first collection is
+            // immediately available after subscribe — the period
+            // check uses `now - last_collected_at >= PERIOD`.
+            last_collected_at: 0,
+            started_at: now,
+            prepaid_balance: total,
+            expert_balance: 0,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::Subscription(seeker.clone(), expert.clone()), &sub);
+
+        env.events().publish(
+            (symbol_short!("sub"), symbol_short!("started")),
+            (seeker, expert, monthly_fee, months, total),
+        );
+        Ok(())
+    }
+
+    /// Expert collects the next month's fee from a subscription.
+    /// Decrements `prepaid_balance` + `months_remaining`, credits
+    /// `expert_balance`, and routes platform fee + insurance cut
+    /// just like a settled session. Fails if no period has elapsed
+    /// since the last collection or the subscription is exhausted.
+    pub fn collect_subscription_payment(
+        env: Env,
+        expert: Address,
+        seeker: Address,
+    ) -> Result<i128, Error> {
+        expert.require_auth();
+        let mut sub: Subscription = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Subscription(seeker.clone(), expert.clone()))
+            .ok_or(Error::SubscriptionNotFound)?;
+        if sub.months_remaining == 0 {
+            return Err(Error::SubscriptionExpired);
+        }
+        let now = env.ledger().timestamp();
+        let elapsed = now.saturating_sub(sub.last_collected_at);
+        if sub.last_collected_at > 0 && elapsed < SUBSCRIPTION_PERIOD_SECS {
+            return Err(Error::SubscriptionAlreadyCollected);
+        }
+
+        let fee = sub.monthly_fee;
+        if sub.prepaid_balance < fee {
+            return Err(Error::SubscriptionExpired);
+        }
+
+        let platform_fee = Self::platform_fee_for_token(&env, &sub.token, fee)?;
+        let insurance_cut = Self::route_insurance_cut(&env, &sub.token, platform_fee);
+        let treasury_fee = platform_fee.saturating_sub(insurance_cut);
+        let net = fee.saturating_sub(platform_fee);
+
+        sub.prepaid_balance -= fee;
+        sub.months_remaining -= 1;
+        sub.last_collected_at = now;
+        sub.expert_balance = sub.expert_balance.saturating_add(net);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Subscription(seeker.clone(), expert.clone()), &sub);
+
+        // Treasury routing is done via the contract balance; the net
+        // goes into the expert's virtual balance for batch withdrawal
+        // (matches the issue's "credits expert's virtual balance" AC).
+        if treasury_fee > 0 {
+            if let Some(treasury) =
+                env.storage().instance().get::<DataKey, Address>(&DataKey::TreasuryAddress)
+            {
+                let token_client = token::Client::new(&env, &sub.token);
+                token_client.transfer(
+                    &env.current_contract_address(),
+                    &treasury,
+                    &treasury_fee,
+                );
+            }
+        }
+
+        env.events().publish(
+            (symbol_short!("sub"), symbol_short!("collect")),
+            (seeker, expert, net, platform_fee, insurance_cut),
+        );
+        Ok(net)
+    }
+
+    /// Expert claims their accumulated virtual balance to their wallet.
+    pub fn claim_subscription_balance(
+        env: Env,
+        expert: Address,
+        seeker: Address,
+    ) -> Result<i128, Error> {
+        expert.require_auth();
+        let mut sub: Subscription = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Subscription(seeker.clone(), expert.clone()))
+            .ok_or(Error::SubscriptionNotFound)?;
+        let amount = sub.expert_balance;
+        if amount == 0 {
+            return Ok(0);
+        }
+        sub.expert_balance = 0;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Subscription(seeker.clone(), expert.clone()), &sub);
+        let token_client = token::Client::new(&env, &sub.token);
+        token_client.transfer(&env.current_contract_address(), &expert, &amount);
+        env.events().publish(
+            (symbol_short!("sub"), symbol_short!("claim")),
+            (seeker, expert, amount),
+        );
+        Ok(amount)
+    }
+
+    /// Read a subscription record.
+    pub fn get_subscription(
+        env: Env,
+        seeker: Address,
+        expert: Address,
+    ) -> Result<Subscription, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Subscription(seeker, expert))
+            .ok_or(Error::SubscriptionNotFound)
     }
 
     /// Updates the encrypted notes hash for a specific session.
@@ -1292,6 +1819,58 @@ impl SkillSphereContract {
             .set(&DataKey::Session(session.id), session);
     }
 
+    /// Compute the platform fee, honouring the per-asset override
+    /// (#196) when one is configured for `token`. Falls through to
+    /// the global tiered config otherwise.
+    fn platform_fee_for_token(env: &Env, token: &Address, amount: i128) -> Result<i128, Error> {
+        if let Some(asset_bps) = env
+            .storage()
+            .instance()
+            .get::<DataKey, u32>(&DataKey::AssetFeeBps(token.clone()))
+        {
+            if asset_bps > MAX_BPS {
+                return Err(Error::InvalidFeeBps);
+            }
+            return Ok(amount
+                .saturating_mul(asset_bps as i128)
+                .saturating_div(MAX_BPS as i128));
+        }
+        Self::calculate_platform_fee(env.clone(), amount)
+    }
+
+    /// Slice `INSURANCE_BPS_OF_FEE` bps off the platform fee for the
+    /// insurance fund (#197). Updates the per-token vault balance and
+    /// returns the diverted amount so callers can subtract it from
+    /// the treasury share. Tokens stay in the contract — actual
+    /// transfer to the recipient happens in `withdraw_insurance`.
+    fn route_insurance_cut(env: &Env, token: &Address, platform_fee: i128) -> i128 {
+        // Skip the diversion when no insurance vault is configured;
+        // upgrading deployments don't need to migrate atomically.
+        if env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::InsuranceVaultAddress)
+            .is_none()
+        {
+            return 0;
+        }
+        let cut = platform_fee
+            .saturating_mul(INSURANCE_BPS_OF_FEE as i128)
+            .saturating_div(MAX_BPS as i128);
+        if cut > 0 {
+            let mut bal: i128 = env
+                .storage()
+                .instance()
+                .get(&DataKey::InsuranceVaultBalance(token.clone()))
+                .unwrap_or(0i128);
+            bal = bal.saturating_add(cut);
+            env.storage()
+                .instance()
+                .set(&DataKey::InsuranceVaultBalance(token.clone()), &bal);
+        }
+        cut
+    }
+
     fn require_participant(session: &Session, caller: &Address) -> Result<(), Error> {
         if *caller != session.seeker && *caller != session.expert {
             return Err(Error::Unauthorized);
@@ -1332,14 +1911,23 @@ impl SkillSphereContract {
             return Ok(0);
         }
 
-        let platform_fee = Self::calculate_platform_fee(env.clone(), claimable)?;
+        // #196: per-asset fee override takes priority over the
+        // tiered config for this session's funding token.
+        let platform_fee = Self::platform_fee_for_token(env, &session.token, claimable)?;
         let referrer = Self::expert_referrer(env, &session.expert);
         let referral_reward = if referrer.is_some() {
             Self::calculate_referral_reward(platform_fee)
         } else {
             0
         };
-        let treasury_fee = platform_fee.saturating_sub(referral_reward);
+        // #197: slice 1% of the platform fee for the insurance fund
+        // before it routes to treasury. Returns 0 when no vault is
+        // configured, so deployments upgrade gracefully.
+        let insurance_cut =
+            Self::route_insurance_cut(env, &session.token, platform_fee.saturating_sub(referral_reward));
+        let treasury_fee = platform_fee
+            .saturating_sub(referral_reward)
+            .saturating_sub(insurance_cut);
         let mut expert_payout = claimable.saturating_sub(platform_fee);
 
         // === EFFECTS ===
@@ -3676,5 +4264,186 @@ mod test {
         
         assert_eq!(token1_fees, 5); // 5% of 100
         assert_eq!(token2_fees, 5); // 5% of 100
+    }
+
+    // ====================================================================
+    // #194 / #195 / #196 / #197 tests
+    // ====================================================================
+
+    #[test]
+    fn test_asset_fee_bps_override_set_get_clear() {
+        let (env, client, _, _, _, _, token, _) = setup();
+        assert!(client.get_asset_fee_bps(&token).is_none());
+        client.set_asset_fee_bps(&token, &50u32);
+        assert_eq!(client.get_asset_fee_bps(&token), Some(50u32));
+        client.clear_asset_fee_bps(&token);
+        assert!(client.get_asset_fee_bps(&token).is_none());
+        let _ = env;
+    }
+
+    #[test]
+    fn test_asset_fee_bps_applies_to_settlement() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        // Override: charge only 1% (100 bps) for this token, instead
+        // of the default tiered 5%.
+        client.set_asset_fee_bps(&token, &100u32);
+
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &10_000, &0, &test_cid(&env));
+        env.ledger().set_timestamp(1_000 + 100);
+        client.settle_session(&session_id);
+
+        // Treasury collected 1% of 1_000 (100 sec * 10/sec) = 10.
+        let treasury_fee = client.get_treasury_balance(&token);
+        assert_eq!(treasury_fee, 10);
+    }
+
+    #[test]
+    fn test_insurance_vault_accrues_and_admin_can_withdraw() {
+        let (env, client, _, admin, seeker, expert, token, _) = setup();
+        let vault = Address::generate(&env);
+        client.set_insurance_vault(&vault);
+
+        register_and_avail(&env, &client, &expert, 100);
+
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &10_000, &0, &test_cid(&env));
+        env.ledger().set_timestamp(1_000 + 100);
+        client.settle_session(&session_id);
+
+        // Default fee is 5% of 10_000 = 500; insurance slice is 1%
+        // of fee = 5; treasury gets 495.
+        let insurance = client.insurance_balance(&token);
+        assert_eq!(insurance, 5);
+        let treasury_fee = client.get_treasury_balance(&token);
+        assert_eq!(treasury_fee, 495);
+
+        // Admin withdraws the full insurance balance.
+        let recipient = Address::generate(&env);
+        client.withdraw_insurance(&token, &recipient, &5i128);
+        assert_eq!(client.insurance_balance(&token), 0);
+        let _ = admin;
+    }
+
+    #[test]
+    fn test_insurance_skipped_when_vault_unset() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 100);
+
+        // No `set_insurance_vault` call → diversion is skipped.
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &10_000, &0, &test_cid(&env));
+        env.ledger().set_timestamp(1_000 + 100);
+        client.settle_session(&session_id);
+
+        assert_eq!(client.insurance_balance(&token), 0);
+        // Treasury keeps the whole 500 since no insurance slice.
+        assert_eq!(client.get_treasury_balance(&token), 500);
+    }
+
+    #[test]
+    fn test_fixed_price_session_locks_and_releases_on_approval() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        let asset = token::Client::new(&env, &token);
+        let expert_before = asset.balance(&expert);
+
+        let session_id =
+            client.initialize_fixed_price_session(&seeker, &expert, &token, &10_000, &test_cid(&env));
+        let fp = client.get_fixed_price_session(&session_id);
+        assert!(matches!(fp.status, FixedPriceStatus::Locked));
+
+        let payout = client.approve_fixed_price_session(&seeker, &session_id);
+        // 10_000 - 5% fee = 9_500 net to expert.
+        assert_eq!(payout, 9_500);
+        assert_eq!(asset.balance(&expert) - expert_before, 9_500);
+
+        let fp = client.get_fixed_price_session(&session_id);
+        assert!(matches!(fp.status, FixedPriceStatus::Released));
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #34)")]
+    fn test_fixed_price_double_approve_fails() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.initialize_fixed_price_session(&seeker, &expert, &token, &1_000, &test_cid(&env));
+        client.approve_fixed_price_session(&seeker, &session_id);
+        client.approve_fixed_price_session(&seeker, &session_id);
+    }
+
+    #[test]
+    fn test_fixed_price_dispute_moves_to_disputed() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.initialize_fixed_price_session(&seeker, &expert, &token, &1_000, &test_cid(&env));
+        client.dispute_fixed_price_session(
+            &session_id,
+            &seeker,
+            &String::from_str(&env, "no delivery"),
+            &test_cid(&env),
+        );
+        let fp = client.get_fixed_price_session(&session_id);
+        assert!(matches!(fp.status, FixedPriceStatus::Disputed));
+    }
+
+    #[test]
+    fn test_subscription_subscribe_collect_and_claim() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        // 12-month subscription at 1_000 / month.
+        client.subscribe(&seeker, &expert, &token, &1_000i128, &12u32);
+        let sub = client.get_subscription(&seeker, &expert);
+        assert_eq!(sub.prepaid_balance, 12_000);
+        assert_eq!(sub.months_remaining, 12);
+
+        // First collection is allowed immediately.
+        let net = client.collect_subscription_payment(&expert, &seeker);
+        // 1_000 - 5% fee = 950 net into expert virtual balance.
+        assert_eq!(net, 950);
+        let sub = client.get_subscription(&seeker, &expert);
+        assert_eq!(sub.months_remaining, 11);
+        assert_eq!(sub.expert_balance, 950);
+
+        // Claiming sends it on-chain.
+        let asset = token::Client::new(&env, &token);
+        let before = asset.balance(&expert);
+        let claimed = client.claim_subscription_balance(&expert, &seeker);
+        assert_eq!(claimed, 950);
+        assert_eq!(asset.balance(&expert) - before, 950);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #36)")]
+    fn test_subscription_collect_twice_in_same_period_fails() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        client.subscribe(&seeker, &expert, &token, &1_000i128, &3u32);
+        client.collect_subscription_payment(&expert, &seeker);
+        // Same period — second collection must trip
+        // SubscriptionAlreadyCollected (#36).
+        client.collect_subscription_payment(&expert, &seeker);
+    }
+
+    #[test]
+    fn test_subscription_collect_advances_with_period() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        client.subscribe(&seeker, &expert, &token, &1_000i128, &3u32);
+        client.collect_subscription_payment(&expert, &seeker);
+
+        // Advance one full subscription period and collect again.
+        let next = env.ledger().timestamp() + 30 * 24 * 60 * 60;
+        env.ledger().set_timestamp(next);
+        let net = client.collect_subscription_payment(&expert, &seeker);
+        assert_eq!(net, 950);
+        let sub = client.get_subscription(&seeker, &expert);
+        assert_eq!(sub.months_remaining, 1);
     }
 }
