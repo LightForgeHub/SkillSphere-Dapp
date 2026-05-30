@@ -28,7 +28,7 @@ pub enum Error {
     ExpertNotRegistered = 22,
     ExpertUnavailable = 23,
     InvalidReferrer = 24,
-    ReentrancyDetected = 25,
+    Reentrancy = 25,
     DepositTooLow = 26,
     AlreadyInitialized = 27,
     InvalidRating = 28,
