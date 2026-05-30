@@ -4,9 +4,11 @@ mod errors;
 mod reputation;
 mod dex;
 mod governance;
+pub mod bridge;
 pub use errors::Error;
 pub use reputation::BadgeRecord;
 pub use dex::SwapPath;
+pub use bridge::BridgeError;
 
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, symbol_short, token,
