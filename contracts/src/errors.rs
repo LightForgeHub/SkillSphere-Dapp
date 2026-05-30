@@ -61,4 +61,5 @@ pub enum Error {
     HoursThresholdNotMet = 47,
     SessionFrozen = 48,
     SwapFailed = 49,
+
 }
