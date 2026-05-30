@@ -88,12 +88,13 @@ const REVERIFY_PERIOD_SECS: u64 = 30 * 24 * 60 * 60;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
     Admin,
-    NextSessionId,
+    SessionCounter,
     PlatformFeeConfig,
     MinimumSessionDeposit,
     ProtocolPaused,
     ReentrancyLock,
     ExpertProfile(Address),
+    ExpertChainReputation(Address, String),
     ExpertReputation(Address),
     Session(u64),
     Dispute(u64),
@@ -103,6 +104,8 @@ pub enum DataKey {
     TreasuryAddress,
     TreasuryBalance(Address),
     ArbitrationCommittee,
+    ArbitrationCommitteeMember(Address),
+    ArbitrationCommitteeSize,
     SessionRating(u64),
     ExpertAverageRating(Address),
     ExpertRatingCount(Address),
@@ -141,7 +144,7 @@ pub enum DataKey {
     InsuranceVaultAddress,
     InsuranceVaultBalance(Address),
     // #194: fixed-price escrow sessions keyed by session_id from
-    // NextSessionId. Stored separately from streaming sessions so the
+    // SessionCounter. Stored separately from streaming sessions so the
     // streaming math path is never invoked on them.
     FixedPriceSession(u64),
     // #195: subscription records keyed by (seeker, expert).
@@ -270,6 +273,7 @@ pub struct ExpertProfile {
     pub referrer: Option<Address>,
     pub staked_balance: i128,
     pub reputation: u32,
+    pub cross_chain_reputation: u32,
     pub availability_status: bool,
 }
 
@@ -385,7 +389,7 @@ impl SkillSphereContract {
         admin.require_auth();
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::NextSessionId, &1u64);
+        env.storage().instance().set(&DataKey::SessionCounter, &0u64);
         env.storage().instance().set(
             &DataKey::PlatformFeeConfig,
             &FeeConfig {
@@ -1717,7 +1721,54 @@ impl SkillSphereContract {
 
     /// Retrieves the current reputation of an expert.
     pub fn get_expert_reputation(env: Env, expert: Address) -> u32 {
-        Self::expert_profile(&env, expert).reputation
+        let profile = Self::expert_profile(&env, expert);
+        Self::effective_reputation(&profile)
+    }
+
+    /// Oracle-submitted per-chain reputation score for an expert.
+    pub fn set_cross_chain_reputation(
+        env: Env,
+        oracle: Address,
+        expert: Address,
+        chain: String,
+        score: u32,
+    ) -> Result<(), Error> {
+        oracle.require_auth();
+        let trusted: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TrustedOracle(oracle.clone()))
+            .unwrap_or(false);
+        if !trusted {
+            return Err(Error::OracleNotTrusted);
+        }
+
+        let chain_key = DataKey::ExpertChainReputation(expert.clone(), chain.clone());
+        let previous: u32 = env.storage().persistent().get(&chain_key).unwrap_or(0u32);
+        env.storage().persistent().set(&chain_key, &score);
+
+        let mut profile = Self::expert_profile(&env, expert.clone());
+        profile.cross_chain_reputation = profile
+            .cross_chain_reputation
+            .saturating_sub(previous)
+            .saturating_add(score);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ExpertProfile(expert.clone()), &profile);
+
+        env.events().publish(
+            (symbol_short!("xchain"), symbol_short!("reput")),
+            (oracle, expert, chain, score, profile.cross_chain_reputation),
+        );
+        Ok(())
+    }
+
+    /// Returns the oracle-reported reputation score for a specific chain.
+    pub fn get_cross_chain_reputation(env: Env, expert: Address, chain: String) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertChainReputation(expert, chain))
+            .unwrap_or(0u32)
     }
 
     /// Starts a new session between a seeker and an expert.
@@ -1782,7 +1833,7 @@ impl SkillSphereContract {
             }
         }
 
-        if profile.reputation < min_reputation {
+        if Self::effective_reputation(&profile) < min_reputation {
             panic_with_error!(&env, Error::ReputationTooLow);
         }
 
@@ -1968,6 +2019,7 @@ impl SkillSphereContract {
     /// * `Error::InvalidSessionState` - If the session is already finished or disputed.
     pub fn settle_session(env: Env, session_id: u64) -> Result<i128, Error> {
         Self::ensure_protocol_active(&env)?;
+        Self::assert_not_locked(&env)?;
         let session = Self::get_session_or_error(&env, session_id)?;
         session.expert.require_auth();
         Self::internal_settle(&env, session)
@@ -2028,6 +2080,7 @@ impl SkillSphereContract {
     /// * `Error::SessionNotFound` - If the session doesn't exist.
     /// * `Error::Unauthorized` - If the caller is not a participant.
     pub fn end_session(env: Env, caller: Address, session_id: u64) -> Result<(), Error> {
+        Self::assert_not_locked(&env)?;
         caller.require_auth();
         let mut session = Self::get_session_or_error(&env, session_id)?;
         Self::require_participant(&session, &caller)?;
@@ -2263,14 +2316,15 @@ impl SkillSphereContract {
     }
 
     fn next_session_id(env: &Env) -> u64 {
-        let next_id = env
+        let counter = env
             .storage()
             .instance()
-            .get(&DataKey::NextSessionId)
-            .unwrap_or(1u64);
+            .get(&DataKey::SessionCounter)
+            .unwrap_or(0u64);
+        let next_id = counter.saturating_add(1);
         env.storage()
             .instance()
-            .set(&DataKey::NextSessionId, &(next_id + 1));
+            .set(&DataKey::SessionCounter, &next_id);
         next_id
     }
 
@@ -2305,6 +2359,13 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::ReentrancyLock, &locked);
+    }
+
+    fn assert_not_locked(env: &Env) -> Result<(), Error> {
+        if Self::reentrancy_locked(env) {
+            return Err(Error::Reentrancy);
+        }
+        Ok(())
     }
 
     fn ensure_protocol_active(env: &Env) -> Result<(), Error> {
@@ -2522,9 +2583,7 @@ impl SkillSphereContract {
 
     fn internal_settle(env: &Env, mut session: Session) -> Result<i128, Error> {
         // === REENTRANCY GUARD ===
-        if Self::reentrancy_locked(env) {
-            return Err(Error::ReentrancyDetected);
-        }
+        Self::assert_not_locked(env)?;
         Self::set_reentrancy_lock(env, true);
 
         // === CHECKS ===
@@ -2673,9 +2732,7 @@ impl SkillSphereContract {
 
     fn close_session(env: &Env, session: &mut Session) -> Result<(i128, i128), Error> {
         // === REENTRANCY GUARD ===
-        if Self::reentrancy_locked(env) {
-            return Err(Error::ReentrancyDetected);
-        }
+        Self::assert_not_locked(env)?;
         Self::set_reentrancy_lock(env, true);
 
         // === CHECKS ===
@@ -2803,8 +2860,15 @@ impl SkillSphereContract {
                 referrer: None,
                 staked_balance: 0,
                 reputation: 0,
+                cross_chain_reputation: 0,
                 availability_status: false,
             })
+    }
+
+    fn effective_reputation(profile: &ExpertProfile) -> u32 {
+        profile
+            .reputation
+            .saturating_add(profile.cross_chain_reputation)
     }
 
     fn expert_referrer(env: &Env, expert: &Address) -> Option<Address> {
@@ -3303,14 +3367,19 @@ impl SkillSphereContract {
         let admin = Self::get_admin_address(&env)?;
         admin.require_auth();
 
-        // Store committee members in persistent state
-        // Using a vector to store the committee members
-        let mut committee: Vec<Address> = Vec::new(&env);
-        committee.push_back(member1);
-        committee.push_back(member2);
-        committee.push_back(member3);
-
-        env.storage().persistent().set(&DataKey::ArbitrationCommittee, &committee);
+        // Mapping-style storage is cheaper than persisting an address array.
+        env.storage()
+            .persistent()
+            .set(&DataKey::ArbitrationCommitteeMember(member1), &true);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ArbitrationCommitteeMember(member2), &true);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ArbitrationCommitteeMember(member3), &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::ArbitrationCommitteeSize, &3u32);
 
         Ok(())
     }
@@ -3435,9 +3504,7 @@ impl SkillSphereContract {
     /// * `Error::InvalidSessionState` - If the session has already accrued earnings.
     pub fn claim_no_show_refund(env: Env, seeker: Address, session_id: u64) -> Result<i128, Error> {
         // === REENTRANCY GUARD ===
-        if Self::reentrancy_locked(&env) {
-            return Err(Error::ReentrancyDetected);
-        }
+        Self::assert_not_locked(&env)?;
         Self::set_reentrancy_lock(&env, true);
 
         // === CHECKS ===
@@ -3502,9 +3569,7 @@ impl SkillSphereContract {
     /// * `Error::InsufficientBalance` - If the session balance is less than accrued (should not happen).
     pub fn withdraw_accrued(env: Env, session_id: u64) -> Result<i128, Error> {
         // === REENTRANCY GUARD ===
-        if Self::reentrancy_locked(&env) {
-            return Err(Error::ReentrancyDetected);
-        }
+        Self::assert_not_locked(&env)?;
         Self::set_reentrancy_lock(&env, true);
 
         // === CHECKS ===
@@ -3861,7 +3926,7 @@ impl SkillSphereContract {
         }
         let key = DataKey::SessionCommit(commitment.clone());
         let consumed_key = DataKey::SessionCommitConsumed(commitment.clone());
-        if env.storage().persistent().has(&key)
+        if env.storage().temporary().has(&key)
             || env.storage().persistent().has(&consumed_key)
         {
             // Re-using a commitment is rejected so an observer cannot
@@ -3873,7 +3938,7 @@ impl SkillSphereContract {
             committer: committer.clone(),
             created_at: env.ledger().timestamp() as u32,
         };
-        env.storage().persistent().set(&key, &record);
+        env.storage().temporary().set(&key, &record);
         env.events().publish(
             (symbol_short!("session"), symbol_short!("commit")),
             (commitment, committer),
@@ -3909,7 +3974,7 @@ impl SkillSphereContract {
 
         let record: CommitRecord = env
             .storage()
-            .persistent()
+            .temporary()
             .get(&key)
             .ok_or(Error::SessionNotFound)?;
 
@@ -3917,7 +3982,7 @@ impl SkillSphereContract {
             return Err(Error::InvalidSessionState);
         }
 
-        env.storage().persistent().remove(&key);
+        env.storage().temporary().remove(&key);
         // Leave a tombstone so the same commitment hash cannot be
         // committed again after its preimage has been revealed.
         env.storage()
@@ -3935,7 +4000,7 @@ impl SkillSphereContract {
     /// after a network blip) before resubmitting.
     pub fn get_session_commit(env: Env, commitment: BytesN<32>) -> Option<CommitRecord> {
         env.storage()
-            .persistent()
+            .temporary()
             .get(&DataKey::SessionCommit(commitment))
     }
 
@@ -4348,6 +4413,48 @@ mod test {
         let session_id =
             client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
         assert_eq!(session_id, 1);
+    }
+
+    #[test]
+    fn test_start_session_assigns_unique_monotonic_ids() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        let first = client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+        let second = client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+
+        assert_eq!(first, 1);
+        assert_eq!(second, 2);
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn test_cross_chain_reputation_is_aggregated() {
+        let (env, client, _, _, _, expert, _, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        let oracle = Address::generate(&env);
+        client.register_trusted_oracle(&oracle);
+        client.set_expert_reputation(&expert, &10);
+
+        client.set_cross_chain_reputation(
+            &oracle,
+            &expert,
+            &String::from_str(&env, "ethereum"),
+            &40,
+        );
+        client.set_cross_chain_reputation(
+            &oracle,
+            &expert,
+            &String::from_str(&env, "polygon"),
+            &15,
+        );
+
+        assert_eq!(
+            client.get_cross_chain_reputation(&expert, &String::from_str(&env, "ethereum")),
+            40
+        );
+        assert_eq!(client.get_expert_reputation(&expert), 65);
     }
 
     #[test]
