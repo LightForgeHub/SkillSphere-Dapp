@@ -169,6 +169,10 @@ pub enum DataKey {
     // The seeker / expert identities are not stored on chain until the
     // commitment is revealed; until that point only the hash is public.
     SessionCommit(BytesN<32>),
+    // #206 tombstone: marks a commitment hash whose preimage has been
+    // revealed. Kept after `SessionCommit` is removed so the same hash
+    // cannot be re-committed and re-revealed (replay protection).
+    SessionCommitConsumed(BytesN<32>),
     // #207: per-expert dynamic-pricing configuration.
     //   ExpertPriceFeed(expert) → ExpertPriceFeedConfig {
     //       oracle_contract, asset_pair, multiplier_bps,
@@ -3854,9 +3858,13 @@ impl SkillSphereContract {
             return Err(Error::ProtocolPaused);
         }
         let key = DataKey::SessionCommit(commitment.clone());
-        if env.storage().persistent().has(&key) {
+        let consumed_key = DataKey::SessionCommitConsumed(commitment.clone());
+        if env.storage().persistent().has(&key)
+            || env.storage().persistent().has(&consumed_key)
+        {
             // Re-using a commitment is rejected so an observer cannot
-            // "overwrite" a stranger's commitment record.
+            // "overwrite" a stranger's commitment record, and so a
+            // previously-revealed preimage cannot be replayed.
             return Err(Error::AlreadyInitialized);
         }
         let record = CommitRecord {
@@ -3908,6 +3916,11 @@ impl SkillSphereContract {
         }
 
         env.storage().persistent().remove(&key);
+        // Leave a tombstone so the same commitment hash cannot be
+        // committed again after its preimage has been revealed.
+        env.storage()
+            .persistent()
+            .set(&DataKey::SessionCommitConsumed(computed.into()), &true);
         env.events().publish(
             (symbol_short!("session"), symbol_short!("reveal")),
             (committer, seeker, expert),
@@ -3961,6 +3974,9 @@ impl SkillSphereContract {
     /// to the static rate on the profile.
     pub fn clear_expert_price_feed(env: Env, expert: Address) -> Result<(), Error> {
         expert.require_auth();
+        if Self::protocol_paused(&env) {
+            return Err(Error::ProtocolPaused);
+        }
         env.storage()
             .persistent()
             .remove(&DataKey::ExpertPriceFeed(expert.clone()));

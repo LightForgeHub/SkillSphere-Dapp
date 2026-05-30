@@ -82,12 +82,12 @@
         {"name": "seeker", "type": "Address"},
         {"name": "expert", "type": "Address"},
         {"name": "token", "type": "Address"},
-        {"name": "rate_per_second", "type": "i128"},
-        {"name": "deposit", "type": "i128"},
+        {"name": "amount", "type": "i128"},
+        {"name": "min_reputation", "type": "u32"},
         {"name": "metadata_cid", "type": "String"}
       ],
-      "returns": "Result<u64, Error>",
-      "events": ["session/start"],
+      "returns": "u64",
+      "events": ["session/started"],
       "errors": ["ProtocolPaused", "ExpertNotRegistered", "DepositTooLow"]
     },
     "settle_session": {
@@ -196,7 +196,15 @@
     "_NOTE": "This file documents the core entrypoints listed under issue #209's acceptance criteria. The full contract exposes ~120 public functions; mirroring every signature here would duplicate `lib.rs`. The intent is a stable, machine-readable index of the contract surface that off-chain tooling can render as Swagger-style docs."
   },
   "events": {
-    "session/start": ["session_id: u64", "seeker: Address", "expert: Address"],
+    "session/started": [
+      "session_id: u64",
+      "seeker: Address",
+      "expert: Address",
+      "rate_per_second: i128",
+      "amount: i128",
+      "started_at: u32",
+      "metadata_cid: String"
+    ],
     "session/commit": ["commitment: BytesN<32>", "committer: Address"],
     "session/reveal": ["committer: Address", "seeker: Address", "expert: Address"],
     "expert/feedset": ["expert: Address"],
