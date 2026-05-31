@@ -2,6 +2,7 @@
 
 mod migrations;
 mod admin;
+mod storage;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
@@ -25,6 +26,8 @@ const STAKE_TIER_3: i128 = 10_000;
 const FEE_REDUCTION_TIER_1_BPS: u32 = 100;
 const FEE_REDUCTION_TIER_2_BPS: u32 = 200;
 const FEE_REDUCTION_TIER_3_BPS: u32 = 300;
+/// 90 days in seconds — minimum age of a completed session before archival.
+const ARCHIVE_DELAY_SECS: u64 = 90 * 24 * 60 * 60;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -1019,6 +1022,45 @@ impl SkillSphereContract {
             total_sessions,
             active_sessions,
         }
+    }
+
+    /// Move a completed session from Persistent to Temporary storage (90-day TTL).
+    /// Admin-only. Callable only after the session has been completed for ≥90 days.
+    pub fn archive_session(env: Env, session_id: u64) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+
+        let session = Self::get_session_or_error(&env, session_id)?;
+
+        if !matches!(
+            session.status,
+            SessionStatus::Completed | SessionStatus::Resolved
+        ) {
+            return Err(Error::InvalidSessionState);
+        }
+
+        let now = env.ledger().timestamp();
+        let completed_at = session.last_settlement_timestamp as u64;
+        if now < completed_at.saturating_add(ARCHIVE_DELAY_SECS) {
+            return Err(Error::TimelockNotExpired);
+        }
+
+        // Write to temporary storage with 90-day TTL, then remove from persistent.
+        storage::write_archive(&env, &session);
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Session(session_id));
+
+        env.events().publish(
+            (symbol_short!("session"), symbol_short!("archived")),
+            (session_id, now),
+        );
+
+        Ok(())
+    }
+
+    /// Read a session from temporary (archived) storage.
+    pub fn get_archived_session(env: Env, session_id: u64) -> Option<Session> {
+        storage::read_archive(&env, session_id)
     }
 
     /// Migrate storage schema to `new_version`. Admin-only, runs once per version bump.
@@ -2781,5 +2823,63 @@ mod test {
         client.pause_protocol();
         let status = client.health_check();
         assert!(status.is_paused);
+    }
+
+    // --- #248: archive_session ---
+
+    #[test]
+    fn test_archive_session_moves_to_temporary_storage() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+
+        // Fully settle the session.
+        env.ledger().set_timestamp(1_300);
+        client.settle_session(&session_id);
+
+        // Advance 90 days past completion.
+        let ninety_days: u64 = 90 * 24 * 60 * 60;
+        env.ledger().set_timestamp(1_300 + ninety_days + 1);
+
+        client.archive_session(&session_id);
+
+        // Session no longer in persistent storage (get_session should fail).
+        let result = client.try_get_session(&session_id);
+        assert!(result.is_err());
+
+        // Session readable from temporary storage.
+        let archived = client.get_archived_session(&session_id);
+        assert!(archived.is_some());
+        assert_eq!(archived.unwrap().id, session_id);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_archive_session_fails_before_90_days() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+
+        env.ledger().set_timestamp(1_300);
+        client.settle_session(&session_id);
+
+        // Only 1 day after completion — should fail.
+        env.ledger().set_timestamp(1_300 + 24 * 60 * 60);
+        client.archive_session(&session_id);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_archive_session_fails_for_active_session() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+
+        let ninety_days: u64 = 90 * 24 * 60 * 60;
+        env.ledger().set_timestamp(1_000 + ninety_days + 1);
+        client.archive_session(&session_id);
     }
 }
