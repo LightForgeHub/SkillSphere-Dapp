@@ -40,18 +40,11 @@ pub enum Error {
     InsufficientBalance = 34,
 
     // #213 / #214
-    BurnBpsExceedsFee = 34,
     StakeNotFound = 35,
     NoRewardsToClaim = 36,
-    InsuffStakeBalance = 37,
 
     // #194 / #195 / #196 / #197
-    FpAlreadyFinalised = 38,
-    SubNotFound = 39,
-    SubAlreadyCollected = 40,
-    SubscriptionExpired = 41,
     ContractUnset = 42,
-    InsuffInsuranceBal = 43,
 
     // #198 / #199 / #200
     ExpertOffline = 44,
@@ -66,10 +59,8 @@ pub enum Error {
     // #240 / #241 / #242
     ExpertOnCooldown = 50,
     SpendingLimitExceeded = 51,
-    VoucherExpired = 52,
-    VoucherNonceUsed = 53,
-    InvalidVoucherSignature = 54,
-    VoucherPubkeyNotSet = 55,
     InvalidVoucher = 56,
 
+    // #257
+    TimelockActive = 57,
 }
