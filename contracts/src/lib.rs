@@ -947,6 +947,34 @@ impl SkillSphereContract {
     }
 
     // ====================================================================
+    // Anti-Spam Session Deposit
+    // ====================================================================
+
+    /// Sets the non-refundable anti-spam deposit required on every new session.
+    ///
+    /// Set to `0` to disable (the default). Deposit is burned to the insurance
+    /// vault on session creation and does not count toward the session escrow.
+    pub fn set_spam_deposit_amount(env: Env, amount: i128) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+        treasury::set_spam_deposit_amount(&env, amount);
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("spamDep"), amount),
+        );
+        Ok(())
+    }
+
+    /// Returns the currently-configured anti-spam deposit amount.
+    pub fn get_spam_deposit_amount(env: Env) -> i128 {
+        treasury::spam_deposit_amount(&env)
+    }
+
+    // ====================================================================
     // #194 — Fixed-Price Escrow for Milestone Tasks
     // ====================================================================
 
@@ -2389,6 +2417,11 @@ impl SkillSphereContract {
             panic_with_error!(&env, Error::InsufficientBalance);
         }
 
+        // Collect non-refundable anti-spam deposit (burned to insurance vault).
+        if let Err(e) = treasury::collect_spam_deposit(&env, &seeker, &token) {
+            panic_with_error!(&env, e);
+        }
+
         Self::create_active_session(
             &env,
             seeker,
@@ -2465,6 +2498,9 @@ impl SkillSphereContract {
         if token_client.balance(&seeker) < amount {
             return Err(Error::InsufficientBalance);
         }
+
+        // Collect non-refundable anti-spam deposit (burned to insurance vault).
+        treasury::collect_spam_deposit(&env, &seeker, &token)?;
 
         let locked_xlm_rate = if profile.rate_currency == RateCurrency::USD {
             Self::lock_usd_rate_for_session(&env, &expert)
