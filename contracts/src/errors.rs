@@ -62,10 +62,13 @@ pub enum Error {
     SessionFrozen = 48,
     SwapFailed = 49,
 
-    // #236 / #239 / #237 / #238
-    RateLimitExceeded = 50,
-    TokenNotWhitelisted = 51,
-    TokenAlreadyWhitelisted = 52,
-    TokenNotInWhitelist = 53,
+    // #240 / #241 / #242
+    ExpertOnCooldown = 50,
+    SpendingLimitExceeded = 51,
+    VoucherExpired = 52,
+    VoucherNonceUsed = 53,
+    InvalidVoucherSignature = 54,
+    VoucherPubkeyNotSet = 55,
+    InvalidVoucher = 56,
 
 }

@@ -1,7 +1,7 @@
 #![no_std]
 
 pub mod bridge;
-mod admin;
+mod crypto;
 mod dex;
 mod disputes;
 mod errors;
@@ -9,6 +9,7 @@ mod events;
 mod governance;
 mod reputation;
 pub use bridge::BridgeError;
+pub use crypto::SessionVoucher;
 pub use dex::SwapPath;
 pub use errors::Error;
 pub use reputation::BadgeRecord;
@@ -190,14 +191,16 @@ pub enum DataKey {
     // call sites that opt into a "if oracle unavailable, fall back to
     // a static rate" policy.
     ExpertPriceFeed(Address),
-    // #236: per-address rate-limit tombstone (temporary storage).
-    LastAction(Address),
-    // #236: admin-configured minimum ledger gap between rate-limited calls.
-    RateLimitMinLedgers,
-    // #239: admin-managed whitelist of approved payment tokens.
-    ApprovedTokens,
-    // #238: expert cancellation reason stored separately for transparency.
-    SessionCancelReason(u64),
+    // #240: admin-configured cooldown length (ledgers) after dispute loss.
+    ExpertCooldownLedgers,
+    // #240: temporary storage — ledger sequence until expert may accept sessions.
+    ExpertCooldownUntil(Address),
+    // #241: optional per-seeker max deposit per session.
+    SeekerSpendingLimit(Address),
+    // #242: ed25519 public key used to verify session vouchers.
+    ExpertVoucherPubkey(Address),
+    // #242: tombstone for consumed voucher nonces (replay protection).
+    VoucherNonceConsumed(Address, u64),
 }
 
 #[contracttype]
@@ -419,6 +422,10 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::ReentrancyLock, &false);
+        env.storage().instance().set(
+            &DataKey::ExpertCooldownLedgers,
+            &disputes::DEFAULT_EXPERT_COOLDOWN_LEDGERS,
+        );
     }
 
     /// Registers or updates an expert's profile details.
@@ -471,7 +478,7 @@ impl SkillSphereContract {
             return Err(Error::InvalidFeeBps);
         }
         env.storage().instance().set(&DataKey::BurnBps, &burn_bps);
-        env.events().publish((symbol_short!("burnBps"),), burn_bps);
+        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("burnBps"), burn_bps));
         Ok(())
     }
 
@@ -533,8 +540,12 @@ impl SkillSphereContract {
             .instance()
             .set(&DataKey::StakingTotalStaked, &total.saturating_add(amount));
 
-        env.events()
-            .publish((symbol_short!("stake"),), (staker, token, amount));
+        events::publish_event(
+            &env,
+            events::event_type::staking(),
+            0,
+            (symbol_short!("stake"), staker, token, amount),
+        );
         Ok(())
     }
 
@@ -573,8 +584,12 @@ impl SkillSphereContract {
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&env.current_contract_address(), &staker, &amount);
 
-        env.events()
-            .publish((symbol_short!("unstake"),), (staker, token, amount));
+        events::publish_event(
+            &env,
+            events::event_type::staking(),
+            0,
+            (symbol_short!("unstake"), staker, token, amount),
+        );
         Ok(())
     }
 
@@ -625,8 +640,12 @@ impl SkillSphereContract {
         let token_client = token::Client::new(&env, &reward_token);
         token_client.transfer(&env.current_contract_address(), &staker, &owed);
 
-        env.events()
-            .publish((symbol_short!("claim"),), (staker, reward_token, owed));
+        events::publish_event(
+            &env,
+            events::event_type::staking(),
+            0,
+            (symbol_short!("claim"), staker, reward_token, owed),
+        );
         Ok(owed)
     }
 
@@ -680,8 +699,12 @@ impl SkillSphereContract {
             &acc.saturating_add(delta),
         );
 
-        env.events()
-            .publish((symbol_short!("rewardDep"),), (from, reward_token, amount));
+        events::publish_event(
+            &env,
+            events::event_type::staking(),
+            0,
+            (symbol_short!("rewardDep"), from, reward_token, amount),
+        );
         Ok(())
     }
 
@@ -701,8 +724,12 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::AssetFeeBps(asset.clone()), &fee_bps);
-        env.events()
-            .publish((symbol_short!("assetFee"),), (asset, fee_bps));
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("assetFee"), asset, fee_bps),
+        );
         Ok(())
     }
 
@@ -713,8 +740,12 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .remove(&DataKey::AssetFeeBps(asset.clone()));
-        env.events()
-            .publish((symbol_short!("assetFee"),), (asset, 0u32));
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("assetFee"), asset, 0u32),
+        );
         Ok(())
     }
 
@@ -736,7 +767,7 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::InsuranceVaultAddress, &vault);
-        env.events().publish((symbol_short!("insVault"),), vault);
+        events::publish_event(&env, events::event_type::insurance(), 0, (symbol_short!("insVault"), vault));
         Ok(())
     }
 
@@ -792,9 +823,11 @@ impl SkillSphereContract {
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&env.current_contract_address(), &recipient, &amount);
 
-        env.events().publish(
-            (symbol_short!("insWithdr"),),
-            (vault, token, recipient, amount),
+        events::publish_event(
+            &env,
+            events::event_type::insurance(),
+            0,
+            (symbol_short!("insWithdr"), vault, token, recipient, amount),
         );
         Ok(())
     }
@@ -848,9 +881,11 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::FixedPriceSession(session_id), &session);
 
-        env.events().publish(
-            (symbol_short!("fp"), symbol_short!("started")),
-            (session_id, seeker, expert, token, amount),
+        events::publish_event(
+            &env,
+            events::event_type::fixed_price(),
+            session_id,
+            (symbol_short!("started"), seeker, expert, token, amount),
         );
         Ok(session_id)
     }
@@ -874,7 +909,7 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::ExpertLastHeartbeat(expert.clone()), &now);
-        env.events().publish((symbol_short!("hb"),), (expert, now));
+        events::publish_event(&env, events::event_type::heartbeat(), 0, (expert, now));
         Ok(())
     }
 
@@ -925,9 +960,11 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::FixedPriceSession(session_id), &fp);
 
-        env.events().publish(
-            (symbol_short!("fp"), symbol_short!("approved")),
-            (session_id, expert_payout, platform_fee, insurance_cut),
+        events::publish_event(
+            &env,
+            events::event_type::fixed_price(),
+            session_id,
+            (symbol_short!("approved"), expert_payout, platform_fee, insurance_cut),
         );
         Ok(expert_payout)
     }
@@ -981,9 +1018,11 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::Dispute(session_id), &dispute);
 
-        env.events().publish(
-            (symbol_short!("fp"), symbol_short!("disputed")),
-            (session_id, seeker, evidence_cid),
+        events::publish_event(
+            &env,
+            events::event_type::fixed_price(),
+            session_id,
+            (symbol_short!("disputed"), seeker, evidence_cid),
         );
         Ok(())
     }
@@ -1047,9 +1086,11 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::Subscription(seeker.clone(), expert.clone()), &sub);
 
-        env.events().publish(
-            (symbol_short!("sub"), symbol_short!("started")),
-            (seeker, expert, monthly_fee, months, total),
+        events::publish_event(
+            &env,
+            events::event_type::subscription(),
+            0,
+            (symbol_short!("started"), seeker, expert, monthly_fee, months, total),
         );
         Ok(())
     }
@@ -1107,9 +1148,11 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::Dispute(session_id), &dispute);
 
-        env.events().publish(
-            (symbol_short!("dispute"), symbol_short!("evidence")),
-            (session_id, caller, cid),
+        events::publish_event(
+            &env,
+            events::event_type::dispute_evidence(),
+            session_id,
+            (caller, cid),
         );
         Ok(())
     }
@@ -1190,9 +1233,11 @@ impl SkillSphereContract {
             }
         }
 
-        env.events().publish(
-            (symbol_short!("sub"), symbol_short!("collect")),
-            (seeker, expert, net, platform_fee, insurance_cut),
+        events::publish_event(
+            &env,
+            events::event_type::subscription(),
+            0,
+            (symbol_short!("collect"), seeker, expert, net, platform_fee, insurance_cut),
         );
         Ok(net)
     }
@@ -1219,9 +1264,11 @@ impl SkillSphereContract {
             .set(&DataKey::Subscription(seeker.clone(), expert.clone()), &sub);
         let token_client = token::Client::new(&env, &sub.token);
         token_client.transfer(&env.current_contract_address(), &expert, &amount);
-        env.events().publish(
-            (symbol_short!("sub"), symbol_short!("claim")),
-            (seeker, expert, amount),
+        events::publish_event(
+            &env,
+            events::event_type::subscription(),
+            0,
+            (symbol_short!("claim"), seeker, expert, amount),
         );
         Ok(amount)
     }
@@ -1294,8 +1341,12 @@ impl SkillSphereContract {
         new_admin.require_auth();
 
         env.storage().instance().set(&DataKey::Admin, &new_admin);
-        env.events()
-            .publish((symbol_short!("setAdmin"),), new_admin);
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("setAdmin"), new_admin),
+        );
 
         Ok(())
     }
@@ -1329,7 +1380,7 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::PlatformFeeConfig, &config);
-        env.events().publish((symbol_short!("setFee"),), fee_bps);
+        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("setFee"), fee_bps));
 
         Ok(())
     }
@@ -1367,8 +1418,12 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::PlatformFeeConfig, &config);
-        env.events()
-            .publish((symbol_short!("feeCfg"),), config.clone());
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("feeCfg"), config.clone()),
+        );
 
         Ok(())
     }
@@ -1396,8 +1451,12 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::MinimumSessionDeposit, &min_deposit);
-        env.events()
-            .publish((symbol_short!("setMinDep"),), min_deposit);
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("setMinDep"), min_deposit),
+        );
 
         Ok(())
     }
@@ -1470,8 +1529,12 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::StakingContract, &staking_contract);
-        env.events()
-            .publish((symbol_short!("setStake"),), staking_contract);
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("setStake"), staking_contract),
+        );
         Ok(())
     }
 
@@ -1502,8 +1565,12 @@ impl SkillSphereContract {
             &DataKey::ExpertStakedBalance(expert.clone()),
             &staked_balance,
         );
-        env.events()
-            .publish((symbol_short!("setStBal"),), (expert, staked_balance));
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("setStBal"), expert, staked_balance),
+        );
         Ok(())
     }
 
@@ -1553,8 +1620,12 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::ExpertProfile(expert.clone()), &profile);
-        env.events()
-            .publish((symbol_short!("setRefrr"),), (expert, referrer));
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (symbol_short!("setRefrr"), expert, referrer),
+        );
 
         Ok(())
     }
@@ -1581,7 +1652,7 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::TreasuryAddress, &treasury);
-        env.events().publish((symbol_short!("setTreas"),), treasury);
+        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("setTreas"), treasury));
         Ok(())
     }
 
@@ -1629,8 +1700,12 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::TreasuryBalance(token.clone()), &new_balance);
 
-        env.events()
-            .publish((symbol_short!("feeCollct"),), (session_id, token, amount));
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            session_id,
+            (symbol_short!("feeCollct"), token, amount),
+        );
 
         Ok(())
     }
@@ -1671,9 +1746,11 @@ impl SkillSphereContract {
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&env.current_contract_address(), &recipient, &amount);
 
-        env.events().publish(
-            (symbol_short!("treasWdrw"),),
-            (token.clone(), amount, recipient.clone()),
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("treasWdrw"), token.clone(), amount, recipient.clone()),
         );
 
         Ok(())
@@ -1710,9 +1787,11 @@ impl SkillSphereContract {
             &current_balance,
         );
 
-        env.events().publish(
-            (symbol_short!("treasWdrw"),),
-            (token.clone(), current_balance, recipient.clone()),
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("treasWdrw"), token.clone(), current_balance, recipient.clone()),
         );
 
         Ok(current_balance)
@@ -1740,7 +1819,7 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::ProtocolPaused, &true);
-        env.events().publish((symbol_short!("protPause"),), true);
+        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("protPause"), true));
         Ok(())
     }
 
@@ -1753,7 +1832,7 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::ProtocolPaused, &false);
-        env.events().publish((symbol_short!("protPause"),), false);
+        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("protPause"), false));
         Ok(())
     }
 
@@ -1777,8 +1856,12 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::ExpertProfile(expert.clone()), &profile);
-        env.events()
-            .publish((symbol_short!("setReput"),), (expert, reputation));
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("setReput"), expert, reputation),
+        );
         Ok(())
     }
 
@@ -1826,9 +1909,18 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::ExpertProfile(expert.clone()), &profile);
 
-        env.events().publish(
-            (symbol_short!("xchain"), symbol_short!("reput")),
-            (oracle, expert, chain, score, profile.cross_chain_reputation),
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (
+                symbol_short!("xchain"),
+                oracle,
+                expert,
+                chain,
+                score,
+                profile.cross_chain_reputation,
+            ),
         );
         Ok(())
     }
@@ -1886,34 +1978,14 @@ impl SkillSphereContract {
             panic_with_error!(&env, Error::InvalidCid);
         }
 
-        let profile = Self::expert_profile(&env, expert.clone());
-        if profile.rate_per_second == 0 {
-            panic_with_error!(&env, Error::ExpertNotRegistered);
-        }
-        if !profile.availability_status {
-            panic_with_error!(&env, Error::ExpertUnavailable);
+        if let Err(err) = Self::enforce_seeker_spending_limit(&env, &seeker, amount) {
+            panic_with_error!(&env, err);
         }
 
-        // #199: heartbeat freshness check.
-        // Backward-compat: experts who have never called `heartbeat()`
-        // (no LastHeartbeat key) keep the legacy "online via
-        // availability_status only" semantics so existing flows don't
-        // break. Once an expert has called heartbeat at least once, the
-        // 1-hour window is enforced on every new session.
-        if let Some(last_hb) = env
-            .storage()
-            .persistent()
-            .get::<DataKey, u64>(&DataKey::ExpertLastHeartbeat(expert.clone()))
-        {
-            let now_secs = env.ledger().timestamp();
-            if now_secs.saturating_sub(last_hb) > HEARTBEAT_VALIDITY_WINDOW {
-                panic_with_error!(&env, Error::ExpertOffline);
-            }
-        }
-
-        if Self::effective_reputation(&profile) < min_reputation {
-            panic_with_error!(&env, Error::ReputationTooLow);
-        }
+        let profile = match Self::assert_expert_can_accept_session(&env, expert.clone(), min_reputation) {
+            Ok(p) => p,
+            Err(err) => panic_with_error!(&env, err),
+        };
 
         let min_deposit = Self::min_session_deposit(&env);
         if amount < min_deposit {
@@ -1928,50 +2000,182 @@ impl SkillSphereContract {
         if token_client.balance(&seeker) < amount {
             panic_with_error!(&env, Error::InsufficientBalance);
         }
-        token_client.transfer(&seeker, &env.current_contract_address(), &amount);
 
-        let session_id = Self::next_session_id(&env);
-        let now = env.ledger().timestamp() as u32;
+        Self::create_active_session(
+            &env,
+            seeker,
+            expert,
+            token,
+            profile.rate_per_second,
+            amount,
+            metadata_cid,
+        )
+    }
 
-        let session = Session {
-            id: session_id,
-            seeker: seeker.clone(),
-            expert: expert.clone(),
-            token: token.clone(),
-            rate_per_second: profile.rate_per_second,
-            balance: amount,
-            last_settlement_timestamp: now,
-            start_timestamp: now,
-            accrued_amount: 0,
-            status: SessionStatus::Active,
-            metadata_cid: metadata_cid.clone(),
-            encrypted_notes_hash: None,
-            paused_at: None,
-        };
-
+    /// Seeker-imposed cap on the deposit amount for each new session (#241).
+    pub fn set_spending_limit(env: Env, seeker: Address, max_per_session: i128) -> Result<(), Error> {
+        seeker.require_auth();
+        if max_per_session <= 0 {
+            return Err(Error::InvalidAmount);
+        }
         env.storage()
             .persistent()
-            .set(&DataKey::Session(session_id), &session);
+            .set(&DataKey::SeekerSpendingLimit(seeker.clone()), &max_per_session);
+        events::publish_event(
+            &env,
+            events::event_type::spending_limit(),
+            0,
+            (seeker, max_per_session),
+        );
+        Ok(())
+    }
 
-        // #203: stamp the initial re-verification timestamp on session creation.
+    /// Clear a previously configured spending limit (#241).
+    pub fn clear_spending_limit(env: Env, seeker: Address) -> Result<(), Error> {
+        seeker.require_auth();
         env.storage()
             .persistent()
-            .set(&DataKey::SessionLastVerified(session_id), &(now as u64));
+            .remove(&DataKey::SeekerSpendingLimit(seeker.clone()));
+        events::publish_event(
+            &env,
+            events::event_type::spending_limit(),
+            0,
+            (seeker, 0i128),
+        );
+        Ok(())
+    }
 
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("started")),
-            (
-                session_id,
-                seeker.clone(),
-                expert.clone(),
-                profile.rate_per_second,
-                amount,
-                now,
-                metadata_cid,
-            ),
+    pub fn get_spending_limit(env: Env, seeker: Address) -> Option<i128> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SeekerSpendingLimit(seeker))
+    }
+
+    /// Admin: configure expert cooldown length in ledgers after dispute loss (#240).
+    pub fn set_expert_cooldown_ledgers(env: Env, ledgers: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if ledgers == 0 {
+            return Err(Error::InvalidAmount);
+        }
+        disputes::set_cooldown_ledgers(&env, ledgers);
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("expCool"), ledgers),
+        );
+        Ok(())
+    }
+
+    pub fn get_expert_cooldown_ledgers(env: Env) -> u32 {
+        disputes::cooldown_ledgers(&env)
+    }
+
+    pub fn get_expert_cooldown_until(env: Env, expert: Address) -> Option<u32> {
+        disputes::expert_cooldown_until(&env, &expert)
+    }
+
+    /// Expert registers the ed25519 public key used to verify session vouchers (#242).
+    pub fn set_voucher_signing_key(
+        env: Env,
+        expert: Address,
+        public_key: BytesN<32>,
+    ) -> Result<(), Error> {
+        expert.require_auth();
+        crypto::set_voucher_pubkey(&env, &expert, public_key.clone());
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (expert, public_key),
+        );
+        Ok(())
+    }
+
+    pub fn get_voucher_signing_key(env: Env, expert: Address) -> Option<BytesN<32>> {
+        crypto::voucher_pubkey(&env, &expert)
+    }
+
+    /// Start a session using an expert-signed off-chain voucher (#242).
+    pub fn start_session_with_voucher(
+        env: Env,
+        seeker: Address,
+        token: Address,
+        amount: i128,
+        min_reputation: u32,
+        metadata_cid: String,
+        voucher: SessionVoucher,
+        expert_signature: BytesN<64>,
+    ) -> Result<u64, Error> {
+        seeker.require_auth();
+        Self::ensure_protocol_active(&env)?;
+        if !Self::is_valid_ipfs_cid(&metadata_cid) {
+            return Err(Error::InvalidCid);
+        }
+        Self::enforce_seeker_spending_limit(&env, &seeker, amount)?;
+
+        if voucher.rate_per_second <= 0 || voucher.max_duration == 0 {
+            return Err(Error::InvalidVoucher);
+        }
+        if env.ledger().timestamp() > voucher.expiry {
+            return Err(Error::VoucherExpired);
+        }
+        if crypto::is_nonce_consumed(&env, &voucher.expert, voucher.nonce) {
+            return Err(Error::VoucherNonceUsed);
+        }
+
+        let public_key = crypto::voucher_pubkey(&env, &voucher.expert)
+            .ok_or(Error::VoucherPubkeyNotSet)?;
+        crypto::verify_voucher_signature(&env, &voucher, &public_key, &expert_signature)?;
+
+        let profile =
+            Self::assert_expert_can_accept_session(&env, voucher.expert.clone(), min_reputation)?;
+
+        if profile.rate_per_second != voucher.rate_per_second {
+            return Err(Error::InvalidVoucher);
+        }
+
+        let max_escrow = voucher
+            .rate_per_second
+            .saturating_mul(voucher.max_duration as i128);
+        if amount > max_escrow {
+            return Err(Error::InvalidAmount);
+        }
+
+        let min_deposit = Self::min_session_deposit(&env);
+        if amount < min_deposit {
+            return Err(Error::AmountBelowMinimum);
+        }
+        let min_escrow = voucher.rate_per_second.saturating_mul(300);
+        if amount < min_escrow {
+            return Err(Error::DepositTooLow);
+        }
+
+        let token_client = token::Client::new(&env, &token);
+        if token_client.balance(&seeker) < amount {
+            return Err(Error::InsufficientBalance);
+        }
+
+        crypto::consume_nonce(&env, &voucher.expert, voucher.nonce);
+
+        let session_id = Self::create_active_session(
+            &env,
+            seeker,
+            voucher.expert.clone(),
+            token,
+            voucher.rate_per_second,
+            amount,
+            metadata_cid,
         );
 
-        session_id
+        events::publish_event(
+            &env,
+            events::event_type::session_voucher(),
+            session_id,
+            (voucher.expert, voucher.nonce),
+        );
+
+        Ok(session_id)
     }
 
     /// Calculates the amount claimable from a session at a given time.
@@ -2028,9 +2232,11 @@ impl SkillSphereContract {
         session.paused_at = Some(now);
 
         Self::save_session(&env, &session);
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("paused")),
-            (session_id, now),
+        events::publish_event(
+            &env,
+            events::event_type::session_paused(),
+            session_id,
+            now,
         );
 
         Ok(())
@@ -2075,9 +2281,11 @@ impl SkillSphereContract {
         session.paused_at = None;
 
         Self::save_session(&env, &session);
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("resumed")),
-            (session_id, now),
+        events::publish_event(
+            &env,
+            events::event_type::session_resumed(),
+            session_id,
+            now,
         );
 
         Ok(())
@@ -2316,9 +2524,11 @@ impl SkillSphereContract {
             .set(&DataKey::Dispute(session_id), &dispute);
 
         let created_at = dispute.created_at;
-        env.events().publish(
-            (symbol_short!("dispute"), symbol_short!("flagged")),
-            (session_id, seeker, evidence_cid, created_at),
+        events::publish_event(
+            &env,
+            events::event_type::dispute_flagged(),
+            session_id,
+            (seeker, evidence_cid, created_at),
         );
 
         Ok(())
@@ -2415,7 +2625,7 @@ impl SkillSphereContract {
             .instance()
             .set(&DataKey::UpgradeTimelock, &timelock);
 
-        env.events().publish((symbol_short!("upgInit"),), now);
+        events::publish_event(&env, events::event_type::upgrade(), 0, (symbol_short!("upgInit"), now));
 
         Ok(())
     }
@@ -2444,7 +2654,7 @@ impl SkillSphereContract {
         env.deployer()
             .update_current_contract_wasm(timelock.new_wasm_hash);
 
-        env.events().publish((symbol_short!("upgExec"),), now);
+        events::publish_event(&env, events::event_type::upgrade(), 0, (symbol_short!("upgExec"), now));
 
         Ok(())
     }
@@ -2521,7 +2731,109 @@ impl SkillSphereContract {
         Ok(())
     }
 
-    pub(crate) fn get_session_or_error(env: &Env, session_id: u64) -> Result<Session, Error> {
+    fn enforce_seeker_spending_limit(env: &Env, seeker: &Address, amount: i128) -> Result<(), Error> {
+        if let Some(limit) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, i128>(&DataKey::SeekerSpendingLimit(seeker.clone()))
+        {
+            if amount > limit {
+                return Err(Error::SpendingLimitExceeded);
+            }
+        }
+        Ok(())
+    }
+
+    fn assert_expert_can_accept_session(
+        env: &Env,
+        expert: Address,
+        min_reputation: u32,
+    ) -> Result<ExpertProfile, Error> {
+        if disputes::is_expert_on_cooldown(env, &expert) {
+            return Err(Error::ExpertOnCooldown);
+        }
+
+        let profile = Self::expert_profile(env, expert.clone());
+        if profile.rate_per_second == 0 {
+            return Err(Error::ExpertNotRegistered);
+        }
+        if !profile.availability_status {
+            return Err(Error::ExpertUnavailable);
+        }
+
+        if let Some(last_hb) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, u64>(&DataKey::ExpertLastHeartbeat(expert.clone()))
+        {
+            let now_secs = env.ledger().timestamp();
+            if now_secs.saturating_sub(last_hb) > HEARTBEAT_VALIDITY_WINDOW {
+                return Err(Error::ExpertOffline);
+            }
+        }
+
+        if Self::effective_reputation(&profile) < min_reputation {
+            return Err(Error::ReputationTooLow);
+        }
+
+        Ok(profile)
+    }
+
+    fn create_active_session(
+        env: &Env,
+        seeker: Address,
+        expert: Address,
+        token: Address,
+        rate_per_second: i128,
+        amount: i128,
+        metadata_cid: String,
+    ) -> u64 {
+        let token_client = token::Client::new(env, &token);
+        token_client.transfer(&seeker, &env.current_contract_address(), &amount);
+
+        let session_id = Self::next_session_id(env);
+        let now = env.ledger().timestamp() as u32;
+
+        let session = Session {
+            id: session_id,
+            seeker: seeker.clone(),
+            expert: expert.clone(),
+            token: token.clone(),
+            rate_per_second,
+            balance: amount,
+            last_settlement_timestamp: now,
+            start_timestamp: now,
+            accrued_amount: 0,
+            status: SessionStatus::Active,
+            metadata_cid: metadata_cid.clone(),
+            encrypted_notes_hash: None,
+            paused_at: None,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Session(session_id), &session);
+        env.storage()
+            .persistent()
+            .set(&DataKey::SessionLastVerified(session_id), &(now as u64));
+
+        events::publish_event(
+            env,
+            events::event_type::session_started(),
+            session_id,
+            (
+                seeker.clone(),
+                expert.clone(),
+                rate_per_second,
+                amount,
+                metadata_cid,
+            ),
+        );
+
+        session_id
+    }
+
+    fn get_session_or_error(env: &Env, session_id: u64) -> Result<Session, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::Session(session_id))
@@ -2590,7 +2902,7 @@ impl SkillSphereContract {
     /// in Stellar deployments), and bump the per-token TotalBurned
     /// counter. Returns the burned amount so the caller can subtract
     /// it from the treasury transfer.
-    fn apply_burn(env: &Env, token: &Address, treasury_share: i128) -> i128 {
+    fn apply_burn(env: &Env, session_id: u64, token: &Address, treasury_share: i128) -> i128 {
         let burn_bps: u32 = env
             .storage()
             .instance()
@@ -2623,8 +2935,10 @@ impl SkillSphereContract {
             &DataKey::TotalBurned(token.clone()),
             &prev.saturating_add(burn_amount),
         );
-        env.events().publish(
-            (symbol_short!("burn"),),
+        events::publish_event(
+            env,
+            events::event_type::fee_burn(),
+            session_id,
             (token.clone(), burn_amount, burn_bps),
         );
         burn_amount
@@ -2708,9 +3022,11 @@ impl SkillSphereContract {
             .set(&DataKey::TotalVolumeSettled, &total_volume);
 
         if total_sessions % PLATFORM_STATS_EMIT_INTERVAL == 0 {
-            env.events().publish(
-                (symbol_short!("plat_stat"),),
-                (total_sessions, total_volume, env.ledger().timestamp()),
+            events::publish_event(
+                env,
+                events::event_type::platform_stats(),
+                0,
+                (total_sessions, total_volume),
             );
         }
     }
@@ -2822,7 +3138,7 @@ impl SkillSphereContract {
             // `total_burned(token)` counter let off-chain bookkeeping
             // (or a follow-up admin call to the token contract's
             // burn function) clear them.
-            let burned = Self::apply_burn(env, &token, treasury_fee);
+            let burned = Self::apply_burn(env, session_id, &token, treasury_fee);
             let treasury_payout = treasury_fee.saturating_sub(burned);
             if treasury_payout > 0 {
                 if let Some(treasury) = env
@@ -2835,9 +3151,11 @@ impl SkillSphereContract {
                         &treasury,
                         &treasury_payout,
                     );
-                    env.events().publish(
-                        (symbol_short!("feeRoute"),),
-                        (session_id, token.clone(), treasury_payout),
+                    events::publish_event(
+                        env,
+                        events::event_type::admin_config(),
+                        session_id,
+                        (symbol_short!("feeRoute"), token.clone(), treasury_payout),
                     );
                 } else {
                     Self::collect_fee(env.clone(), session_id, token.clone(), treasury_payout)?;
@@ -2854,9 +3172,11 @@ impl SkillSphereContract {
             token_client.transfer(&env.current_contract_address(), &expert, &expert_payout);
         }
 
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("settled")),
-            (session_id, expert_payout, now),
+        events::publish_event(
+            env,
+            events::event_type::session_settled(),
+            session_id,
+            (expert_payout, now),
         );
 
         // #200: roll-up volume + session counters and emit a
@@ -2948,9 +3268,11 @@ impl SkillSphereContract {
         }
 
         let finished_at = env.ledger().timestamp();
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("finished")),
-            (session.id, final_claimable, final_remaining, finished_at),
+        events::publish_event(
+            env,
+            events::event_type::session_finished(),
+            session.id,
+            (final_claimable, final_remaining, finished_at),
         );
 
         Self::set_reentrancy_lock(env, false);
@@ -3128,15 +3450,31 @@ impl SkillSphereContract {
             );
         }
 
-        let resolved_at = env.ledger().timestamp();
-        env.events().publish(
-            (symbol_short!("dispute"), symbol_short!("resolved")),
+        disputes::apply_cooldown_if_expert_lost(
+            env,
+            &session.expert,
+            seeker_award_bps,
+            expert_award_bps,
+        );
+        if disputes::is_expert_on_cooldown(env, &session.expert) {
+            if let Some(until) = disputes::expert_cooldown_until(env, &session.expert) {
+                events::publish_event(
+                    env,
+                    events::event_type::expert_cooldown(),
+                    session.id,
+                    (session.expert.clone(), until),
+                );
+            }
+        }
+
+        events::publish_event(
+            env,
+            events::event_type::dispute_resolved(),
+            session.id,
             (
-                session.id,
                 seeker_amount,
                 expert_amount,
                 auto_resolved,
-                resolved_at,
             ),
         );
 
@@ -3267,9 +3605,11 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::ExpertRatingCount(expert.clone()), &new_count);
 
-        env.events().publish(
-            (symbol_short!("rating"), symbol_short!("submitted")),
-            (session_id, expert, rating, new_avg),
+        events::publish_event(
+            &env,
+            events::event_type::rating(),
+            session_id,
+            (expert, rating, new_avg),
         );
 
         Ok(())
@@ -3345,9 +3685,11 @@ impl SkillSphereContract {
                 .set(&DataKey::ReferralSessionCount(expert.clone()), &0u32);
         }
 
-        env.events().publish(
-            (symbol_short!("expert"), symbol_short!("regist")),
-            (expert, referrer_id),
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (symbol_short!("regist"), expert, referrer_id),
         );
 
         Ok(())
@@ -3382,8 +3724,12 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::TrustedOracle(oracle.clone()), &true);
-        env.events()
-            .publish((symbol_short!("oracle"), symbol_short!("regist")), oracle);
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (symbol_short!("oracleReg"), oracle),
+        );
         Ok(())
     }
 
@@ -3399,8 +3745,12 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .remove(&DataKey::TrustedOracle(oracle.clone()));
-        env.events()
-            .publish((symbol_short!("oracle"), symbol_short!("removed")), oracle);
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (symbol_short!("oracleRm"), oracle),
+        );
         Ok(())
     }
 
@@ -3443,9 +3793,11 @@ impl SkillSphereContract {
             &verification,
         );
 
-        env.events().publish(
-            (symbol_short!("expert"), symbol_short!("verified")),
-            (expert, oracle_source),
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (symbol_short!("verified"), expert, oracle_source),
         );
 
         Ok(())
@@ -3499,8 +3851,12 @@ impl SkillSphereContract {
             .set(&DataKey::ExpertProfile(expert.clone()), &profile);
 
         // Emit event for frontend indexer
-        env.events()
-            .publish((symbol_short!("staked"),), (expert.clone(), amount));
+        events::publish_event(
+            &env,
+            events::event_type::staking(),
+            0,
+            (symbol_short!("staked"), expert.clone(), amount),
+        );
 
         Ok(())
     }
@@ -3542,8 +3898,12 @@ impl SkillSphereContract {
             .set(&DataKey::ExpertProfile(expert.clone()), &profile);
 
         // Emit event for frontend indexer
-        env.events()
-            .publish((symbol_short!("unstaked"),), (expert.clone(), amount));
+        events::publish_event(
+            &env,
+            events::event_type::staking(),
+            0,
+            (symbol_short!("unstaked"), expert.clone(), amount),
+        );
 
         Ok(())
     }
@@ -3606,8 +3966,12 @@ impl SkillSphereContract {
         // Verify dispute exists
         let _dispute = Self::get_session_or_error(&env, session_id)?;
 
-        env.events()
-            .publish((symbol_short!("resProp"),), (session_id, seeker_award_bps));
+        events::publish_event(
+            &env,
+            events::event_type::governance(),
+            session_id,
+            (symbol_short!("resProp"), seeker_award_bps),
+        );
 
         Ok(())
     }
@@ -3686,8 +4050,10 @@ impl SkillSphereContract {
             .set(&treasury_key, &treasury_balance);
 
         // Emit event for auditing
-        env.events().publish(
-            (symbol_short!("slashed"),),
+        events::publish_event(
+            &env,
+            events::event_type::slashing(),
+            0,
             (expert_id.clone(), amount, reason.clone()),
         );
 
@@ -3756,9 +4122,11 @@ impl SkillSphereContract {
             &refund_amount,
         );
 
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("refund")),
-            (session_id, refund_amount, now),
+        events::publish_event(
+            &env,
+            events::event_type::session_refund(),
+            session_id,
+            (refund_amount, now),
         );
 
         Self::set_reentrancy_lock(&env, false);
@@ -3829,9 +4197,11 @@ impl SkillSphereContract {
             &total_claimable,
         );
 
-        env.events().publish(
-            (symbol_short!("withdraw"), symbol_short!("accrued")),
-            (session_id, total_claimable, now),
+        events::publish_event(
+            &env,
+            events::event_type::session_settled(),
+            session_id,
+            (symbol_short!("withdraw"), total_claimable, now),
         );
 
         Self::set_reentrancy_lock(&env, false);
@@ -3849,7 +4219,7 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::SbtContractAddress, &sbt_addr);
-        env.events().publish((symbol_short!("sbtSet"),), sbt_addr);
+        events::publish_event(&env, events::event_type::integration(), 0, (symbol_short!("sbtSet"), sbt_addr));
         Ok(())
     }
 
@@ -3896,8 +4266,12 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::ExpertBadge(expert.clone()), &record);
 
-        env.events()
-            .publish((symbol_short!("badge"),), (expert, badge_id, now));
+        events::publish_event(
+            &env,
+            events::event_type::badge(),
+            0,
+            (expert, badge_id, now),
+        );
         Ok(record)
     }
 
@@ -3935,8 +4309,12 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::SessionFrozenFlag(session_id), &false);
-        env.events()
-            .publish((symbol_short!("reverify"),), (session_id, now));
+        events::publish_event(
+            &env,
+            events::event_type::reverify(),
+            session_id,
+            now,
+        );
         Ok(())
     }
 
@@ -3954,8 +4332,12 @@ impl SkillSphereContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::SessionFrozenFlag(session_id), &true);
-            env.events()
-                .publish((symbol_short!("frozen"),), (session_id, now));
+            events::publish_event(
+                &env,
+                events::event_type::frozen(),
+                session_id,
+                now,
+            );
         }
         Ok(())
     }
@@ -3998,7 +4380,7 @@ impl SkillSphereContract {
         env.storage()
             .instance()
             .set(&DataKey::DexContractAddress, &dex_addr);
-        env.events().publish((symbol_short!("dexSet"),), dex_addr);
+        events::publish_event(&env, events::event_type::integration(), 0, (symbol_short!("dexSet"), dex_addr));
         Ok(())
     }
 
@@ -4106,10 +4488,11 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::SessionLastVerified(session_id), &(now as u64));
 
-        env.events().publish(
-            (symbol_short!("swap"), symbol_short!("started")),
+        events::publish_event(
+            &env,
+            events::event_type::swap(),
+            session_id,
             (
-                session_id,
                 seeker,
                 expert,
                 offer_token,
@@ -4157,8 +4540,10 @@ impl SkillSphereContract {
             created_at: env.ledger().timestamp() as u32,
         };
         env.storage().temporary().set(&key, &record);
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("commit")),
+        events::publish_event(
+            &env,
+            events::event_type::session_commit(),
+            0,
             (commitment, committer),
         );
         Ok(())
@@ -4206,8 +4591,10 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::SessionCommitConsumed(computed.into()), &true);
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("reveal")),
+        events::publish_event(
+            &env,
+            events::event_type::session_reveal(),
+            0,
             (committer, seeker, expert),
         );
         Ok(())
@@ -4248,8 +4635,12 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::ExpertPriceFeed(expert.clone()), &config);
-        env.events()
-            .publish((symbol_short!("expert"), symbol_short!("feedset")), expert);
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (symbol_short!("feedset"), expert),
+        );
         Ok(())
     }
 
@@ -4263,8 +4654,12 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .remove(&DataKey::ExpertPriceFeed(expert.clone()));
-        env.events()
-            .publish((symbol_short!("expert"), symbol_short!("feedrm")), expert);
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (symbol_short!("feedrm"), expert),
+        );
         Ok(())
     }
 
@@ -6290,6 +6685,43 @@ mod test {
         assert!(v1 >= claimable);
     }
 
+    #[test]
+    fn test_expert_cooldown_after_dispute_loss() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+
+        client.flag_dispute(
+            &session_id,
+            &seeker,
+            &String::from_str(&env, "Expert no-show"),
+            &test_cid(&env),
+        );
+        client.resolve_dispute(&session_id, &8_000);
+
+        let until = client.get_expert_cooldown_until(&expert);
+        assert!(until.is_some());
+        assert!(until.unwrap() > env.ledger().sequence());
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #50)")]
+    fn test_start_session_rejects_expert_on_cooldown() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+
+        client.flag_dispute(
+            &session_id,
+            &seeker,
+            &String::from_str(&env, "Seeker wins"),
+            &test_cid(&env),
+        );
+        client.resolve_dispute(&session_id, &10_000);
+
+        client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
     // #236 / #237 / #238 / #239 tests
     // ====================================================================
 
@@ -6335,6 +6767,11 @@ mod test {
 
     #[test]
     #[should_panic(expected = "Error(Contract, #51)")]
+    fn test_seeker_spending_limit_enforced() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        client.set_spending_limit(&seeker, &2_000);
+
     fn test_start_session_rejects_non_whitelisted_token() {
         let (env, client, _, admin, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
@@ -6343,6 +6780,118 @@ mod test {
     }
 
     #[test]
+    fn test_start_session_with_voucher() {
+        use ed25519_dalek::{Signer, SigningKey};
+        use soroban_sdk::BytesN;
+
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        let seed = [7u8; 32];
+        let signing_key = SigningKey::from_bytes(&seed);
+        let verifying_key = signing_key.verifying_key();
+        let mut pk_arr = [0u8; 32];
+        pk_arr.copy_from_slice(verifying_key.as_bytes());
+        let public_key = BytesN::from_array(&env, &pk_arr);
+        client.set_voucher_signing_key(&expert, &public_key);
+
+        let voucher = SessionVoucher {
+            expert: expert.clone(),
+            rate_per_second: 10,
+            max_duration: 600,
+            expiry: env.ledger().timestamp() + 3_600,
+            nonce: 1,
+        };
+
+        let mut msg = soroban_sdk::Bytes::new(&env);
+        msg.append(&voucher.expert.to_xdr(&env));
+        msg.append(&voucher.rate_per_second.to_xdr(&env));
+        msg.append(&voucher.max_duration.to_xdr(&env));
+        msg.append(&voucher.expiry.to_xdr(&env));
+        msg.append(&voucher.nonce.to_xdr(&env));
+        let mut msg_vec = std::vec![0u8; msg.len() as usize];
+        msg.copy_into_slice(&mut msg_vec);
+        let sig_bytes = signing_key.sign(&msg_vec);
+        let mut sig_arr = [0u8; 64];
+        sig_arr.copy_from_slice(sig_bytes.as_bytes());
+        let signature = BytesN::from_array(&env, &sig_arr);
+
+        let session_id = client
+            .start_session_with_voucher(
+                &seeker,
+                &token,
+                &3_000,
+                &0,
+                &test_cid(&env),
+                &voucher,
+                &signature,
+            )
+            .unwrap();
+        assert_eq!(session_id, 1);
+
+        let replay = client.try_start_session_with_voucher(
+            &seeker,
+            &token,
+            &3_000,
+            &0,
+            &test_cid(&env),
+            &voucher,
+            &signature,
+        );
+        assert_eq!(replay, Err(Ok(Error::VoucherNonceUsed)));
+    }
+
+    #[test]
+    fn test_webhook_relay_emits_standard_envelope() {
+        use soroban_sdk::testutils::Events;
+        use soroban_sdk::{symbol_short, Symbol};
+
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+        client.set_spending_limit(&seeker, &5_000);
+
+        client.flag_dispute(
+            &session_id,
+            &seeker,
+            &String::from_str(&env, "Relay test"),
+            &test_cid(&env),
+        );
+
+        let all_events = env.events().all();
+        assert!(!all_events.is_empty());
+
+        let webhook_topic = symbol_short!("webhook");
+        let mut saw_session_start = false;
+        let mut saw_dispute = false;
+        let mut saw_spending_limit = false;
+
+        for (_contract, topics, data) in all_events {
+            assert!(!topics.is_empty());
+            let topic0: Symbol = topics[0].try_into_val(&env).unwrap();
+            if topic0 != webhook_topic {
+                continue;
+            }
+            let (event_type, sid, _ts, _payload): (Symbol, u64, u64, soroban_sdk::Val) =
+                data.try_into_val(&env).unwrap();
+            if event_type == crate::events::event_type::session_started() {
+                saw_session_start = true;
+                assert_eq!(sid, session_id);
+            }
+            if event_type == crate::events::event_type::dispute_flagged() {
+                saw_dispute = true;
+                assert_eq!(sid, session_id);
+            }
+            if event_type == crate::events::event_type::spending_limit() {
+                saw_spending_limit = true;
+            }
+        }
+
+        assert!(saw_session_start);
+        assert!(saw_dispute);
+        assert!(saw_spending_limit);
     fn test_admin_token_whitelist_add_and_remove() {
         let (env, client, _, admin, _, _, token, _) = setup();
         let extra = Address::generate(&env);
