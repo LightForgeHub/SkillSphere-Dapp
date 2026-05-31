@@ -1,5 +1,8 @@
 #![no_std]
 
+mod migrations;
+mod admin;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, token, Address, BytesN, Env,
     panic_with_error, String, Vec,
@@ -74,6 +77,7 @@ pub enum DataKey {
     TreasuryAddress,
     TreasuryBalance(Address),
     ArbitrationCommittee,
+    ContractVersion,
 }
 
 #[contracttype]
@@ -964,6 +968,39 @@ impl SkillSphereContract {
             .instance()
             .get(&DataKey::UpgradeTimelock)
             .ok_or(Error::UpgradeNotInitiated)
+    }
+
+    pub fn get_contract_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::ContractVersion)
+            .unwrap_or(1u32)
+    }
+
+    /// Migrate storage schema to `new_version`. Admin-only, runs once per version bump.
+    pub fn migrate(env: Env, new_version: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+
+        let current: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ContractVersion)
+            .unwrap_or(1u32);
+
+        if new_version <= current {
+            return Err(Error::InvalidSessionState);
+        }
+
+        migrations::run(&env, current, new_version);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::ContractVersion, &new_version);
+
+        env.events()
+            .publish((symbol_short!("migrated"),), (current, new_version));
+
+        Ok(())
     }
 
     fn next_session_id(env: &Env) -> u64 {
