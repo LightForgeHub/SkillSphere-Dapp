@@ -1,4 +1,4 @@
-import { Collection, ExpertCollection, NFT } from "../types/types";
+import { Collection, ExpertCollection, NFT, Session, Expert } from "../types/types";
 
 export const mockExpert: ExpertCollection[] = [
     {
@@ -224,5 +224,99 @@ export const mocknftData: NFT[] = [
         price: '1.20',
         image: '/nft4.svg',
         avatar: '/nftAvatar3.png',
+    },
+];
+
+export const mockSessions: Session[] = [
+    {
+        id: '1',
+        title: 'Advanced React Patterns',
+        expertName: 'Sarah Chen',
+        expertAvatar: '/assets/Avatar.svg',
+        date: '2025-06-15',
+        time: '2:00 PM',
+        duration: '60 mins',
+        status: 'upcoming',
+        price: '$50',
+        category: 'Web Development',
+    },
+    {
+        id: '2',
+        title: 'Blockchain Fundamentals',
+        expertName: 'Alex Kumar',
+        expertAvatar: '/assets/Avatar.svg',
+        date: '2025-06-10',
+        time: '10:30 AM',
+        duration: '90 mins',
+        status: 'active',
+        price: '$75',
+        category: 'Blockchain',
+    },
+    {
+        id: '3',
+        title: 'UI/UX Design Workshop',
+        expertName: 'Emma Wilson',
+        expertAvatar: '/assets/Avatar.svg',
+        date: '2025-06-05',
+        time: '3:00 PM',
+        duration: '60 mins',
+        status: 'completed',
+        price: '$60',
+        category: 'Design',
+    },
+    {
+        id: '4',
+        title: 'Node.js Best Practices',
+        expertName: 'Marcus Johnson',
+        expertAvatar: '/assets/Avatar.svg',
+        date: '2025-05-28',
+        time: '5:00 PM',
+        duration: '75 mins',
+        status: 'completed',
+        price: '$65',
+        category: 'Backend',
+    },
+];
+
+export const mockExperts: Expert[] = [
+    {
+        id: '1',
+        name: 'Sarah Chen',
+        avatar: '/assets/Avatar.svg',
+        category: 'Web Development',
+        rating: 4.8,
+        reviews: 127,
+        hourlyRate: '$50/hr',
+        availability: true,
+    },
+    {
+        id: '2',
+        name: 'Alex Kumar',
+        avatar: '/assets/Avatar.svg',
+        category: 'Blockchain',
+        rating: 4.9,
+        reviews: 95,
+        hourlyRate: '$75/hr',
+        availability: true,
+    },
+    {
+        id: '3',
+        name: 'Emma Wilson',
+        avatar: '/assets/Avatar.svg',
+        category: 'Design',
+        rating: 4.7,
+        reviews: 156,
+        hourlyRate: '$60/hr',
+        availability: false,
+    },
+    {
+        id: '4',
+        name: 'Marcus Johnson',
+        avatar: '/assets/Avatar.svg',
+        category: 'Backend',
+        rating: 4.6,
+        reviews: 84,
+        hourlyRate: '$65/hr',
+        availability: true,
     },
 ];

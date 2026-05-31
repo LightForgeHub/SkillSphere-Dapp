@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Pencil, FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/Avatar";
 import { Separator } from "@/components/ui/Separator";
+import DownloadModal from "./DownloadModal";
 import { cn } from "@/lib/utils";
 
 const submissions = [
@@ -39,6 +40,14 @@ const submissions = [
 ];
 
 export default function TaskTabContent() {
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState<typeof submissions[0] | null>(null);
+
+  const handleDownloadClick = (submission: typeof submissions[0]) => {
+    setSelectedSubmission(submission);
+    setIsDownloadModalOpen(true);
+  };
+
   return (
     <div className="flex flex-col items-center self-stretch grow-0 shrink-0 w-full max-w-[820px] min-h-[895px] bg-[#1A1520] border border-[#1D1D1C] rounded-[12px] p-6 gap-8 text-white">
       {/* Header */}
@@ -112,7 +121,10 @@ export default function TaskTabContent() {
                 </div>
               </div>
 
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#211B27] border border-white/5 text-white/60 hover:text-white hover:bg-[#2A2332] transition-all group shadow-sm">
+              <button 
+                onClick={() => handleDownloadClick(sub)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#211B27] border border-white/5 text-white/60 hover:text-white hover:bg-[#2A2332] transition-all group shadow-sm"
+              >
                 <div className="bg-[#2A2332] p-1.5 rounded flex items-center justify-center">
                     <FileText size={14} className="text-[#FF4D4D]" />
                 </div>
@@ -122,6 +134,14 @@ export default function TaskTabContent() {
           ))}
         </div>
       </div>
+
+      <DownloadModal
+        open={isDownloadModalOpen}
+        onClose={() => setIsDownloadModalOpen(false)}
+        studentName={selectedSubmission?.name}
+        taskName={selectedSubmission?.taskName}
+        fileName="submission.pdf"
+      />
     </div>
   );
 }
