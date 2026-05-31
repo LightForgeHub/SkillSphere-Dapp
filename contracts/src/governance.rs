@@ -56,3 +56,37 @@ pub fn accrue_earned(env: &Env, expert: &Address, amount: i128) {
         .persistent()
         .set(&DataKey::UserTotalEarned(expert.clone()), &prev.saturating_add(amount));
 }
+
+/// Returns how many referred sessions have been counted for an expert.
+pub fn referral_session_count(env: &Env, expert: &Address) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ReferralSessionCount(expert.clone()))
+        .unwrap_or(0)
+}
+
+/// Increments the referral session count for an expert when a commission is paid.
+pub fn increment_referral_session_count(env: &Env, expert: &Address) {
+    let current = referral_session_count(env, expert);
+    if current < referral_session_limit(env) {
+        env.storage().persistent().set(
+            &DataKey::ReferralSessionCount(expert.clone()),
+            &current.saturating_add(1),
+        );
+    }
+}
+
+/// Returns the referral commission eligibility limit for an expert.
+pub fn referral_session_limit(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::ReferralSessionLimit)
+        .unwrap_or(DEFAULT_REFERRAL_SESSION_LIMIT)
+}
+
+/// Admin configures how many referred sessions qualify for commission.
+pub fn set_referral_session_limit(env: &Env, limit: u32) {
+    env.storage()
+        .instance()
+        .set(&DataKey::ReferralSessionLimit, &limit);
+}
