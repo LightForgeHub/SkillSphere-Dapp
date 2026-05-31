@@ -1,8 +1,11 @@
 #![no_std]
 
 pub mod bridge;
+mod admin;
 mod dex;
+mod disputes;
 mod errors;
+mod events;
 mod governance;
 mod reputation;
 pub use bridge::BridgeError;
@@ -42,7 +45,7 @@ const TIMELOCK_DURATION: u64 = 48 * 60 * 60;
 const DISPUTE_EXPIRY_WINDOW: u64 = 30 * 24 * 60 * 60;
 const SESSION_ESCROW_TTL: u64 = 300; // 5 minutes for pause grace period
 const SESSION_NO_SHOW_REFUND_WINDOW: u64 = 600; // 10 minutes
-const MIN_SESSION_ESCROW: i128 = 10; // Dust cleanup threshold
+pub(crate) const MIN_SESSION_ESCROW: i128 = 10; // Dust cleanup threshold
 const DEFAULT_FEE_FIRST_TIER_LIMIT: i128 = 1_000;
 const DEFAULT_FEE_FIRST_TIER_BPS: u32 = 500;
 const DEFAULT_FEE_SECOND_TIER_BPS: u32 = 300;
@@ -187,6 +190,14 @@ pub enum DataKey {
     // call sites that opt into a "if oracle unavailable, fall back to
     // a static rate" policy.
     ExpertPriceFeed(Address),
+    // #236: per-address rate-limit tombstone (temporary storage).
+    LastAction(Address),
+    // #236: admin-configured minimum ledger gap between rate-limited calls.
+    RateLimitMinLedgers,
+    // #239: admin-managed whitelist of approved payment tokens.
+    ApprovedTokens,
+    // #238: expert cancellation reason stored separately for transparency.
+    SessionCancelReason(u64),
 }
 
 #[contracttype]
@@ -197,6 +208,7 @@ pub enum SessionStatus {
     Completed,
     Disputed,
     Resolved,
+    CancelledByExpert,
 }
 
 /// Per-commitment metadata for the privacy-preserving session-handshake
@@ -853,6 +865,7 @@ impl SkillSphereContract {
     /// working until they opt in.
     pub fn heartbeat(env: Env, expert: Address) -> Result<(), Error> {
         expert.require_auth();
+        admin::rate_limit(&env, &expert, admin::rate_limit_min_ledgers(&env))?;
         let profile = Self::expert_profile(&env, expert.clone());
         if profile.rate_per_second == 0 {
             return Err(Error::ExpertNotRegistered);
@@ -1394,6 +1407,57 @@ impl SkillSphereContract {
         Self::min_session_deposit(&env)
     }
 
+    // ====================================================================
+    // #236 — Per-Address Rate-Limit Guard
+    // ====================================================================
+
+    /// Sets the minimum ledger gap enforced between rate-limited calls
+    /// (`start_session`, `heartbeat`).  Zero disables throttling.
+    pub fn set_rate_limit_min_ledgers(env: Env, min_ledgers: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        admin::set_rate_limit_min_ledgers(&env, min_ledgers);
+        env.events()
+            .publish((symbol_short!("rateLim"),), min_ledgers);
+        Ok(())
+    }
+
+    /// Returns the configured rate-limit cooldown in ledgers.
+    pub fn get_rate_limit_min_ledgers(env: Env) -> u32 {
+        admin::rate_limit_min_ledgers(&env)
+    }
+
+    // ====================================================================
+    // #239 — Whitelisted Token Registry
+    // ====================================================================
+
+    /// Adds a token contract to the approved payment-token registry.
+    pub fn add_approved_token(env: Env, token: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        admin::add_approved_token(&env, token.clone())?;
+        env.events()
+            .publish((symbol_short!("addToken"),), token);
+        Ok(())
+    }
+
+    /// Removes a token contract from the approved payment-token registry.
+    pub fn remove_approved_token(env: Env, token: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        admin::remove_approved_token(&env, token.clone())?;
+        env.events()
+            .publish((symbol_short!("rmToken"),), token);
+        Ok(())
+    }
+
+    /// Returns whether `token` is on the approved payment-token registry.
+    pub fn is_token_approved(env: Env, token: Address) -> bool {
+        admin::is_token_whitelisted(&env, &token)
+    }
+
+    /// Returns the full list of approved payment tokens.
+    pub fn get_approved_tokens(env: Env) -> Vec<Address> {
+        admin::approved_tokens(&env)
+    }
+
     /// Sets the staking contract address.
     ///
     /// # Arguments
@@ -1812,6 +1876,12 @@ impl SkillSphereContract {
         if Self::protocol_paused(&env) {
             panic_with_error!(&env, Error::ProtocolPaused);
         }
+        if let Err(e) = admin::rate_limit(&env, &seeker, admin::rate_limit_min_ledgers(&env)) {
+            panic_with_error!(&env, e);
+        }
+        if let Err(e) = admin::require_token_whitelisted(&env, &token) {
+            panic_with_error!(&env, e);
+        }
         if !Self::is_valid_ipfs_cid(&metadata_cid) {
             panic_with_error!(&env, Error::InvalidCid);
         }
@@ -2098,6 +2168,73 @@ impl SkillSphereContract {
         Ok(())
     }
 
+    // ====================================================================
+    // #238 — Expert-Initiated Session Cancellation
+    // ====================================================================
+
+    /// Allows an expert to cancel their own active or paused session.
+    ///
+    /// Accrued earnings are paid to the expert; the remaining escrow
+    /// balance is refunded to the seeker.  `reason_cid` is stored for
+    /// transparency and the session status becomes `CancelledByExpert`.
+    pub fn cancel_session(
+        env: Env,
+        expert: Address,
+        session_id: u64,
+        reason_cid: String,
+    ) -> Result<(i128, i128), Error> {
+        disputes::cancel_session_by_expert(&env, expert, session_id, reason_cid)
+    }
+
+    /// Returns the expert-provided cancellation reason CID, if any.
+    pub fn get_session_cancel_reason(env: Env, session_id: u64) -> Option<String> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SessionCancelReason(session_id))
+    }
+
+    // ====================================================================
+    // #237 — Session Renewal / Top-Up
+    // ====================================================================
+
+    /// Adds `amount` tokens to an active session's escrow balance.
+    ///
+    /// Only the seeker may top up their own session while it is active.
+    pub fn top_up_session(
+        env: Env,
+        seeker: Address,
+        session_id: u64,
+        amount: i128,
+    ) -> Result<i128, Error> {
+        seeker.require_auth();
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let mut session = Self::get_session_or_error(&env, session_id)?;
+
+        if seeker != session.seeker {
+            return Err(Error::Unauthorized);
+        }
+        if session.status != SessionStatus::Active {
+            return Err(Error::SessionNotActive);
+        }
+
+        let token_client = token::Client::new(&env, &session.token);
+        if token_client.balance(&seeker) < amount {
+            return Err(Error::InsufficientBalance);
+        }
+        token_client.transfer(&seeker, &env.current_contract_address(), &amount);
+
+        session.balance = session.balance.saturating_add(amount);
+        let new_balance = session.balance;
+        Self::save_session(&env, &session);
+
+        events::publish_top_up(&env, session_id, amount, new_balance);
+        Ok(new_balance)
+    }
+
     /// Retrieves the details of a session.
     ///
     /// # Errors
@@ -2363,13 +2500,13 @@ impl SkillSphereContract {
             .unwrap_or(false)
     }
 
-    fn set_reentrancy_lock(env: &Env, locked: bool) {
+    pub(crate) fn set_reentrancy_lock(env: &Env, locked: bool) {
         env.storage()
             .instance()
             .set(&DataKey::ReentrancyLock, &locked);
     }
 
-    fn assert_not_locked(env: &Env) -> Result<(), Error> {
+    pub(crate) fn assert_not_locked(env: &Env) -> Result<(), Error> {
         if Self::reentrancy_locked(env) {
             return Err(Error::Reentrancy);
         }
@@ -2384,14 +2521,14 @@ impl SkillSphereContract {
         Ok(())
     }
 
-    fn get_session_or_error(env: &Env, session_id: u64) -> Result<Session, Error> {
+    pub(crate) fn get_session_or_error(env: &Env, session_id: u64) -> Result<Session, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::Session(session_id))
             .ok_or(Error::SessionNotFound)
     }
 
-    fn save_session(env: &Env, session: &Session) {
+    pub(crate) fn save_session(env: &Env, session: &Session) {
         env.storage()
             .persistent()
             .set(&DataKey::Session(session.id), session);
@@ -2593,7 +2730,10 @@ impl SkillSphereContract {
         // === CHECKS ===
         if matches!(
             session.status,
-            SessionStatus::Completed | SessionStatus::Disputed | SessionStatus::Resolved
+            SessionStatus::Completed
+                | SessionStatus::Disputed
+                | SessionStatus::Resolved
+                | SessionStatus::CancelledByExpert
         ) {
             Self::set_reentrancy_lock(env, false);
             return Err(Error::InvalidSessionState);
@@ -2756,7 +2896,10 @@ impl SkillSphereContract {
         // === CHECKS ===
         if matches!(
             session.status,
-            SessionStatus::Completed | SessionStatus::Disputed | SessionStatus::Resolved
+            SessionStatus::Completed
+                | SessionStatus::Disputed
+                | SessionStatus::Resolved
+                | SessionStatus::CancelledByExpert
         ) {
             Self::set_reentrancy_lock(env, false);
             return Err(Error::InvalidSessionState);
@@ -2814,7 +2957,7 @@ impl SkillSphereContract {
         Ok((final_claimable, final_remaining))
     }
 
-    fn claimable_amount_for_session(session: &Session, current_time: u64) -> i128 {
+    pub(crate) fn claimable_amount_for_session(session: &Session, current_time: u64) -> i128 {
         let streamed = if session.status == SessionStatus::Active {
             Self::streamed_amount_since(session, current_time)
         } else {
@@ -2849,7 +2992,7 @@ impl SkillSphereContract {
         (session.last_settlement_timestamp as u64).saturating_add(funded_seconds)
     }
 
-    fn bounded_time(session: &Session, current_time: u64) -> u64 {
+    pub(crate) fn bounded_time(session: &Session, current_time: u64) -> u64 {
         let expiry = Self::expiry_timestamp_for_session(session);
         if current_time > expiry {
             expiry
@@ -3004,7 +3147,7 @@ impl SkillSphereContract {
         (dispute.created_at as u64).saturating_add(DISPUTE_EXPIRY_WINDOW)
     }
 
-    fn is_valid_ipfs_cid(cid: &String) -> bool {
+    pub(crate) fn is_valid_ipfs_cid(cid: &String) -> bool {
         let len = cid.len() as usize;
         if !(2..=64).contains(&len) {
             return false;
@@ -3888,6 +4031,13 @@ impl SkillSphereContract {
         seeker.require_auth();
         Self::ensure_protocol_active(&env)?;
 
+        if let Err(e) = admin::rate_limit(&env, &seeker, admin::rate_limit_min_ledgers(&env)) {
+            return Err(e);
+        }
+        if let Err(e) = admin::require_token_whitelisted(&env, &ask_token) {
+            return Err(e);
+        }
+
         if offer_amount <= 0 {
             return Err(Error::InvalidAmount);
         }
@@ -4272,6 +4422,16 @@ mod test {
         String::from_str(env, "QmYwAPJzv5CZsnAzt8auVZRnGzrYxkM4Tveoxu48UUfGz8")
     }
 
+    fn whitelist_token(
+        client: &SkillSphereContractClient,
+        admin: &Address,
+        token: &Address,
+    ) {
+        if !client.is_token_approved(token) {
+            client.add_approved_token(admin, token);
+        }
+    }
+
     fn setup() -> (
         Env,
         SkillSphereContractClient<'static>,
@@ -4297,6 +4457,8 @@ mod test {
         let token_address = token.address();
 
         client.initialize(&admin);
+
+        client.add_approved_token(&admin, &token_address);
 
         let asset_admin = token::StellarAssetClient::new(&env, &token_address);
         asset_admin.mint(&seeker, &100_000);
@@ -5489,12 +5651,13 @@ mod test {
 
     #[test]
     fn test_multiple_sessions_with_different_tokens() {
-        let (env, client, _, _, seeker, expert, token1, token_admin) = setup();
+        let (env, client, _, admin, seeker, expert, token1, token_admin) = setup();
         register_and_avail(&env, &client, &expert, 10);
 
         // Create second token (USDC)
         let token2 = env.register_stellar_asset_contract_v2(token_admin.clone());
         let token2_address = token2.address();
+        whitelist_token(&client, &admin, &token2_address);
         let asset_admin2 = token::StellarAssetClient::new(&env, &token2_address);
         asset_admin2.mint(&seeker, &10_000);
 
@@ -5522,12 +5685,13 @@ mod test {
 
     #[test]
     fn test_settle_session_uses_correct_token_contract() {
-        let (env, client, _, _, seeker, expert, token1, token_admin) = setup();
+        let (env, client, _, admin, seeker, expert, token1, token_admin) = setup();
         register_and_avail(&env, &client, &expert, 10);
 
         // Create USDC token
         let usdc_token = env.register_stellar_asset_contract_v2(token_admin.clone());
         let usdc_address = usdc_token.address();
+        whitelist_token(&client, &admin, &usdc_address);
         let usdc_admin = token::StellarAssetClient::new(&env, &usdc_address);
         usdc_admin.mint(&seeker, &10_000);
 
@@ -5549,7 +5713,7 @@ mod test {
 
     #[test]
     fn test_expert_can_accept_multiple_token_types() {
-        let (env, client, _, _, seeker, expert, xlm_token, token_admin) = setup();
+        let (env, client, _, admin, seeker, expert, xlm_token, token_admin) = setup();
         register_and_avail(&env, &client, &expert, 10);
 
         // Create USDC and DAI tokens
@@ -5557,6 +5721,8 @@ mod test {
         let usdc_address = usdc.address();
         let dai = env.register_stellar_asset_contract_v2(token_admin.clone());
         let dai_address = dai.address();
+        whitelist_token(&client, &admin, &usdc_address);
+        whitelist_token(&client, &admin, &dai_address);
 
         let usdc_admin = token::StellarAssetClient::new(&env, &usdc_address);
         let dai_admin = token::StellarAssetClient::new(&env, &dai_address);
@@ -5579,11 +5745,12 @@ mod test {
 
     #[test]
     fn test_treasury_tracks_fees_per_token() {
-        let (env, client, _, _, seeker, expert, token1, token_admin) = setup();
+        let (env, client, _, admin, seeker, expert, token1, token_admin) = setup();
         register_and_avail(&env, &client, &expert, 10);
 
         let token2 = env.register_stellar_asset_contract_v2(token_admin.clone());
         let token2_address = token2.address();
+        whitelist_token(&client, &admin, &token2_address);
         let asset_admin2 = token::StellarAssetClient::new(&env, &token2_address);
         asset_admin2.mint(&seeker, &10_000);
 
@@ -6121,5 +6288,137 @@ mod test {
         assert_eq!(s1, 1);
         // Volume counter tracks gross claimable, not net-of-fee payout.
         assert!(v1 >= claimable);
+    }
+
+    // #236 / #237 / #238 / #239 tests
+    // ====================================================================
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #50)")]
+    fn test_rate_limit_blocks_rapid_start_session_calls() {
+        let (env, client, _, admin, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        client.set_rate_limit_min_ledgers(&admin, &2);
+
+        client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+
+        env.ledger().set_sequence_number(env.ledger().sequence() + 1);
+        client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+    }
+
+    #[test]
+    fn test_rate_limit_allows_start_session_after_cooldown() {
+        let (env, client, _, admin, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        client.set_rate_limit_min_ledgers(&admin, &2);
+
+        client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+        env.ledger().set_sequence_number(env.ledger().sequence() + 2);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+        assert!(session_id >= 2);
+    }
+
+    #[test]
+    fn test_rate_limit_blocks_rapid_heartbeat_calls() {
+        let (env, client, _, admin, _, expert, _, _) = setup();
+        client.register_expert(&expert, &10, &test_cid(&env));
+        client.set_rate_limit_min_ledgers(&admin, &2);
+
+        client.heartbeat(&expert);
+        env.ledger().set_sequence_number(env.ledger().sequence() + 1);
+        assert_eq!(client.heartbeat(&expert), Err(Error::RateLimitExceeded));
+
+        env.ledger().set_sequence_number(env.ledger().sequence() + 2);
+        assert_eq!(client.heartbeat(&expert), Ok(()));
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #51)")]
+    fn test_start_session_rejects_non_whitelisted_token() {
+        let (env, client, _, admin, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        client.remove_approved_token(&admin, &token);
+        client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+    }
+
+    #[test]
+    fn test_admin_token_whitelist_add_and_remove() {
+        let (env, client, _, admin, _, _, token, _) = setup();
+        let extra = Address::generate(&env);
+
+        assert!(client.is_token_approved(&token));
+        assert!(!client.is_token_approved(&extra));
+
+        client.add_approved_token(&admin, &extra);
+        assert!(client.is_token_approved(&extra));
+
+        client.remove_approved_token(&admin, &extra);
+        assert!(!client.is_token_approved(&extra));
+    }
+
+    #[test]
+    fn test_top_up_session_increases_balance_and_settles() {
+        let (env, client, contract_id, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+
+        let top_up = 2_000i128;
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+        asset_admin.mint(&seeker, &top_up);
+
+        let new_balance = client.top_up_session(&seeker, &session_id, &top_up);
+        assert_eq!(new_balance, 5_000);
+
+        let session = client.get_session(&session_id);
+        assert_eq!(session.balance, 5_000);
+
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&contract_id), 5_000);
+
+        env.ledger().set_timestamp(1_100);
+        let settled = client.settle_session(&session_id);
+        assert!(settled > 0);
+
+        let session_after = client.get_session(&session_id);
+        assert!(session_after.balance < 5_000);
+    }
+
+    #[test]
+    fn test_expert_cancel_session_partial_refund() {
+        let (env, client, contract_id, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+
+        env.ledger().set_timestamp(1_100);
+        let reason = test_cid(&env);
+        let (expert_payout, seeker_refund) =
+            client.cancel_session(&expert, &session_id, &reason);
+
+        assert!(expert_payout > 0);
+        assert!(seeker_refund > 0);
+        assert_eq!(expert_payout + seeker_refund, 3_000);
+
+        let session = client.get_session(&session_id);
+        assert_eq!(session.status, SessionStatus::CancelledByExpert);
+        assert_eq!(session.balance, 0);
+        assert_eq!(client.get_session_cancel_reason(&session_id), Some(reason));
+
+        let token_client = token::Client::new(&env, &token);
+        assert_eq!(token_client.balance(&contract_id), 0);
+        assert_eq!(token_client.balance(&expert), expert_payout);
+        assert_eq!(token_client.balance(&seeker), 97_000 + seeker_refund);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #2)")]
+    fn test_cancel_session_rejects_non_expert() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+        client.cancel_session(&seeker, &session_id, &test_cid(&env));
     }
 }
