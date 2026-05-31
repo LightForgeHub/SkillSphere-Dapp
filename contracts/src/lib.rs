@@ -2251,6 +2251,53 @@ impl SkillSphereContract {
         Self::protocol_paused(&env)
     }
 
+    // ====================================================================
+    // Oracle Circuit Breaker
+    // ====================================================================
+
+    /// Returns `true` when the oracle circuit breaker is active and new
+    /// sessions are blocked.
+    pub fn is_circuit_breaker_active(env: Env) -> bool {
+        oracles::is_circuit_breaker_active(&env)
+    }
+
+    /// Admin resets the circuit breaker after investigating the price anomaly.
+    pub fn reset_circuit_breaker(env: Env) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        oracles::reset_circuit_breaker(&env);
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("cbReset"),),
+        );
+        Ok(())
+    }
+
+    /// Sets the maximum allowable oracle price deviation in basis points.
+    ///
+    /// Default is 2 000 bps (20%). If the oracle price moves more than this
+    /// fraction in one update, the circuit breaker is tripped.
+    pub fn set_max_price_deviation_bps(env: Env, bps: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if bps > MAX_BPS {
+            return Err(Error::InvalidFeeBps);
+        }
+        oracles::set_max_price_deviation_bps(&env, bps);
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("maxDevBps"), bps),
+        );
+        Ok(())
+    }
+
+    /// Returns the configured maximum price-deviation threshold in bps.
+    pub fn get_max_price_deviation_bps(env: Env) -> u32 {
+        oracles::max_price_deviation_bps(&env)
+    }
+
     /// Manually sets an expert's reputation (admin only).
     ///
     /// # Arguments
@@ -2378,6 +2425,9 @@ impl SkillSphereContract {
         if Self::protocol_paused(&env) {
             panic_with_error!(&env, Error::ProtocolPaused);
         }
+        if oracles::is_circuit_breaker_active(&env) {
+            panic_with_error!(&env, Error::CircuitBreakerActive);
+        }
         if let Err(e) = admin::rate_limit(&env, &seeker, admin::rate_limit_min_ledgers(&env)) {
             panic_with_error!(&env, e);
         }
@@ -2455,6 +2505,9 @@ impl SkillSphereContract {
     ) -> Result<u64, Error> {
         seeker.require_auth();
         Self::ensure_protocol_active(&env)?;
+        if oracles::is_circuit_breaker_active(&env) {
+            return Err(Error::CircuitBreakerActive);
+        }
         if let Err(e) = admin::rate_limit(&env, &seeker, admin::rate_limit_min_ledgers(&env)) {
             panic_with_error!(&env, e);
         }
@@ -3578,6 +3631,13 @@ impl SkillSphereContract {
         let (price, last_updated_at) = client.get_price(&cfg.asset_pair);
         let now = env.ledger().timestamp() as u32;
         if now.saturating_sub(last_updated_at) > cfg.max_staleness_seconds {
+            return None;
+        }
+
+        // Check price deviation against the last known oracle price.
+        // If deviation exceeds the threshold the circuit breaker activates;
+        // we return None here so the caller falls back to the static rate.
+        if oracles::check_and_update_price(env, price).is_err() {
             return None;
         }
 
