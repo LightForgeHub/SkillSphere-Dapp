@@ -1,5 +1,8 @@
 #![no_std]
 
+mod migrations;
+mod admin;
+mod storage;
 pub mod bridge;
 mod crypto;
 mod dex;
@@ -58,6 +61,42 @@ const STAKE_TIER_3: i128 = 10_000;
 const FEE_REDUCTION_TIER_1_BPS: u32 = 100;
 const FEE_REDUCTION_TIER_2_BPS: u32 = 200;
 const FEE_REDUCTION_TIER_3_BPS: u32 = 300;
+/// 90 days in seconds — minimum age of a completed session before archival.
+const ARCHIVE_DELAY_SECS: u64 = 90 * 24 * 60 * 60;
+/// Maximum number of sessions that can be archived in a single batch call.
+const MAX_ARCHIVE_BATCH_SIZE: u32 = 50;
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum Error {
+    Unauthorized = 1,
+    SessionNotFound = 2,
+    InvalidSessionState = 3,
+    InsufficientBalance = 4,
+    InvalidAmount = 5,
+    NotStarted = 6,
+    AlreadyFinished = 7,
+    DisputeNotFound = 8,
+    UpgradeNotInitiated = 9,
+    TimelockNotExpired = 10,
+    EmptyDisputeReason = 11,
+    ProtocolPaused = 12,
+    ReputationTooLow = 13,
+    InvalidFeeBps = 14,
+    SessionExpired = 15,
+    InvalidCid = 16,
+    InvalidSplitBps = 17,
+    DisputeWindowActive = 18,
+    InvalidFeeConfig = 19,
+    InsufficientTreasuryBalance = 20,
+    AmountBelowMinimum = 21,
+    ExpertNotRegistered = 22,
+    ExpertUnavailable = 23,
+    InvalidReferrer = 24,
+    ReentrancyDetected = 25,
+    DepositTooLow = 26,
+}
 const REFERRAL_COMMISSION_BPS: u32 = 500; // 5% of platform fee for referrer
 const REFERRAL_SESSION_LIMIT: u32 = 10; // Referral commission applies to first X sessions
 const RATING_SCALE_MIN: u32 = 1;
@@ -107,6 +146,8 @@ pub enum DataKey {
     TreasuryAddress,
     TreasuryBalance(Address),
     ArbitrationCommittee,
+    ContractVersion,
+    ActiveSessionCount,
     SessionRating(u64),
     ExpertAverageRating(Address),
     ExpertRatingCount(Address),
@@ -317,6 +358,12 @@ pub struct Session {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArchiveSummary {
+    pub archived: u32,
+    pub skipped: u32,
+}
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SessionRating {
     pub session_id: u64,
     pub rater: Address,
@@ -324,6 +371,15 @@ pub struct SessionRating {
     pub created_at: u32,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractStatus {
+    pub version: u32,
+    pub admin: Option<Address>,
+    pub is_paused: bool,
+    pub total_sessions: u64,
+    pub active_sessions: u64,
+}
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExpertVerification {
@@ -1086,6 +1142,19 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::Subscription(seeker.clone(), expert.clone()), &sub);
 
+        Self::increment_active_sessions(&env);
+
+        env.events().publish(
+            (symbol_short!("session"), symbol_short!("started")),
+            (
+                session_id,
+                seeker.clone(),
+                expert.clone(),
+                profile.rate_per_second,
+                amount,
+                now,
+                metadata_cid,
+            ),
         events::publish_event(
             &env,
             events::event_type::subscription(),
@@ -1138,6 +1207,45 @@ impl SkillSphereContract {
             return Err(Error::InvalidSessionState);
         }
 
+        let now = Self::bounded_time(&session, env.ledger().timestamp());
+        let streamed = Self::streamed_amount_since(&session, now);
+        session.accrued_amount = session.accrued_amount.saturating_add(streamed);
+        session.last_settlement_timestamp = now as u32;
+        session.status = SessionStatus::Paused;
+        session.paused_at = Some(now);
+
+        Self::save_session(&env, &session);
+        env.events().publish(
+            (symbol_short!("session"), symbol_short!("paused")),
+            (session_id, now),
+        );
+
+        Ok(())
+    }
+
+    pub fn resume_session(env: Env, caller: Address, session_id: u64) -> Result<(), Error> {
+        Self::ensure_protocol_active(&env)?;
+        caller.require_auth();
+        let mut session = Self::get_session_or_error(&env, session_id)?;
+        Self::require_participant(&session, &caller)?;
+
+        if session.status != SessionStatus::Paused {
+            return Err(Error::InvalidSessionState);
+        }
+
+        let now = env.ledger().timestamp() as u32;
+        let paused_at = match session.paused_at {
+            Some(t) => t,
+            None => session.last_settlement_timestamp as u64,
+        };
+
+        // Check if TTL expired during pause
+        if now as u64 > paused_at + SESSION_ESCROW_TTL {
+            // Auto-settle the session as completed
+            session.status = SessionStatus::Completed;
+            Self::save_session(&env, &session);
+            Self::decrement_active_sessions(&env);
+            return Err(Error::SessionExpired);
         let admin = Self::get_admin_address(&env)?;
         if caller != session.seeker && caller != session.expert && caller != admin {
             return Err(Error::Unauthorized);
@@ -1351,6 +1459,11 @@ impl SkillSphereContract {
         Ok(())
     }
 
+        session.balance = 0;
+        session.status = SessionStatus::Completed;
+        session.last_settlement_timestamp = now as u32;
+        Self::save_session(&env, &session);
+        Self::decrement_active_sessions(&env);
     /// Retrieves the current contract administrator address.
     ///
     /// # Errors
@@ -1582,6 +1695,169 @@ impl SkillSphereContract {
             .unwrap_or(0i128)
     }
 
+    pub fn get_contract_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::ContractVersion)
+            .unwrap_or(1u32)
+    }
+
+    pub fn health_check(env: Env) -> ContractStatus {
+        let version: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ContractVersion)
+            .unwrap_or(1u32);
+        let admin: Option<Address> = env.storage().instance().get(&DataKey::Admin);
+        let is_paused = Self::protocol_paused(&env);
+        let next_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextSessionId)
+            .unwrap_or(1u64);
+        let total_sessions = next_id.saturating_sub(1);
+        let active_sessions: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveSessionCount)
+            .unwrap_or(0u64);
+
+        ContractStatus {
+            version,
+            admin,
+            is_paused,
+            total_sessions,
+            active_sessions,
+        }
+    }
+
+    /// Move a completed session from Persistent to Temporary storage (90-day TTL).
+    /// Admin-only. Callable only after the session has been completed for ≥90 days.
+    pub fn archive_session(env: Env, session_id: u64) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+
+        let session = Self::get_session_or_error(&env, session_id)?;
+
+        if !matches!(
+            session.status,
+            SessionStatus::Completed | SessionStatus::Resolved
+        ) {
+            return Err(Error::InvalidSessionState);
+        }
+
+        let now = env.ledger().timestamp();
+        let completed_at = session.last_settlement_timestamp as u64;
+        if now < completed_at.saturating_add(ARCHIVE_DELAY_SECS) {
+            return Err(Error::TimelockNotExpired);
+        }
+
+        // Write to temporary storage with 90-day TTL, then remove from persistent.
+        storage::write_archive(&env, &session);
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Session(session_id));
+
+        env.events().publish(
+            (symbol_short!("session"), symbol_short!("archived")),
+            (session_id, now),
+        );
+
+        Ok(())
+    }
+
+    /// Read a session from temporary (archived) storage.
+    pub fn get_archived_session(env: Env, session_id: u64) -> Option<Session> {
+        storage::read_archive(&env, session_id)
+    }
+
+    /// Batch-archive up to `MAX_ARCHIVE_BATCH_SIZE` completed sessions.
+    /// Admin-only. Skips sessions that are not eligible without panicking.
+    pub fn batch_archive_sessions(
+        env: Env,
+        session_ids: Vec<u64>,
+    ) -> Result<ArchiveSummary, Error> {
+        Self::require_admin(&env)?;
+
+        if session_ids.len() > MAX_ARCHIVE_BATCH_SIZE {
+            return Err(Error::InvalidAmount);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut archived: u32 = 0;
+        let mut skipped: u32 = 0;
+
+        for session_id in session_ids.iter() {
+            let session = match env
+                .storage()
+                .persistent()
+                .get::<DataKey, Session>(&DataKey::Session(session_id))
+            {
+                Some(s) => s,
+                None => { skipped += 1; continue; }
+            };
+
+            let eligible = matches!(
+                session.status,
+                SessionStatus::Completed | SessionStatus::Resolved
+            ) && now >= (session.last_settlement_timestamp as u64).saturating_add(ARCHIVE_DELAY_SECS);
+
+            if !eligible {
+                skipped += 1;
+                continue;
+            }
+
+            storage::write_archive(&env, &session);
+            env.storage()
+                .persistent()
+                .remove(&DataKey::Session(session_id));
+
+            env.events().publish(
+                (symbol_short!("session"), symbol_short!("archived")),
+                (session_id, now),
+            );
+
+            archived += 1;
+        }
+
+        Ok(ArchiveSummary { archived, skipped })
+    }
+
+    /// Migrate storage schema to `new_version`. Admin-only, runs once per version bump.
+    pub fn migrate(env: Env, new_version: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+
+        let current: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ContractVersion)
+            .unwrap_or(1u32);
+
+        if new_version <= current {
+            return Err(Error::InvalidSessionState);
+        }
+
+        migrations::run(&env, current, new_version);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::ContractVersion, &new_version);
+
+        env.events()
+            .publish((symbol_short!("migrated"),), (current, new_version));
+
+        Ok(())
+    }
+
+    fn next_session_id(env: &Env) -> u64 {
+        let next_id = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextSessionId)
+            .unwrap_or(1u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::NextSessionId, &(next_id + 1));
+        next_id
     /// Calculates the effective fee bps for an expert, considering their stake.
     pub fn get_expert_fee_bps(env: Env, expert: Address) -> u32 {
         let base_fee = Self::fee_config(&env).first_tier_bps;
@@ -1707,6 +1983,32 @@ impl SkillSphereContract {
             (symbol_short!("feeCollct"), token, amount),
         );
 
+    fn increment_active_sessions(env: &Env) {
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveSessionCount)
+            .unwrap_or(0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::ActiveSessionCount, &count.saturating_add(1));
+    }
+
+    fn decrement_active_sessions(env: &Env) {
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveSessionCount)
+            .unwrap_or(0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::ActiveSessionCount, &count.saturating_sub(1));
+    }
+
+    fn require_participant(session: &Session, caller: &Address) -> Result<(), Error> {
+        if *caller != session.seeker && *caller != session.expert {
+            return Err(Error::Unauthorized);
+        }
         Ok(())
     }
 
@@ -1733,6 +2035,22 @@ impl SkillSphereContract {
             return Err(Error::InvalidAmount);
         }
 
+        let now = env.ledger().timestamp();
+        let expiry = Self::expiry_timestamp_for_session(&session);
+        let effective_time = Self::bounded_time(&session, now);
+        let claimable = Self::claimable_amount_for_session(&session, effective_time);
+  
+        if claimable <= 0 {
+            if now > expiry {
+                session.status = SessionStatus::Completed;
+                session.last_settlement_timestamp = expiry as u32;
+                Self::save_session(env, &session);
+                Self::decrement_active_sessions(env);
+                Self::set_reentrancy_lock(env, false);
+                return Err(Error::SessionExpired);
+            }
+            Self::set_reentrancy_lock(env, false);
+            return Ok(0);
         let current_balance = Self::get_treasury_balance(env.clone(), token.clone());
         if current_balance < amount {
             return Err(Error::InsuffTreasuryBal);
@@ -1753,6 +2071,10 @@ impl SkillSphereContract {
             (symbol_short!("treasWdrw"), token.clone(), amount, recipient.clone()),
         );
 
+        Self::save_session(env, &session);
+        if session.status == SessionStatus::Completed {
+            Self::decrement_active_sessions(env);
+        }
         Ok(())
     }
 
@@ -1836,6 +2158,8 @@ impl SkillSphereContract {
         Ok(())
     }
 
+        Self::save_session(env, session);
+        Self::decrement_active_sessions(env);
     /// Checks if the protocol is currently paused.
     pub fn is_protocol_paused(env: Env) -> bool {
         Self::protocol_paused(&env)
@@ -2081,6 +2405,55 @@ impl SkillSphereContract {
         expert: Address,
         public_key: BytesN<32>,
     ) -> Result<(), Error> {
+        if seeker_award_bps > MAX_BPS {
+            return Err(Error::InvalidSplitBps);
+        }
+
+        let expert_award_bps = MAX_BPS - seeker_award_bps;
+        let seeker_amount =
+            session.balance.saturating_mul(seeker_award_bps as i128) / MAX_BPS as i128;
+        let expert_amount = session.balance.saturating_sub(seeker_amount);
+
+        dispute.resolved = true;
+        dispute.seeker_award_bps = seeker_award_bps;
+        dispute.expert_award_bps = expert_award_bps;
+        dispute.auto_resolved = auto_resolved;
+        session.balance = 0;
+        session.accrued_amount = 0;
+        session.status = SessionStatus::Resolved;
+
+        Self::save_session(env, session);
+        Self::decrement_active_sessions(env);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Dispute(session.id), dispute);
+
+        let token_client = token::Client::new(env, &session.token);
+        if expert_amount > 0 {
+            token_client.transfer(
+                &env.current_contract_address(),
+                &session.expert,
+                &expert_amount,
+            );
+        }
+        if seeker_amount > 0 {
+            token_client.transfer(
+                &env.current_contract_address(),
+                &session.seeker,
+                &seeker_amount,
+            );
+        }
+
+        let resolved_at = env.ledger().timestamp();
+        env.events().publish(
+            (symbol_short!("dispute"), symbol_short!("resolved")),
+            (
+                session.id,
+                seeker_amount,
+                expert_amount,
+                auto_resolved,
+                resolved_at,
+            ),
         expert.require_auth();
         crypto::set_voucher_pubkey(&env, &expert, public_key.clone());
         events::publish_event(
@@ -6969,5 +7342,170 @@ mod test {
         let session_id =
             client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
         client.cancel_session(&seeker, &session_id, &test_cid(&env));
+    }
+
+    // --- #247: health_check ---
+
+    #[test]
+    fn test_health_check_returns_correct_status() {
+        let (env, client, _, admin, seeker, expert, token, _) = setup();
+
+        // Before any sessions: total=0, active=0, not paused, version=1
+        let status = client.health_check();
+        assert_eq!(status.version, 1);
+        assert_eq!(status.admin, Some(admin));
+        assert!(!status.is_paused);
+        assert_eq!(status.total_sessions, 0);
+        assert_eq!(status.active_sessions, 0);
+
+        // Start a session: total=1, active=1
+        register_and_avail(&env, &client, &expert, 10);
+        client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+        let status = client.health_check();
+        assert_eq!(status.total_sessions, 1);
+        assert_eq!(status.active_sessions, 1);
+
+        // Settle the session fully: active drops to 0
+        env.ledger().set_timestamp(1_300);
+        client.settle_session(&1);
+        let status = client.health_check();
+        assert_eq!(status.total_sessions, 1);
+        assert_eq!(status.active_sessions, 0);
+
+        // Pause the protocol
+        client.pause_protocol();
+        let status = client.health_check();
+        assert!(status.is_paused);
+    }
+
+    // --- #248: archive_session ---
+
+    #[test]
+    fn test_archive_session_moves_to_temporary_storage() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+
+        // Fully settle the session.
+        env.ledger().set_timestamp(1_300);
+        client.settle_session(&session_id);
+
+        // Advance 90 days past completion.
+        let ninety_days: u64 = 90 * 24 * 60 * 60;
+        env.ledger().set_timestamp(1_300 + ninety_days + 1);
+
+        client.archive_session(&session_id);
+
+        // Session no longer in persistent storage (get_session should fail).
+        let result = client.try_get_session(&session_id);
+        assert!(result.is_err());
+
+        // Session readable from temporary storage.
+        let archived = client.get_archived_session(&session_id);
+        assert!(archived.is_some());
+        assert_eq!(archived.unwrap().id, session_id);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_archive_session_fails_before_90_days() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+
+        env.ledger().set_timestamp(1_300);
+        client.settle_session(&session_id);
+
+        // Only 1 day after completion — should fail.
+        env.ledger().set_timestamp(1_300 + 24 * 60 * 60);
+        client.archive_session(&session_id);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_archive_session_fails_for_active_session() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let session_id =
+            client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+
+        let ninety_days: u64 = 90 * 24 * 60 * 60;
+        env.ledger().set_timestamp(1_000 + ninety_days + 1);
+        client.archive_session(&session_id);
+    }
+
+    // --- #249: batch_archive_sessions ---
+
+    #[test]
+    fn test_batch_archive_archives_eligible_sessions() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+        asset_admin.mint(&seeker, &6_000);
+
+        let s1 = client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+        let s2 = client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+
+        // Settle both sessions.
+        env.ledger().set_timestamp(1_300);
+        client.settle_session(&s1);
+        client.settle_session(&s2);
+
+        // Advance 90 days.
+        let ninety_days: u64 = 90 * 24 * 60 * 60;
+        env.ledger().set_timestamp(1_300 + ninety_days + 1);
+
+        let mut ids = Vec::new(&env);
+        ids.push_back(s1);
+        ids.push_back(s2);
+
+        let summary = client.batch_archive_sessions(&ids);
+        assert_eq!(summary.archived, 2);
+        assert_eq!(summary.skipped, 0);
+
+        assert!(client.get_archived_session(&s1).is_some());
+        assert!(client.get_archived_session(&s2).is_some());
+    }
+
+    #[test]
+    fn test_batch_archive_skips_ineligible_sessions() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        // s1: completed and old enough
+        let s1 = client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+        env.ledger().set_timestamp(1_300);
+        client.settle_session(&s1);
+
+        let ninety_days: u64 = 90 * 24 * 60 * 60;
+        env.ledger().set_timestamp(1_300 + ninety_days + 1);
+
+        // s2: still active (not settled)
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+        asset_admin.mint(&seeker, &3_000);
+        let s2 = client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+
+        // 999: non-existent
+        let mut ids = Vec::new(&env);
+        ids.push_back(s1);
+        ids.push_back(s2);
+        ids.push_back(999u64);
+
+        let summary = client.batch_archive_sessions(&ids);
+        assert_eq!(summary.archived, 1);
+        assert_eq!(summary.skipped, 2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_batch_archive_rejects_oversized_batch() {
+        let (env, client, _, _, _, _, _, _) = setup();
+        let mut ids = Vec::new(&env);
+        for i in 0u64..51 {
+            ids.push_back(i);
+        }
+        client.batch_archive_sessions(&ids);
     }
 }

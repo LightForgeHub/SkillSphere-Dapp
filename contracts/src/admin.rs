@@ -1,12 +1,33 @@
-//! Admin-managed configuration: rate-limit cooldowns (#236) and the
-//! approved-token registry (#239).
+//! Admin helpers – thin re-exports so other modules can import from a single place.
+use crate::{DataKey, Error};
+
+pub use crate::Error;
+
 
 use soroban_sdk::{Address, Env, Vec};
 
-use crate::{DataKey, Error};
+
 
 /// Default rate-limit cooldown: 0 disables per-address throttling.
 const DEFAULT_RATE_LIMIT_MIN_LEDGERS: u32 = 0;
+
+/// Returns the stored admin address, or `Error::Unauthorized` if not set.
+pub fn get_admin(env: &Env) -> Result<Address, Error> {
+    env.storage()
+        .instance()
+        .get(&DataKey::Admin)
+        .ok_or(Error::Unauthorized)
+}
+
+/// Requires the stored admin to have signed the current transaction.
+pub fn require_admin(env: &Env) -> Result<Address, Error> {
+    let admin = get_admin(env)?;
+    admin.require_auth();
+    Ok(admin)
+//! Admin-managed configuration: rate-limit cooldowns (#236) and the
+//! approved-token registry (#239).
+
+
 
 /// Reads the configured minimum ledger gap between rate-limited calls.
 pub fn rate_limit_min_ledgers(env: &Env) -> u32 {
