@@ -11,11 +11,15 @@ mod errors;
 mod events;
 mod governance;
 mod reputation;
+mod treasury;
+mod oracles;
+mod scheduling;
 pub use bridge::BridgeError;
 pub use crypto::SessionVoucher;
 pub use dex::SwapPath;
 pub use errors::Error;
 pub use reputation::BadgeRecord;
+pub use reputation::ExpertTier;
 
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, symbol_short, token, xdr::ToXdr, Address,
@@ -49,6 +53,8 @@ const TIMELOCK_DURATION: u64 = 48 * 60 * 60;
 const DISPUTE_EXPIRY_WINDOW: u64 = 30 * 24 * 60 * 60;
 const SESSION_ESCROW_TTL: u64 = 300; // 5 minutes for pause grace period
 const SESSION_NO_SHOW_REFUND_WINDOW: u64 = 600; // 10 minutes
+/// Minimum expiry buffer (2 hours) added to scheduled_start for reserved sessions.
+const SESSION_EXPIRY_BUFFER_SECS: u64 = 2 * 60 * 60;
 pub(crate) const MIN_SESSION_ESCROW: i128 = 10; // Dust cleanup threshold
 const DEFAULT_FEE_FIRST_TIER_LIMIT: i128 = 1_000;
 const DEFAULT_FEE_FIRST_TIER_BPS: u32 = 500;
@@ -96,6 +102,12 @@ pub enum Error {
     InvalidReferrer = 24,
     ReentrancyDetected = 25,
     DepositTooLow = 26,
+    // Anti-spam session deposit
+    InsufficientAntiSpamDeposit = 27,
+    // Oracle circuit breaker
+    CircuitBreakerActive = 28,
+    // Session expiry
+    SessionNotExpired = 29,
 }
 const REFERRAL_COMMISSION_BPS: u32 = 500; // 5% commission of expert earnings paid from platform fee
 const DEFAULT_REFERRAL_SESSION_LIMIT: u32 = 50;
@@ -186,6 +198,15 @@ pub enum DataKey {
     VoucherNonceConsumed(Address, u64),
     ReferralSessionLimit,
     CancellationFeeBps,
+    // Expert tier system
+    ExpertTier(Address),
+    ExpertCompletedSessions(Address),
+    // Anti-spam session deposit
+    SpamDepositAmount,
+    // Oracle circuit breaker
+    LastOraclePrice,
+    CircuitBreakerActive,
+    MaxPriceDeviationBps,
 }
 
 #[contracttype]
@@ -315,6 +336,9 @@ pub struct Session {
     pub agency_share_bps: u32,
     pub rate_currency: RateCurrency,
     pub locked_xlm_rate: Option<i128>,
+    /// Hard expiry timestamp (seconds). Set for Reserved sessions only.
+    /// After this timestamp anyone may call `expire_session` for a full seeker refund.
+    pub expires_at: Option<u64>,
 }
 
 #[contracttype]
@@ -2488,6 +2512,14 @@ impl SkillSphereContract {
         let session_id = Self::next_session_id(env);
         let start_ts = scheduled_start as u32;
 
+        // expires_at = scheduled_start + max(2 hours, duration_cap)
+        let expiry_buffer = if duration_cap > SESSION_EXPIRY_BUFFER_SECS {
+            duration_cap
+        } else {
+            SESSION_EXPIRY_BUFFER_SECS
+        };
+        let expires_at = scheduled_start.saturating_add(expiry_buffer);
+
         let session = Session {
             id: session_id,
             seeker: seeker.clone(),
@@ -2508,6 +2540,7 @@ impl SkillSphereContract {
             agency_share_bps,
             rate_currency,
             locked_xlm_rate,
+            expires_at: Some(expires_at),
         };
 
         env.storage()
@@ -3472,6 +3505,7 @@ impl SkillSphereContract {
             agency_share_bps,
             rate_currency: rate_currency.clone(),
             locked_xlm_rate,
+            expires_at: None,
         };
 
         env.storage()
@@ -3792,7 +3826,13 @@ impl SkillSphereContract {
 
         // #196: per-asset fee override takes priority over the
         // tiered config for this session's funding token.
-        let platform_fee = Self::platform_fee_for_token(env, &session.token, claimable)?;
+        let base_platform_fee = Self::platform_fee_for_token(env, &session.token, claimable)?;
+        // Apply expert-tier discount: Gold = 0 fee, Silver = 50%, Bronze = full.
+        let platform_fee = match reputation::get_tier(env, &session.expert) {
+            ExpertTier::Gold => 0i128,
+            ExpertTier::Silver => base_platform_fee / 2,
+            ExpertTier::Bronze => base_platform_fee,
+        };
         let expert_earnings = claimable.saturating_sub(platform_fee);
         let referrer = Self::expert_referrer(env, &session.expert);
         let referral_reward = if referrer.is_some()
@@ -3834,7 +3874,8 @@ impl SkillSphereContract {
         session.accrued_amount = 0;
         session.last_settlement_timestamp = effective_time as u32;
 
-        if session.balance == 0 || now >= expiry {
+        let session_just_completed = session.balance == 0 || now >= expiry;
+        if session_just_completed {
             session.status = SessionStatus::Completed;
         }
 
@@ -3947,6 +3988,11 @@ impl SkillSphereContract {
             );
         }
 
+        // Recalculate expert tier on session completion.
+        if session_just_completed {
+            reputation::update_expert_tier_on_completion(env, &expert);
+        }
+
         Self::set_reentrancy_lock(env, false);
         Ok(expert_payout)
     }
@@ -4017,6 +4063,9 @@ impl SkillSphereContract {
             session.id,
             (final_claimable, final_remaining, finished_at),
         );
+
+        // Recalculate expert tier whenever a session is explicitly closed.
+        reputation::update_expert_tier_on_completion(env, &session.expert);
 
         Self::set_reentrancy_lock(env, false);
         Ok((final_claimable, final_remaining))
@@ -4420,6 +4469,25 @@ impl SkillSphereContract {
             .persistent()
             .get(&DataKey::ExpertRatingCount(expert))
             .unwrap_or(0)
+    }
+
+    // ====================================================================
+    // Expert Tier System
+    // ====================================================================
+
+    /// Returns the current performance tier of an expert.
+    ///
+    /// Defaults to `ExpertTier::Bronze` for experts with no completed sessions.
+    pub fn get_expert_tier(env: Env, expert: Address) -> ExpertTier {
+        reputation::get_tier(&env, &expert)
+    }
+
+    /// Returns the number of fully-completed sessions for an expert.
+    pub fn get_expert_completed_sessions(env: Env, expert: Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertCompletedSessions(expert))
+            .unwrap_or(0u32)
     }
 
     /// Registers a new expert with a referrer (Issue #52).
@@ -5256,11 +5324,18 @@ impl SkillSphereContract {
             balance: ask_amount,
             last_settlement_timestamp: now,
             start_timestamp: now,
+            scheduled_start: None,
+            duration_cap: None,
             accrued_amount: 0,
             status: SessionStatus::Active,
             metadata_cid: metadata_cid.clone(),
             encrypted_notes_hash: None,
             paused_at: None,
+            agency_address: profile.agency_address.clone(),
+            agency_share_bps: profile.agency_share_bps,
+            rate_currency: profile.rate_currency.clone(),
+            locked_xlm_rate: None,
+            expires_at: None,
         };
         env.storage()
             .persistent()
