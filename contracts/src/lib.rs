@@ -2717,6 +2717,34 @@ impl SkillSphereContract {
         Ok((refund, fee))
     }
 
+    // ====================================================================
+    // Session Expiry Deadline & Auto-Close
+    // ====================================================================
+
+    /// Force-closes a Reserved (or Paused) session that has passed its
+    /// hard `expires_at` deadline without becoming Active.
+    ///
+    /// Callable by anyone — this is a permissionless safety valve so seekers
+    /// are never permanently locked out of their funds. The full escrow balance
+    /// is refunded to the seeker. Emits `SessionExpired { session_id, refund_amount }`.
+    ///
+    /// # Errors
+    /// * `Error::SessionNotFound`       — session does not exist
+    /// * `Error::InvalidSessionState`   — session has no `expires_at`, is Active, or
+    ///                                    is already in a terminal state
+    /// * `Error::SessionNotExpired`     — `ledger_timestamp < expires_at`
+    pub fn expire_session(env: Env, session_id: u64) -> Result<(), Error> {
+        let session = Self::get_session_or_error(&env, session_id)?;
+        let refund_amount = scheduling::do_expire_session(&env, session)?;
+        events::publish_event(
+            &env,
+            events::event_type::session_expired(),
+            session_id,
+            (session_id, refund_amount),
+        );
+        Ok(())
+    }
+
     fn cancellation_fee_bps(env: &Env) -> u32 {
         env.storage()
             .instance()
