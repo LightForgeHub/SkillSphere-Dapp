@@ -1,12 +1,7 @@
 //! Admin helpers – thin re-exports so other modules can import from a single place.
 use crate::{DataKey, Error};
 
-pub use crate::Error;
-
-
-use soroban_sdk::{Address, Env, Vec};
-
-
+use soroban_sdk::{symbol_short, Address, Env, Vec};
 
 /// Default rate-limit cooldown: 0 disables per-address throttling.
 const DEFAULT_RATE_LIMIT_MIN_LEDGERS: u32 = 0;
@@ -24,16 +19,13 @@ pub fn require_admin(env: &Env) -> Result<Address, Error> {
     let admin = get_admin(env)?;
     admin.require_auth();
     Ok(admin)
-//! Admin-managed configuration: rate-limit cooldowns (#236) and the
-//! approved-token registry (#239).
-
-
+}
 
 /// Reads the configured minimum ledger gap between rate-limited calls.
 pub fn rate_limit_min_ledgers(env: &Env) -> u32 {
     env.storage()
         .instance()
-        .get(&DataKey::RateLimitMinLedgers)
+        .get(&symbol_short!("lim_ledg"))
         .unwrap_or(DEFAULT_RATE_LIMIT_MIN_LEDGERS)
 }
 
@@ -41,28 +33,28 @@ pub fn rate_limit_min_ledgers(env: &Env) -> u32 {
 pub fn set_rate_limit_min_ledgers(env: &Env, min_ledgers: u32) {
     env.storage()
         .instance()
-        .set(&DataKey::RateLimitMinLedgers, &min_ledgers);
+        .set(&symbol_short!("lim_ledg"), &min_ledgers);
 }
 
 /// Enforces a per-address cooldown of at least `min_ledgers` ledgers
 /// between successive calls.  The last action ledger is stored under
-/// `DataKey::LastAction(address)` in **temporary** storage so it
+/// `(symbol_short!("lst_act"), address)` in **temporary** storage so it
 /// auto-expires and does not accumulate rent.
 pub fn rate_limit(env: &Env, caller: &Address, min_ledgers: u32) -> Result<(), Error> {
     if min_ledgers == 0 {
         return Ok(());
     }
 
-    let key = DataKey::LastAction(caller.clone());
+    let key = (symbol_short!("lst_act"), caller.clone());
     let current = env.ledger().sequence();
 
     if let Some(last) = env
         .storage()
         .temporary()
-        .get::<DataKey, u32>(&key)
+        .get::<_, u32>(&key)
     {
         if current.saturating_sub(last) < min_ledgers {
-            return Err(Error::RateLimitExceeded);
+            return Err(Error::Unauthorized);
         }
     }
 
@@ -81,14 +73,14 @@ pub fn rate_limit(env: &Env, caller: &Address, min_ledgers: u32) -> Result<(), E
 pub fn approved_tokens(env: &Env) -> Vec<Address> {
     env.storage()
         .persistent()
-        .get(&DataKey::ApprovedTokens)
+        .get(&symbol_short!("app_toks"))
         .unwrap_or_else(|| Vec::new(env))
 }
 
 fn save_approved_tokens(env: &Env, tokens: &Vec<Address>) {
     env.storage()
         .persistent()
-        .set(&DataKey::ApprovedTokens, tokens);
+        .set(&symbol_short!("app_toks"), tokens);
 }
 
 /// Returns `true` when `token` is present in the approved-token registry.
@@ -107,7 +99,7 @@ pub fn require_token_whitelisted(env: &Env, token: &Address) -> Result<(), Error
     if is_token_whitelisted(env, token) {
         Ok(())
     } else {
-        Err(Error::TokenNotWhitelisted)
+        Err(Error::Unauthorized)
     }
 }
 
@@ -116,7 +108,7 @@ pub fn add_approved_token(env: &Env, token: Address) -> Result<(), Error> {
     let mut tokens = approved_tokens(env);
     for i in 0..tokens.len() {
         if tokens.get(i).unwrap() == token {
-            return Err(Error::TokenAlreadyWhitelisted);
+            return Err(Error::Unauthorized);
         }
     }
     tokens.push_back(token);
@@ -138,7 +130,7 @@ pub fn remove_approved_token(env: &Env, token: Address) -> Result<(), Error> {
         }
     }
     if !found {
-        return Err(Error::TokenNotInWhitelist);
+        return Err(Error::Unauthorized);
     }
     save_approved_tokens(env, &next);
     Ok(())

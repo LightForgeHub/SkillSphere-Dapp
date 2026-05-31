@@ -76,11 +76,13 @@ pub fn increment_referral_session_count(env: &Env, expert: &Address) {
     }
 }
 
+const DEFAULT_REFERRAL_SESSION_LIMIT: u32 = 50;
+
 /// Returns the referral commission eligibility limit for an expert.
 pub fn referral_session_limit(env: &Env) -> u32 {
     env.storage()
         .instance()
-        .get(&DataKey::ReferralSessionLimit)
+        .get(&soroban_sdk::symbol_short!("ref_lim"))
         .unwrap_or(DEFAULT_REFERRAL_SESSION_LIMIT)
 }
 
@@ -88,5 +90,5 @@ pub fn referral_session_limit(env: &Env) -> u32 {
 pub fn set_referral_session_limit(env: &Env, limit: u32) {
     env.storage()
         .instance()
-        .set(&DataKey::ReferralSessionLimit, &limit);
+        .set(&soroban_sdk::symbol_short!("ref_lim"), &limit);
 }
