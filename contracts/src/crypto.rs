@@ -3,9 +3,9 @@
 //! Experts pre-sign voucher payloads off-chain so seekers can open sessions
 //! without a separate on-chain expert confirmation transaction.
 
-use soroban_sdk::{contracttype, xdr::ToXdr, Address, Bytes, BytesN, Env};
+use soroban_sdk::{contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env};
 
-use crate::{DataKey, Error};
+use crate::Error;
 
 /// Signed session invitation issued by an expert off-chain.
 #[contracttype]
@@ -21,7 +21,7 @@ pub struct SessionVoucher {
 /// Canonical byte sequence signed by the expert wallet.
 pub fn voucher_message(env: &Env, voucher: &SessionVoucher) -> Bytes {
     let mut message = Bytes::new(env);
-    message.append(&voucher.expert.to_xdr(env));
+    message.append(&voucher.expert.clone().to_xdr(env));
     message.append(&voucher.rate_per_second.to_xdr(env));
     message.append(&voucher.max_duration.to_xdr(env));
     message.append(&voucher.expiry.to_xdr(env));
@@ -43,25 +43,29 @@ pub fn verify_voucher_signature(
 }
 
 pub fn voucher_pubkey(env: &Env, expert: &Address) -> Option<BytesN<32>> {
+    let key = (symbol_short!("exp_v_pk"), expert.clone());
     env.storage()
         .persistent()
-        .get(&DataKey::ExpertVoucherPubkey(expert.clone()))
+        .get(&key)
 }
 
 pub fn set_voucher_pubkey(env: &Env, expert: &Address, public_key: BytesN<32>) {
+    let key = (symbol_short!("exp_v_pk"), expert.clone());
     env.storage()
         .persistent()
-        .set(&DataKey::ExpertVoucherPubkey(expert.clone()), &public_key);
+        .set(&key, &public_key);
 }
 
 pub fn is_nonce_consumed(env: &Env, expert: &Address, nonce: u64) -> bool {
+    let key = (symbol_short!("v_nonce"), expert.clone(), nonce);
     env.storage()
         .persistent()
-        .has(&DataKey::VoucherNonceConsumed(expert.clone(), nonce))
+        .has(&key)
 }
 
 pub fn consume_nonce(env: &Env, expert: &Address, nonce: u64) {
+    let key = (symbol_short!("v_nonce"), expert.clone(), nonce);
     env.storage()
         .persistent()
-        .set(&DataKey::VoucherNonceConsumed(expert.clone(), nonce), &true);
+        .set(&key, &true);
 }

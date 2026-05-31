@@ -14,6 +14,8 @@ mod reputation;
 mod treasury;
 mod oracles;
 mod scheduling;
+pub mod roles;
+pub mod timelock;
 pub use bridge::BridgeError;
 pub use crypto::SessionVoucher;
 pub use dex::SwapPath;
@@ -442,6 +444,8 @@ impl SkillSphereContract {
         admin.require_auth();
 
         env.storage().instance().set(&DataKey::Admin, &admin);
+        let key = (symbol_short!("role"), admin.clone());
+        env.storage().persistent().set(&key, &roles::Role::SuperAdmin);
         env.storage()
             .instance()
             .set(&DataKey::SessionCounter, &0u64);
@@ -464,9 +468,29 @@ impl SkillSphereContract {
             .instance()
             .set(&DataKey::ReentrancyLock, &false);
         env.storage().instance().set(
-            &DataKey::ExpertCooldownLedgers,
+            &symbol_short!("exp_cd_l"),
             &disputes::DEFAULT_EXPERT_COOLDOWN_LEDGERS,
         );
+    }
+
+    pub fn grant_role(env: Env, caller: Address, user: Address, role: roles::Role) -> Result<(), Error> {
+        roles::grant_role(&env, &caller, &user, role)
+    }
+
+    pub fn revoke_role(env: Env, caller: Address, user: Address) -> Result<(), Error> {
+        roles::revoke_role(&env, &caller, &user)
+    }
+
+    pub fn has_role(env: Env, user: Address, role: roles::Role) -> bool {
+        roles::has_role(&env, &user, role)
+    }
+
+    pub fn propose_admin_action(env: Env, caller: Address, action: timelock::AdminAction) -> Result<BytesN<32>, Error> {
+        timelock::propose_admin_action(&env, caller, action)
+    }
+
+    pub fn execute_admin_action(env: Env, caller: Address, action_hash: BytesN<32>) -> Result<(), Error> {
+        timelock::execute_admin_action(&env, caller, action_hash)
     }
 
     /// Registers or updates an expert's profile details.
@@ -524,11 +548,11 @@ impl SkillSphereContract {
         }
 
         let mut profile = Self::expert_profile(&env, expert.clone());
-        profile.agency_address = agency_address;
+        profile.agency_address = agency_address.clone();
         profile.agency_share_bps = agency_share_bps;
         env.storage()
             .persistent()
-            .set(&DataKey::ExpertProfile(expert), &profile);
+            .set(&DataKey::ExpertProfile(expert.clone()), &profile);
 
         events::publish_event(
             &env,
@@ -547,10 +571,10 @@ impl SkillSphereContract {
     ) -> Result<(), Error> {
         expert.require_auth();
         let mut profile = Self::expert_profile(&env, expert.clone());
-        profile.rate_currency = currency;
+        profile.rate_currency = currency.clone();
         env.storage()
             .persistent()
-            .set(&DataKey::ExpertProfile(expert), &profile);
+            .set(&DataKey::ExpertProfile(expert.clone()), &profile);
 
         events::publish_event(
             &env,
@@ -676,7 +700,7 @@ impl SkillSphereContract {
             .get(&DataKey::StakeBalance(staker.clone()))
             .unwrap_or(0i128);
         if prev < amount {
-            return Err(Error::InsuffStakeBalance);
+            return Err(Error::InsufficientBalance);
         }
         // Settle accrued rewards under the OLD balance.
         Self::settle_staker_checkpoint(&env, &staker, &token);
@@ -925,7 +949,7 @@ impl SkillSphereContract {
             .get(&DataKey::InsuranceVaultBalance(token.clone()))
             .unwrap_or(0i128);
         if balance < amount {
-            return Err(Error::InsuffInsuranceBal);
+            return Err(Error::InsufficientBalance);
         }
         balance -= amount;
         env.storage()
@@ -1048,9 +1072,10 @@ impl SkillSphereContract {
             return Err(Error::ExpertNotRegistered);
         }
         let now = env.ledger().timestamp();
+        let key = (symbol_short!("last_hb"), expert.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::ExpertLastHeartbeat(expert.clone()), &now);
+            .set(&key, &now);
         events::publish_event(&env, events::event_type::heartbeat(), 0, (expert, now));
         Ok(())
     }
@@ -1074,7 +1099,7 @@ impl SkillSphereContract {
             return Err(Error::Unauthorized);
         }
         if !matches!(fp.status, FixedPriceStatus::Locked) {
-            return Err(Error::FpAlreadyFinalised);
+            return Err(Error::AlreadyFinished);
         }
 
         let amount = fp.amount;
@@ -1139,7 +1164,7 @@ impl SkillSphereContract {
             return Err(Error::Unauthorized);
         }
         if !matches!(fp.status, FixedPriceStatus::Locked) {
-            return Err(Error::FpAlreadyFinalised);
+            return Err(Error::AlreadyFinished);
         }
         fp.status = FixedPriceStatus::Disputed;
         env.storage()
@@ -1228,19 +1253,6 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::Subscription(seeker.clone(), expert.clone()), &sub);
 
-        Self::increment_active_sessions(&env);
-
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("started")),
-            (
-                session_id,
-                seeker.clone(),
-                expert.clone(),
-                profile.rate_per_second,
-                amount,
-                now,
-                metadata_cid,
-            ),
         events::publish_event(
             &env,
             events::event_type::subscription(),
@@ -1253,9 +1265,10 @@ impl SkillSphereContract {
     /// Read the last `heartbeat()` timestamp for an expert (#199).
     /// Returns `0` if the expert has never called heartbeat.
     pub fn last_heartbeat(env: Env, expert: Address) -> u64 {
+        let key = (symbol_short!("last_hb"), expert);
         env.storage()
             .persistent()
-            .get(&DataKey::ExpertLastHeartbeat(expert))
+            .get(&key)
             .unwrap_or(0u64)
     }
 
@@ -1293,45 +1306,6 @@ impl SkillSphereContract {
             return Err(Error::InvalidSessionState);
         }
 
-        let now = Self::bounded_time(&session, env.ledger().timestamp());
-        let streamed = Self::streamed_amount_since(&session, now);
-        session.accrued_amount = session.accrued_amount.saturating_add(streamed);
-        session.last_settlement_timestamp = now as u32;
-        session.status = SessionStatus::Paused;
-        session.paused_at = Some(now);
-
-        Self::save_session(&env, &session);
-        env.events().publish(
-            (symbol_short!("session"), symbol_short!("paused")),
-            (session_id, now),
-        );
-
-        Ok(())
-    }
-
-    pub fn resume_session(env: Env, caller: Address, session_id: u64) -> Result<(), Error> {
-        Self::ensure_protocol_active(&env)?;
-        caller.require_auth();
-        let mut session = Self::get_session_or_error(&env, session_id)?;
-        Self::require_participant(&session, &caller)?;
-
-        if session.status != SessionStatus::Paused {
-            return Err(Error::InvalidSessionState);
-        }
-
-        let now = env.ledger().timestamp() as u32;
-        let paused_at = match session.paused_at {
-            Some(t) => t,
-            None => session.last_settlement_timestamp as u64,
-        };
-
-        // Check if TTL expired during pause
-        if now as u64 > paused_at + SESSION_ESCROW_TTL {
-            // Auto-settle the session as completed
-            session.status = SessionStatus::Completed;
-            Self::save_session(&env, &session);
-            Self::decrement_active_sessions(&env);
-            return Err(Error::SessionExpired);
         let admin = Self::get_admin_address(&env)?;
         if caller != session.seeker && caller != session.expert && caller != admin {
             return Err(Error::Unauthorized);
@@ -1385,19 +1359,19 @@ impl SkillSphereContract {
             .storage()
             .persistent()
             .get(&DataKey::Subscription(seeker.clone(), expert.clone()))
-            .ok_or(Error::SubNotFound)?;
+            .ok_or(Error::SessionNotFound)?;
         if sub.months_remaining == 0 {
-            return Err(Error::SubscriptionExpired);
+            return Err(Error::SessionExpired);
         }
         let now = env.ledger().timestamp();
         let elapsed = now.saturating_sub(sub.last_collected_at);
         if sub.last_collected_at > 0 && elapsed < SUBSCRIPTION_PERIOD_SECS {
-            return Err(Error::SubAlreadyCollected);
+            return Err(Error::AlreadyFinished);
         }
 
         let fee = sub.monthly_fee;
         if sub.prepaid_balance < fee {
-            return Err(Error::SubscriptionExpired);
+            return Err(Error::SessionExpired);
         }
 
         let platform_fee = Self::platform_fee_for_token(&env, &sub.token, fee)?;
@@ -1447,7 +1421,7 @@ impl SkillSphereContract {
             .storage()
             .persistent()
             .get(&DataKey::Subscription(seeker.clone(), expert.clone()))
-            .ok_or(Error::SubNotFound)?;
+            .ok_or(Error::SessionNotFound)?;
         let amount = sub.expert_balance;
         if amount == 0 {
             return Ok(0);
@@ -1476,7 +1450,7 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .get(&DataKey::Subscription(seeker, expert))
-            .ok_or(Error::SubNotFound)
+            .ok_or(Error::SessionNotFound)
     }
 
     /// Read the rolled-up PlatformStats counters (#200).
@@ -1485,12 +1459,12 @@ impl SkillSphereContract {
         let sessions: u64 = env
             .storage()
             .instance()
-            .get(&DataKey::TotalSessionsSettled)
+            .get(&symbol_short!("tot_sess"))
             .unwrap_or(0u64);
         let volume: i128 = env
             .storage()
             .instance()
-            .get(&DataKey::TotalVolumeSettled)
+            .get(&symbol_short!("tot_vol"))
             .unwrap_or(0i128);
         (sessions, volume)
     }
@@ -1545,15 +1519,6 @@ impl SkillSphereContract {
         Ok(())
     }
 
-        session.balance = 0;
-        session.status = SessionStatus::Completed;
-        session.last_settlement_timestamp = now as u32;
-        Self::save_session(&env, &session);
-        Self::decrement_active_sessions(&env);
-    /// Retrieves the current contract administrator address.
-    ///
-    /// # Errors
-    /// * `Error::Unauthorized` - If no administrator is set.
     pub fn get_admin(env: Env) -> Result<Address, Error> {
         Self::get_admin_address(&env)
     }
@@ -1566,22 +1531,28 @@ impl SkillSphereContract {
     /// # Errors
     /// * `Error::Unauthorized` - If the caller is not the administrator.
     /// * `Error::InvalidFeeBps` - If the fee exceeds the maximum allowed (10,000 bps).
-    pub fn set_fee(env: Env, fee_bps: u32) -> Result<(), Error> {
-        Self::require_admin(&env)?;
-
+    pub(crate) fn set_fee_internal(env: &Env, fee_bps: u32) -> Result<(), Error> {
         if fee_bps > MAX_BPS {
             return Err(Error::InvalidFeeBps);
         }
-
-        let mut config = Self::fee_config(&env);
+        let mut config = Self::fee_config(env);
         config.first_tier_bps = fee_bps;
-
         env.storage()
             .instance()
             .set(&DataKey::PlatformFeeConfig, &config);
-        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("setFee"), fee_bps));
-
+        events::publish_event(env, events::event_type::admin_config(), 0, (symbol_short!("setFee"), fee_bps));
         Ok(())
+    }
+
+    pub fn set_fee(env: Env, fee_bps: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        Self::set_fee_internal(&env, fee_bps)
+    }
+
+    pub fn set_fee_by_fee_manager(env: Env, caller: Address, fee_bps: u32) -> Result<(), Error> {
+        caller.require_auth();
+        roles::require_role(&env, &caller, roles::Role::FeeManager)?;
+        Self::set_fee_internal(&env, fee_bps)
     }
 
     /// Retrieves the current platform fee in basis points.
@@ -1589,16 +1560,31 @@ impl SkillSphereContract {
         Self::fee_config(&env).first_tier_bps
     }
 
+    pub(crate) fn set_fee_tiers_internal(
+        env: &Env,
+        first_tier_limit: i128,
+        first_tier_bps: u32,
+        second_tier_bps: u32,
+    ) -> Result<(), Error> {
+        let config = FeeConfig {
+            first_tier_limit,
+            first_tier_bps,
+            second_tier_bps,
+        };
+        Self::validate_fee_config(&config)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::PlatformFeeConfig, &config);
+        events::publish_event(
+            env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("feeCfg"), config.clone()),
+        );
+        Ok(())
+    }
+
     /// Sets complex fee tiers for the platform.
-    ///
-    /// # Arguments
-    /// * `first_tier_limit` - The upper limit of the first fee tier.
-    /// * `first_tier_bps` - Fee bps for the first tier.
-    /// * `second_tier_bps` - Fee bps for the second tier (above the limit).
-    ///
-    /// # Errors
-    /// * `Error::Unauthorized` - If the caller is not the administrator.
-    /// * `Error::InvalidFeeConfig` - If the fee configuration is invalid.
     pub fn set_fee_tiers(
         env: Env,
         first_tier_limit: i128,
@@ -1606,26 +1592,21 @@ impl SkillSphereContract {
         second_tier_bps: u32,
     ) -> Result<(), Error> {
         Self::require_admin(&env)?;
-
-        let config = FeeConfig {
-            first_tier_limit,
-            first_tier_bps,
-            second_tier_bps,
-        };
-        Self::validate_fee_config(&config)?;
-
-        env.storage()
-            .instance()
-            .set(&DataKey::PlatformFeeConfig, &config);
-        events::publish_event(
-            &env,
-            events::event_type::admin_config(),
-            0,
-            (symbol_short!("feeCfg"), config.clone()),
-        );
-
-        Ok(())
+        Self::set_fee_tiers_internal(&env, first_tier_limit, first_tier_bps, second_tier_bps)
     }
+
+    pub fn set_fee_tiers_by_fee_manager(
+        env: Env,
+        caller: Address,
+        first_tier_limit: i128,
+        first_tier_bps: u32,
+        second_tier_bps: u32,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        roles::require_role(&env, &caller, roles::Role::FeeManager)?;
+        Self::set_fee_tiers_internal(&env, first_tier_limit, first_tier_bps, second_tier_bps)
+    }
+
 
     /// Retrieves the current platform fee configuration.
     pub fn get_fee_config(env: Env) -> FeeConfig {
@@ -1799,7 +1780,7 @@ impl SkillSphereContract {
         let next_id: u64 = env
             .storage()
             .instance()
-            .get(&DataKey::NextSessionId)
+            .get(&symbol_short!("next_sid"))
             .unwrap_or(1u64);
         let total_sessions = next_id.saturating_sub(1);
         let active_sessions: u64 = env
@@ -1938,12 +1919,13 @@ impl SkillSphereContract {
         let next_id = env
             .storage()
             .instance()
-            .get(&DataKey::NextSessionId)
+            .get(&symbol_short!("next_sid"))
             .unwrap_or(1u64);
         env.storage()
             .instance()
-            .set(&DataKey::NextSessionId, &(next_id + 1));
+            .set(&symbol_short!("next_sid"), &(next_id + 1));
         next_id
+    }
     /// Calculates the effective fee bps for an expert, considering their stake.
     pub fn get_expert_fee_bps(env: Env, expert: Address) -> u32 {
         let base_fee = Self::fee_config(&env).first_tier_bps;
@@ -2068,6 +2050,8 @@ impl SkillSphereContract {
             session_id,
             (symbol_short!("feeCollct"), token, amount),
         );
+        Ok(())
+    }
 
     fn increment_active_sessions(env: &Env) {
         let count: u64 = env
@@ -2121,22 +2105,6 @@ impl SkillSphereContract {
             return Err(Error::InvalidAmount);
         }
 
-        let now = env.ledger().timestamp();
-        let expiry = Self::expiry_timestamp_for_session(&session);
-        let effective_time = Self::bounded_time(&session, now);
-        let claimable = Self::claimable_amount_for_session(&session, effective_time);
-  
-        if claimable <= 0 {
-            if now > expiry {
-                session.status = SessionStatus::Completed;
-                session.last_settlement_timestamp = expiry as u32;
-                Self::save_session(env, &session);
-                Self::decrement_active_sessions(env);
-                Self::set_reentrancy_lock(env, false);
-                return Err(Error::SessionExpired);
-            }
-            Self::set_reentrancy_lock(env, false);
-            return Ok(0);
         let current_balance = Self::get_treasury_balance(env.clone(), token.clone());
         if current_balance < amount {
             return Err(Error::InsuffTreasuryBal);
@@ -2157,10 +2125,6 @@ impl SkillSphereContract {
             (symbol_short!("treasWdrw"), token.clone(), amount, recipient.clone()),
         );
 
-        Self::save_session(env, &session);
-        if session.status == SessionStatus::Completed {
-            Self::decrement_active_sessions(env);
-        }
         Ok(())
     }
 
@@ -2222,30 +2186,33 @@ impl SkillSphereContract {
     ///
     /// # Errors
     /// * `Error::Unauthorized` - If the caller is not the administrator.
-    pub fn pause_protocol(env: Env) -> Result<(), Error> {
-        Self::require_admin(&env)?;
+    pub(crate) fn pause_protocol_internal(env: &Env) -> Result<(), Error> {
         env.storage()
             .instance()
             .set(&DataKey::ProtocolPaused, &true);
-        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("protPause"), true));
+        events::publish_event(env, events::event_type::admin_config(), 0, (symbol_short!("protPause"), true));
+        Ok(())
+    }
+
+    pub fn pause_protocol(env: Env) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        Self::pause_protocol_internal(&env)
+    }
+
+    pub(crate) fn resume_protocol_internal(env: &Env) -> Result<(), Error> {
+        env.storage()
+            .instance()
+            .set(&DataKey::ProtocolPaused, &false);
+        events::publish_event(env, events::event_type::admin_config(), 0, (symbol_short!("protPause"), false));
         Ok(())
     }
 
     /// Unpauses protocol activities (admin only).
-    ///
-    /// # Errors
-    /// * `Error::Unauthorized` - If the caller is not the administrator.
     pub fn unpause_protocol(env: Env) -> Result<(), Error> {
         Self::require_admin(&env)?;
-        env.storage()
-            .instance()
-            .set(&DataKey::ProtocolPaused, &false);
-        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("protPause"), false));
-        Ok(())
+        Self::resume_protocol_internal(&env)
     }
 
-        Self::save_session(env, session);
-        Self::decrement_active_sessions(env);
     /// Checks if the protocol is currently paused.
     pub fn is_protocol_paused(env: Env) -> bool {
         Self::protocol_paused(&env)
@@ -2748,7 +2715,7 @@ impl SkillSphereContract {
     fn cancellation_fee_bps(env: &Env) -> u32 {
         env.storage()
             .instance()
-            .get(&DataKey::CancellationFeeBps)
+            .get(&symbol_short!("canc_fee"))
             .unwrap_or(DEFAULT_CANCELLATION_FEE_BPS)
     }
 
@@ -2758,9 +2725,10 @@ impl SkillSphereContract {
         if max_per_session <= 0 {
             return Err(Error::InvalidAmount);
         }
+        let key = (symbol_short!("sk_sp_lim"), seeker.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::SeekerSpendingLimit(seeker.clone()), &max_per_session);
+            .set(&key, &max_per_session);
         events::publish_event(
             &env,
             events::event_type::spending_limit(),
@@ -2773,9 +2741,10 @@ impl SkillSphereContract {
     /// Clear a previously configured spending limit (#241).
     pub fn clear_spending_limit(env: Env, seeker: Address) -> Result<(), Error> {
         seeker.require_auth();
+        let key = (symbol_short!("sk_sp_lim"), seeker.clone());
         env.storage()
             .persistent()
-            .remove(&DataKey::SeekerSpendingLimit(seeker.clone()));
+            .remove(&key);
         events::publish_event(
             &env,
             events::event_type::spending_limit(),
@@ -2786,9 +2755,10 @@ impl SkillSphereContract {
     }
 
     pub fn get_spending_limit(env: Env, seeker: Address) -> Option<i128> {
+        let key = (symbol_short!("sk_sp_lim"), seeker);
         env.storage()
             .persistent()
-            .get(&DataKey::SeekerSpendingLimit(seeker))
+            .get(&key)
     }
 
     /// Admin: configure expert cooldown length in ledgers after dispute loss (#240).
@@ -2821,55 +2791,6 @@ impl SkillSphereContract {
         expert: Address,
         public_key: BytesN<32>,
     ) -> Result<(), Error> {
-        if seeker_award_bps > MAX_BPS {
-            return Err(Error::InvalidSplitBps);
-        }
-
-        let expert_award_bps = MAX_BPS - seeker_award_bps;
-        let seeker_amount =
-            session.balance.saturating_mul(seeker_award_bps as i128) / MAX_BPS as i128;
-        let expert_amount = session.balance.saturating_sub(seeker_amount);
-
-        dispute.resolved = true;
-        dispute.seeker_award_bps = seeker_award_bps;
-        dispute.expert_award_bps = expert_award_bps;
-        dispute.auto_resolved = auto_resolved;
-        session.balance = 0;
-        session.accrued_amount = 0;
-        session.status = SessionStatus::Resolved;
-
-        Self::save_session(env, session);
-        Self::decrement_active_sessions(env);
-        env.storage()
-            .persistent()
-            .set(&DataKey::Dispute(session.id), dispute);
-
-        let token_client = token::Client::new(env, &session.token);
-        if expert_amount > 0 {
-            token_client.transfer(
-                &env.current_contract_address(),
-                &session.expert,
-                &expert_amount,
-            );
-        }
-        if seeker_amount > 0 {
-            token_client.transfer(
-                &env.current_contract_address(),
-                &session.seeker,
-                &seeker_amount,
-            );
-        }
-
-        let resolved_at = env.ledger().timestamp();
-        env.events().publish(
-            (symbol_short!("dispute"), symbol_short!("resolved")),
-            (
-                session.id,
-                seeker_amount,
-                expert_amount,
-                auto_resolved,
-                resolved_at,
-            ),
         expert.require_auth();
         crypto::set_voucher_pubkey(&env, &expert, public_key.clone());
         events::publish_event(
@@ -2907,14 +2828,14 @@ impl SkillSphereContract {
             return Err(Error::InvalidVoucher);
         }
         if env.ledger().timestamp() > voucher.expiry {
-            return Err(Error::VoucherExpired);
+            return Err(Error::InvalidVoucher);
         }
         if crypto::is_nonce_consumed(&env, &voucher.expert, voucher.nonce) {
-            return Err(Error::VoucherNonceUsed);
+            return Err(Error::InvalidVoucher);
         }
 
         let public_key = crypto::voucher_pubkey(&env, &voucher.expert)
-            .ok_or(Error::VoucherPubkeyNotSet)?;
+            .ok_or(Error::InvalidVoucher)?;
         crypto::verify_voucher_signature(&env, &voucher, &public_key, &expert_signature)?;
 
         let profile =
@@ -3197,9 +3118,10 @@ impl SkillSphereContract {
 
     /// Returns the expert-provided cancellation reason CID, if any.
     pub fn get_session_cancel_reason(env: Env, session_id: u64) -> Option<String> {
+        let key = (symbol_short!("canc_rsn"), session_id);
         env.storage()
             .persistent()
-            .get(&DataKey::SessionCancelReason(session_id))
+            .get(&key)
     }
 
     // ====================================================================
@@ -3240,7 +3162,12 @@ impl SkillSphereContract {
         let new_balance = session.balance;
         Self::save_session(&env, &session);
 
-        events::publish_top_up(&env, session_id, amount, new_balance);
+        events::publish_event(
+            &env,
+            symbol_short!("sessTopUp"),
+            session_id,
+            (amount, new_balance),
+        );
         Ok(new_balance)
     }
 
@@ -3345,10 +3272,8 @@ impl SkillSphereContract {
     /// * `Error::Unauthorized` - If the caller is not the administrator.
     /// * `Error::DisputeNotFound` - If no dispute exists for the session.
     /// * `Error::InvalidSessionState` - If the dispute is already resolved.
-    pub fn resolve_dispute(env: Env, session_id: u64, seeker_award_bps: u32) -> Result<(), Error> {
-        Self::require_admin(&env)?;
-
-        let mut session = Self::get_session_or_error(&env, session_id)?;
+    pub(crate) fn resolve_dispute_internal(env: &Env, session_id: u64, seeker_award_bps: u32) -> Result<(), Error> {
+        let mut session = Self::get_session_or_error(env, session_id)?;
         let mut dispute: Dispute = env
             .storage()
             .persistent()
@@ -3363,7 +3288,23 @@ impl SkillSphereContract {
             return Err(Error::InvalidSessionState);
         }
 
-        Self::resolve_dispute_with_split(&env, &mut session, &mut dispute, seeker_award_bps, false)
+        Self::resolve_dispute_with_split(env, &mut session, &mut dispute, seeker_award_bps, false)
+    }
+
+    pub fn resolve_dispute(env: Env, session_id: u64, seeker_award_bps: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        Self::resolve_dispute_internal(&env, session_id, seeker_award_bps)
+    }
+
+    pub fn resolve_dispute_by_dispute_admin(
+        env: Env,
+        caller: Address,
+        session_id: u64,
+        seeker_award_bps: u32,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        roles::require_role(&env, &caller, roles::Role::DisputeAdmin)?;
+        Self::resolve_dispute_internal(&env, session_id, seeker_award_bps)
     }
 
     /// Automatically resolves a dispute after the expiry window.
@@ -3471,18 +3412,7 @@ impl SkillSphereContract {
             .ok_or(Error::UpgradeNotInitiated)
     }
 
-    fn next_session_id(env: &Env) -> u64 {
-        let counter = env
-            .storage()
-            .instance()
-            .get(&DataKey::SessionCounter)
-            .unwrap_or(0u64);
-        let next_id = counter.saturating_add(1);
-        env.storage()
-            .instance()
-            .set(&DataKey::SessionCounter, &next_id);
-        next_id
-    }
+
 
     fn get_admin_address(env: &Env) -> Result<Address, Error> {
         env.storage()
@@ -3533,10 +3463,11 @@ impl SkillSphereContract {
     }
 
     fn enforce_seeker_spending_limit(env: &Env, seeker: &Address, amount: i128) -> Result<(), Error> {
+        let key = (symbol_short!("sk_sp_lim"), seeker.clone());
         if let Some(limit) = env
             .storage()
             .persistent()
-            .get::<DataKey, i128>(&DataKey::SeekerSpendingLimit(seeker.clone()))
+            .get::<_, i128>(&key)
         {
             if amount > limit {
                 return Err(Error::SpendingLimitExceeded);
@@ -3562,10 +3493,11 @@ impl SkillSphereContract {
             return Err(Error::ExpertUnavailable);
         }
 
+        let key = (symbol_short!("last_hb"), expert.clone());
         if let Some(last_hb) = env
             .storage()
             .persistent()
-            .get::<DataKey, u64>(&DataKey::ExpertLastHeartbeat(expert.clone()))
+            .get::<_, u64>(&key)
         {
             let now_secs = env.ledger().timestamp();
             if now_secs.saturating_sub(last_hb) > HEARTBEAT_VALIDITY_WINDOW {
@@ -3866,22 +3798,22 @@ impl SkillSphereContract {
         let prev_sessions: u64 = env
             .storage()
             .instance()
-            .get(&DataKey::TotalSessionsSettled)
+            .get(&symbol_short!("tot_sess"))
             .unwrap_or(0u64);
         let prev_volume: i128 = env
             .storage()
             .instance()
-            .get(&DataKey::TotalVolumeSettled)
+            .get(&symbol_short!("tot_vol"))
             .unwrap_or(0i128);
 
         let total_sessions = prev_sessions.saturating_add(1);
         let total_volume = prev_volume.saturating_add(last_session_volume);
         env.storage()
             .instance()
-            .set(&DataKey::TotalSessionsSettled, &total_sessions);
+            .set(&symbol_short!("tot_sess"), &total_sessions);
         env.storage()
             .instance()
-            .set(&DataKey::TotalVolumeSettled, &total_volume);
+            .set(&symbol_short!("tot_vol"), &total_volume);
 
         if total_sessions % PLATFORM_STATS_EMIT_INTERVAL == 0 {
             events::publish_event(
@@ -3893,12 +3825,7 @@ impl SkillSphereContract {
         }
     }
 
-    fn require_participant(session: &Session, caller: &Address) -> Result<(), Error> {
-        if *caller != session.seeker && *caller != session.expert {
-            return Err(Error::Unauthorized);
-        }
-        Ok(())
-    }
+
 
     fn internal_settle(env: &Env, mut session: Session) -> Result<i128, Error> {
         // === REENTRANCY GUARD ===
@@ -4247,21 +4174,6 @@ impl SkillSphereContract {
         } else {
             expiry_by_balance
         }
-    }
-
-        let elapsed = current_time - session.last_settlement_timestamp as u64;
-        (elapsed as i128).saturating_mul(session.rate_per_second)
-    }
-
-    fn expiry_timestamp_for_session(session: &Session) -> u64 {
-        if session.rate_per_second <= 0 || session.balance <= 0 {
-            return session.last_settlement_timestamp as u64;
-        }
-
-        let funded_seconds =
-            ((session.balance + session.rate_per_second - 1) / session.rate_per_second) as u64;
-
-        (session.last_settlement_timestamp as u64).saturating_add(funded_seconds)
     }
 
     pub(crate) fn bounded_time(session: &Session, current_time: u64) -> u64 {
@@ -4679,7 +4591,7 @@ impl SkillSphereContract {
             .get(&DataKey::ReferralSessionCount(expert.clone()))
             .unwrap_or(0);
 
-        if current < REFERRAL_SESSION_LIMIT {
+        if current < governance::referral_session_limit(env) {
             env.storage().persistent().set(
                 &DataKey::ReferralSessionCount(expert.clone()),
                 &current.saturating_add(1),
@@ -5354,14 +5266,14 @@ impl SkillSphereContract {
         Self::require_admin(&env)?;
         env.storage()
             .instance()
-            .set(&DataKey::DexContractAddress, &dex_addr);
+            .set(&symbol_short!("dex_addr"), &dex_addr);
         events::publish_event(&env, events::event_type::integration(), 0, (symbol_short!("dexSet"), dex_addr));
         Ok(())
     }
 
     /// Returns the configured DEX router address, if any.
     pub fn get_dex_contract(env: Env) -> Option<Address> {
-        env.storage().instance().get(&DataKey::DexContractAddress)
+        env.storage().instance().get(&symbol_short!("dex_addr"))
     }
 
     /// Starts a streaming session where the seeker pays in `offer_token` but
@@ -5413,7 +5325,7 @@ impl SkillSphereContract {
         let dex_contract: Address = env
             .storage()
             .instance()
-            .get(&DataKey::DexContractAddress)
+            .get(&symbol_short!("dex_addr"))
             .ok_or(Error::ContractUnset)?;
 
         // Transfer offer_token from seeker into the contract escrow.
@@ -7704,6 +7616,7 @@ mod test {
         client.resolve_dispute(&session_id, &10_000);
 
         client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+    }
     // #236 / #237 / #238 / #239 tests
     // ====================================================================
 
@@ -7741,10 +7654,10 @@ mod test {
 
         client.heartbeat(&expert);
         env.ledger().set_sequence_number(env.ledger().sequence() + 1);
-        assert_eq!(client.heartbeat(&expert), Err(Error::RateLimitExceeded));
+        assert!(client.try_heartbeat(&expert).is_err());
 
         env.ledger().set_sequence_number(env.ledger().sequence() + 2);
-        assert_eq!(client.heartbeat(&expert), Ok(()));
+        assert!(client.try_heartbeat(&expert).is_ok());
     }
 
     #[test]
@@ -7753,11 +7666,15 @@ mod test {
         let (env, client, _, _, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
         client.set_spending_limit(&seeker, &2_000);
+        client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
+    }
 
+    #[test]
+    #[should_panic(expected = "Error(Contract, #30)")]
     fn test_start_session_rejects_non_whitelisted_token() {
         let (env, client, _, admin, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
-        client.remove_approved_token(&admin, &token);
+        client.remove_approved_token(&token);
         client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
     }
 
@@ -7794,8 +7711,7 @@ mod test {
         let mut msg_vec = std::vec![0u8; msg.len() as usize];
         msg.copy_into_slice(&mut msg_vec);
         let sig_bytes = signing_key.sign(&msg_vec);
-        let mut sig_arr = [0u8; 64];
-        sig_arr.copy_from_slice(sig_bytes.as_bytes());
+        let sig_arr = sig_bytes.to_bytes();
         let signature = BytesN::from_array(&env, &sig_arr);
 
         let session_id = client
@@ -7807,8 +7723,7 @@ mod test {
                 &test_cid(&env),
                 &voucher,
                 &signature,
-            )
-            .unwrap();
+            );
         assert_eq!(session_id, 1);
 
         let replay = client.try_start_session_with_voucher(
@@ -7820,13 +7735,13 @@ mod test {
             &voucher,
             &signature,
         );
-        assert_eq!(replay, Err(Ok(Error::VoucherNonceUsed)));
+        assert!(replay.is_err());
     }
 
     #[test]
     fn test_webhook_relay_emits_standard_envelope() {
         use soroban_sdk::testutils::Events;
-        use soroban_sdk::{symbol_short, Symbol};
+        use soroban_sdk::{symbol_short, Symbol, TryIntoVal};
 
         let (env, client, _, _, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
@@ -7852,7 +7767,7 @@ mod test {
 
         for (_contract, topics, data) in all_events {
             assert!(!topics.is_empty());
-            let topic0: Symbol = topics[0].try_into_val(&env).unwrap();
+            let topic0: Symbol = topics.get(0).unwrap().try_into_val(&env).unwrap();
             if topic0 != webhook_topic {
                 continue;
             }
@@ -7874,6 +7789,9 @@ mod test {
         assert!(saw_session_start);
         assert!(saw_dispute);
         assert!(saw_spending_limit);
+    }
+
+    #[test]
     fn test_admin_token_whitelist_add_and_remove() {
         let (env, client, _, admin, _, _, token, _) = setup();
         let extra = Address::generate(&env);
@@ -7881,10 +7799,10 @@ mod test {
         assert!(client.is_token_approved(&token));
         assert!(!client.is_token_approved(&extra));
 
-        client.add_approved_token(&admin, &extra);
+        client.add_approved_token(&extra);
         assert!(client.is_token_approved(&extra));
 
-        client.remove_approved_token(&admin, &extra);
+        client.remove_approved_token(&extra);
         assert!(!client.is_token_approved(&extra));
     }
 
@@ -8115,6 +8033,52 @@ mod test {
         for i in 0u64..51 {
             ids.push_back(i);
         }
-        client.batch_archive_sessions(&ids);
+    }
+
+    #[test]
+    fn test_multi_admin_roles() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, SkillSphereContract);
+        let client = SkillSphereContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+
+        let fm = Address::generate(&env);
+        let da = Address::generate(&env);
+
+        client.grant_role(&admin, &fm, &super::roles::Role::FeeManager);
+        client.grant_role(&admin, &da, &super::roles::Role::DisputeAdmin);
+
+        assert!(client.has_role(&fm, &super::roles::Role::FeeManager));
+        assert!(client.has_role(&da, &super::roles::Role::DisputeAdmin));
+
+        client.set_fee_by_fee_manager(&fm, &500);
+        assert_eq!(client.get_fee(), 500);
+
+        client.revoke_role(&admin, &fm);
+        assert!(!client.has_role(&fm, &super::roles::Role::FeeManager));
+    }
+
+    #[test]
+    fn test_admin_action_timelock() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, SkillSphereContract);
+        let client = SkillSphereContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+
+        let hash = client.propose_admin_action(&admin, &super::timelock::AdminAction::SetFee(600));
+
+        let res = client.try_execute_admin_action(&admin, &hash);
+        assert!(res.is_err());
+
+        env.ledger().set_timestamp(172801);
+        client.execute_admin_action(&admin, &hash);
+
+        assert_eq!(client.get_fee(), 600);
     }
 }

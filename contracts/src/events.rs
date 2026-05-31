@@ -21,7 +21,7 @@ pub fn publish_event<P>(
             event_type,
             session_id,
             env.ledger().timestamp(),
-            payload,
+            payload.into_val(env),
         ),
     );
 }

@@ -48,7 +48,7 @@ fn migrate_v1_to_v2(env: &Env) {
     let next_id: u64 = env
         .storage()
         .instance()
-        .get(&DataKey::NextSessionId)
+        .get(&soroban_sdk::symbol_short!("next_sid"))
         .unwrap_or(1u64);
 
     for id in 1..next_id {
@@ -66,18 +66,24 @@ fn migrate_v1_to_v2(env: &Env) {
             {
                 let v2 = Session {
                     id: v1.id,
-                    seeker: v1.seeker,
-                    expert: v1.expert,
-                    token: v1.token,
+                    seeker: v1.seeker.clone(),
+                    expert: v1.expert.clone(),
+                    token: v1.token.clone(),
                     rate_per_second: v1.rate_per_second,
                     balance: v1.balance,
                     last_settlement_timestamp: v1.last_settlement_timestamp,
                     start_timestamp: v1.start_timestamp,
+                    scheduled_start: None,
+                    duration_cap: None,
                     accrued_amount: v1.accrued_amount,
                     status: v1.status,
                     metadata_cid: v1.metadata_cid,
                     encrypted_notes_hash: None,
                     paused_at: None,
+                    agency_address: None,
+                    agency_share_bps: 0,
+                    rate_currency: crate::RateCurrency::XLM,
+                    locked_xlm_rate: None,
                 };
                 env.storage().persistent().set(&key, &v2);
             }
@@ -139,7 +145,7 @@ mod test {
         env.as_contract(&contract_id, || {
             env.storage()
                 .instance()
-                .set(&DataKey::NextSessionId, &2u64);
+                .set(&soroban_sdk::symbol_short!("next_sid"), &2u64);
             env.storage()
                 .persistent()
                 .set(&DataKey::Session(1), &v1);
