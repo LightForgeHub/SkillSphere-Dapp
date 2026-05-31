@@ -78,6 +78,7 @@ pub enum DataKey {
     TreasuryBalance(Address),
     ArbitrationCommittee,
     ContractVersion,
+    ActiveSessionCount,
 }
 
 #[contracttype]
@@ -146,6 +147,16 @@ pub struct Session {
     pub metadata_cid: String,
     pub encrypted_notes_hash: Option<String>,
     pub paused_at: Option<u64>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractStatus {
+    pub version: u32,
+    pub admin: Option<Address>,
+    pub is_paused: bool,
+    pub total_sessions: u64,
+    pub active_sessions: u64,
 }
 
 #[contract]
@@ -609,6 +620,8 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::Session(session_id), &session);
 
+        Self::increment_active_sessions(&env);
+
         env.events().publish(
             (symbol_short!("session"), symbol_short!("started")),
             (
@@ -686,6 +699,7 @@ impl SkillSphereContract {
             // Auto-settle the session as completed
             session.status = SessionStatus::Completed;
             Self::save_session(&env, &session);
+            Self::decrement_active_sessions(&env);
             return Err(Error::SessionExpired);
         }
 
@@ -784,6 +798,7 @@ impl SkillSphereContract {
         session.status = SessionStatus::Completed;
         session.last_settlement_timestamp = now as u32;
         Self::save_session(&env, &session);
+        Self::decrement_active_sessions(&env);
 
         env.events().publish(
             (symbol_short!("session"), symbol_short!("noShowRf")),
@@ -977,6 +992,35 @@ impl SkillSphereContract {
             .unwrap_or(1u32)
     }
 
+    pub fn health_check(env: Env) -> ContractStatus {
+        let version: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ContractVersion)
+            .unwrap_or(1u32);
+        let admin: Option<Address> = env.storage().instance().get(&DataKey::Admin);
+        let is_paused = Self::protocol_paused(&env);
+        let next_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::NextSessionId)
+            .unwrap_or(1u64);
+        let total_sessions = next_id.saturating_sub(1);
+        let active_sessions: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveSessionCount)
+            .unwrap_or(0u64);
+
+        ContractStatus {
+            version,
+            admin,
+            is_paused,
+            total_sessions,
+            active_sessions,
+        }
+    }
+
     /// Migrate storage schema to `new_version`. Admin-only, runs once per version bump.
     pub fn migrate(env: Env, new_version: u32) -> Result<(), Error> {
         Self::require_admin(&env)?;
@@ -1069,6 +1113,28 @@ impl SkillSphereContract {
             .set(&DataKey::Session(session.id), session);
     }
 
+    fn increment_active_sessions(env: &Env) {
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveSessionCount)
+            .unwrap_or(0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::ActiveSessionCount, &count.saturating_add(1));
+    }
+
+    fn decrement_active_sessions(env: &Env) {
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveSessionCount)
+            .unwrap_or(0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::ActiveSessionCount, &count.saturating_sub(1));
+    }
+
     fn require_participant(session: &Session, caller: &Address) -> Result<(), Error> {
         if *caller != session.seeker && *caller != session.expert {
             return Err(Error::Unauthorized);
@@ -1102,6 +1168,7 @@ impl SkillSphereContract {
                 session.status = SessionStatus::Completed;
                 session.last_settlement_timestamp = expiry as u32;
                 Self::save_session(env, &session);
+                Self::decrement_active_sessions(env);
                 Self::set_reentrancy_lock(env, false);
                 return Err(Error::SessionExpired);
             }
@@ -1133,6 +1200,9 @@ impl SkillSphereContract {
         let token = session.token.clone();
 
         Self::save_session(env, &session);
+        if session.status == SessionStatus::Completed {
+            Self::decrement_active_sessions(env);
+        }
 
         // === INTERACTIONS ===
         let token_client = token::Client::new(env, &token);
@@ -1197,6 +1267,7 @@ impl SkillSphereContract {
         session.status = SessionStatus::Completed;
 
         Self::save_session(env, session);
+        Self::decrement_active_sessions(env);
 
         // === INTERACTIONS ===
         let token_client = token::Client::new(env, &session.token);
@@ -1373,6 +1444,7 @@ impl SkillSphereContract {
         session.status = SessionStatus::Resolved;
 
         Self::save_session(env, session);
+        Self::decrement_active_sessions(env);
         env.storage()
             .persistent()
             .set(&DataKey::Dispute(session.id), dispute);
@@ -2675,5 +2747,39 @@ mod test {
 
         assert_eq!(results.get(0).unwrap(), 95);
         assert_eq!(results.get(1).unwrap(), 0);
+    }
+
+    // --- #247: health_check ---
+
+    #[test]
+    fn test_health_check_returns_correct_status() {
+        let (env, client, _, admin, seeker, expert, token, _) = setup();
+
+        // Before any sessions: total=0, active=0, not paused, version=1
+        let status = client.health_check();
+        assert_eq!(status.version, 1);
+        assert_eq!(status.admin, Some(admin));
+        assert!(!status.is_paused);
+        assert_eq!(status.total_sessions, 0);
+        assert_eq!(status.active_sessions, 0);
+
+        // Start a session: total=1, active=1
+        register_and_avail(&env, &client, &expert, 10);
+        client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+        let status = client.health_check();
+        assert_eq!(status.total_sessions, 1);
+        assert_eq!(status.active_sessions, 1);
+
+        // Settle the session fully: active drops to 0
+        env.ledger().set_timestamp(1_300);
+        client.settle_session(&1);
+        let status = client.health_check();
+        assert_eq!(status.total_sessions, 1);
+        assert_eq!(status.active_sessions, 0);
+
+        // Pause the protocol
+        client.pause_protocol();
+        let status = client.health_check();
+        assert!(status.is_paused);
     }
 }
