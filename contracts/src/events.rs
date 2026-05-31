@@ -60,6 +60,26 @@ pub mod event_type {
         symbol_short!("sessVouch")
     }
 
+    pub fn session_reserved() -> Symbol {
+        symbol_short!("sessResrv")
+    }
+
+    pub fn session_reserved_activated() -> Symbol {
+        symbol_short!("sessRact")
+    }
+
+    pub fn session_cancelled() -> Symbol {
+        symbol_short!("sessCncl")
+    }
+
+    pub fn referral_commission_paid() -> Symbol {
+        symbol_short!("refComm")
+    }
+
+    pub fn revenue_shared() -> Symbol {
+        symbol_short!("revShare")
+    }
+
     pub fn dispute_flagged() -> Symbol {
         symbol_short!("dispFlag")
     }

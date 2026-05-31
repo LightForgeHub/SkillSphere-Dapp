@@ -35,8 +35,9 @@ pub enum Error {
     RatingSubmitted = 29,
     OracleNotTrusted = 30,
     InvalidOracleSig = 31,
-    InvalidSessionState = 32,
-    InsufficientBalance = 33,
+    OraclePriceUnavailable = 32,
+    InvalidSessionState = 33,
+    InsufficientBalance = 34,
 
     // #213 / #214
     BurnBpsExceedsFee = 34,

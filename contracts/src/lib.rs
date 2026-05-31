@@ -97,8 +97,10 @@ pub enum Error {
     ReentrancyDetected = 25,
     DepositTooLow = 26,
 }
-const REFERRAL_COMMISSION_BPS: u32 = 500; // 5% of platform fee for referrer
-const REFERRAL_SESSION_LIMIT: u32 = 10; // Referral commission applies to first X sessions
+const REFERRAL_COMMISSION_BPS: u32 = 500; // 5% commission of expert earnings paid from platform fee
+const DEFAULT_REFERRAL_SESSION_LIMIT: u32 = 50;
+const DEFAULT_CANCELLATION_FEE_BPS: u32 = 500;
+const CANCELLATION_GRACE_PERIOD_SECS: u64 = 60 * 60;
 const RATING_SCALE_MIN: u32 = 1;
 const RATING_SCALE_MAX: u32 = 5;
 // #213: default burn-share (in bps) of the treasury-bound portion of
@@ -154,94 +156,36 @@ pub enum DataKey {
     ReferralSessionCount(Address),
     TrustedOracle(Address),
     ExpertVerificationStatus(Address),
-    // #213 Dynamic Fee Burn: bps of the treasury-bound portion of the
-    // platform fee that gets burned on every settlement. Stored
-    // instance-wide; `None` (or 0) means burning is off.
     BurnBps,
-    // #213 per-token running total of burned amounts (the contract
-    // doesn't lose the tokens on-chain — it transfers them to a sink
-    // address or burn function; this counter tracks the volume).
     TotalBurned(Address),
-    // #214 Staking Yield Distributions:
-    //   StakeBalance(staker) → i128: live stake amount in the staking
-    //     token (kept in addition to the existing
-    //     ExpertStakedBalance so non-expert stakers are supported).
-    //   StakeStartedAt(staker) → u64: last stake timestamp for the
-    //     time-weight calculation.
-    //   StakingRewardPool(token) → i128: undistributed yield tokens.
-    //   StakingTotalStaked → i128: sum of live stake balances.
-    //   StakerRewardCheckpoint(staker, token) → i128: per-staker
-    //     reward integral checkpoint used by the lazy claim model.
     StakeBalance(Address),
     StakeStartedAt(Address),
     StakingRewardPool(Address),
     StakingTotalStaked,
     StakerRewardCheckpoint(Address, Address),
-    StakingRewardPerShare(Address), // accumulator, per (reward token)
-    // #196: per-asset platform fee override in basis points; if set,
-    // takes priority over the global tiered fee config for that token.
+    StakingRewardPerShare(Address),
     AssetFeeBps(Address),
-    // #197: insurance vault account address + per-token vault balances
-    // accrued from settlement diversions.
     InsuranceVaultAddress,
     InsuranceVaultBalance(Address),
-    // #194: fixed-price escrow sessions keyed by session_id from
-    // SessionCounter. Stored separately from streaming sessions so the
-    // streaming math path is never invoked on them.
     FixedPriceSession(u64),
-    // #195: subscription records keyed by (seeker, expert).
     Subscription(Address, Address),
-    // #199: last `heartbeat()` timestamp (seconds since unix epoch).
-    // Stored separately from ExpertProfile so adding the field is
-    // backward-compatible with existing on-chain profiles — no
-    // migration needed.
-    ExpertLastHeartbeat(Address),
-    // #200: running counters used by the rolled-up PlatformStats event.
-    TotalVolumeSettled,
-    TotalSessionsSettled,
-    // #202: Soulbound Skill Badges
+    SessionLastVerified(u64),
+    SessionFrozenFlag(u64),
+    UserTotalSpent(Address),
+    UserTotalEarned(Address),
     SbtContractAddress,
     ExpertBadge(Address),
     ExpertTotalSeconds(Address),
-    // #203: Periodic Re-Verification for Long-Term Escrows
-    SessionLastVerified(u64),
-    SessionFrozenFlag(u64),
-    // #204: Community Treasury Voting Power
-    UserTotalSpent(Address),
-    UserTotalEarned(Address),
-    // #205: DEX Integration
-    DexContractAddress,
-    // #206: Privacy-preserving session handshakes (commit-reveal).
-    // Key: commitment_hash → CommitRecord { committer, created_at }.
-    // The seeker / expert identities are not stored on chain until the
-    // commitment is revealed; until that point only the hash is public.
     SessionCommit(BytesN<32>),
-    // #206 tombstone: marks a commitment hash whose preimage has been
-    // revealed. Kept after `SessionCommit` is removed so the same hash
-    // cannot be re-committed and re-revealed (replay protection).
     SessionCommitConsumed(BytesN<32>),
-    // #207: per-expert dynamic-pricing configuration.
-    //   ExpertPriceFeed(expert) → ExpertPriceFeedConfig {
-    //       oracle_contract, asset_pair, multiplier_bps,
-    //       max_staleness_seconds, fallback_rate_per_second
-    //   }
-    // When set, `get_dynamic_rate(expert)` reads from `oracle_contract`
-    // (via the `PriceOracleClient` trait below), scales by
-    // `multiplier_bps`, and rejects prices older than
-    // `max_staleness_seconds`. `fallback_rate_per_second` is used by
-    // call sites that opt into a "if oracle unavailable, fall back to
-    // a static rate" policy.
     ExpertPriceFeed(Address),
-    // #240: admin-configured cooldown length (ledgers) after dispute loss.
     ExpertCooldownLedgers,
-    // #240: temporary storage — ledger sequence until expert may accept sessions.
     ExpertCooldownUntil(Address),
-    // #241: optional per-seeker max deposit per session.
     SeekerSpendingLimit(Address),
-    // #242: ed25519 public key used to verify session vouchers.
     ExpertVoucherPubkey(Address),
-    // #242: tombstone for consumed voucher nonces (replay protection).
     VoucherNonceConsumed(Address, u64),
+    ReferralSessionLimit,
+    CancellationFeeBps,
 }
 
 #[contracttype]
@@ -249,10 +193,18 @@ pub enum DataKey {
 pub enum SessionStatus {
     Active,
     Paused,
+    Reserved,
     Completed,
     Disputed,
     Resolved,
     CancelledByExpert,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RateCurrency {
+    XLM,
+    USD,
 }
 
 /// Per-commitment metadata for the privacy-preserving session-handshake
@@ -324,6 +276,9 @@ pub struct ExpertProfile {
     pub rate_per_second: i128,
     pub metadata_cid: String,
     pub referrer: Option<Address>,
+    pub agency_address: Option<Address>,
+    pub agency_share_bps: u32,
+    pub rate_currency: RateCurrency,
     pub staked_balance: i128,
     pub reputation: u32,
     pub cross_chain_reputation: u32,
@@ -349,11 +304,17 @@ pub struct Session {
     pub balance: i128,
     pub last_settlement_timestamp: u32,
     pub start_timestamp: u32,
+    pub scheduled_start: Option<u64>,
+    pub duration_cap: Option<u64>,
     pub accrued_amount: i128,
     pub status: SessionStatus,
     pub metadata_cid: String,
     pub encrypted_notes_hash: Option<String>,
     pub paused_at: Option<u64>,
+    pub agency_address: Option<Address>,
+    pub agency_share_bps: u32,
+    pub rate_currency: RateCurrency,
+    pub locked_xlm_rate: Option<i128>,
 }
 
 #[contracttype]
@@ -493,14 +454,87 @@ impl SkillSphereContract {
     ///
     /// # Failure
     /// * Requires authentication from the expert.
-    pub fn register_expert(env: Env, expert: Address, rate: i128, metadata_cid: String) {
+    pub fn register_expert(
+        env: Env,
+        expert: Address,
+        rate: i128,
+        metadata_cid: String,
+        agency_address: Option<Address>,
+        agency_share_bps: Option<u32>,
+        rate_currency: RateCurrency,
+    ) {
         expert.require_auth();
+        let agency_share_bps = agency_share_bps.unwrap_or(0);
+        if agency_share_bps > MAX_BPS {
+            panic_with_error!(&env, Error::InvalidSplitBps);
+        }
+        if agency_share_bps > 0 && agency_address.is_none() {
+            panic_with_error!(&env, Error::InvalidSplitBps);
+        }
+
         let mut profile = Self::expert_profile(&env, expert.clone());
         profile.rate_per_second = rate;
         profile.metadata_cid = metadata_cid;
+        profile.agency_address = agency_address;
+        profile.agency_share_bps = agency_share_bps;
+        profile.rate_currency = rate_currency;
+
         env.storage()
             .persistent()
             .set(&DataKey::ExpertProfile(expert), &profile);
+    }
+
+    /// Updates an expert's agency split for future sessions only.
+    pub fn update_agency_split(
+        env: Env,
+        expert: Address,
+        agency_address: Option<Address>,
+        agency_share_bps: u32,
+    ) -> Result<(), Error> {
+        expert.require_auth();
+        if agency_share_bps > MAX_BPS {
+            return Err(Error::InvalidSplitBps);
+        }
+        if agency_share_bps > 0 && agency_address.is_none() {
+            return Err(Error::InvalidSplitBps);
+        }
+
+        let mut profile = Self::expert_profile(&env, expert.clone());
+        profile.agency_address = agency_address;
+        profile.agency_share_bps = agency_share_bps;
+        env.storage()
+            .persistent()
+            .set(&DataKey::ExpertProfile(expert), &profile);
+
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (symbol_short!("agencyUp"), expert, agency_address, agency_share_bps),
+        );
+        Ok(())
+    }
+
+    /// Sets the expert's rate currency (XLM or USD).
+    pub fn set_expert_rate_currency(
+        env: Env,
+        expert: Address,
+        currency: RateCurrency,
+    ) -> Result<(), Error> {
+        expert.require_auth();
+        let mut profile = Self::expert_profile(&env, expert.clone());
+        profile.rate_currency = currency;
+        env.storage()
+            .persistent()
+            .set(&DataKey::ExpertProfile(expert), &profile);
+
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            0,
+            (symbol_short!("rateCurr"), expert, currency),
+        );
+        Ok(())
     }
 
     /// Sets the availability status of an expert.
@@ -2311,6 +2345,12 @@ impl SkillSphereContract {
             Err(err) => panic_with_error!(&env, err),
         };
 
+        let locked_xlm_rate = if profile.rate_currency == RateCurrency::USD {
+            Self::lock_usd_rate_for_session(&env, &expert)
+        } else {
+            None
+        };
+
         let min_deposit = Self::min_session_deposit(&env);
         if amount < min_deposit {
             panic_with_error!(&env, Error::AmountBelowMinimum);
@@ -2333,7 +2373,233 @@ impl SkillSphereContract {
             profile.rate_per_second,
             amount,
             metadata_cid,
+            None,
+            None,
+            profile.agency_address.clone(),
+            profile.agency_share_bps,
+            profile.rate_currency.clone(),
+            locked_xlm_rate,
         )
+    }
+
+    /// Reserves a new session for a future start time.
+    ///
+    /// Funds are locked in escrow until the scheduled time arrives.
+    pub fn reserve_session(
+        env: Env,
+        seeker: Address,
+        expert: Address,
+        token: Address,
+        amount: i128,
+        min_reputation: u32,
+        scheduled_start: u64,
+        duration_cap: u64,
+        metadata_cid: String,
+    ) -> Result<u64, Error> {
+        seeker.require_auth();
+        Self::ensure_protocol_active(&env)?;
+        if let Err(e) = admin::rate_limit(&env, &seeker, admin::rate_limit_min_ledgers(&env)) {
+            panic_with_error!(&env, e);
+        }
+        if let Err(e) = admin::require_token_whitelisted(&env, &token) {
+            panic_with_error!(&env, e);
+        }
+        if !Self::is_valid_ipfs_cid(&metadata_cid) {
+            return Err(Error::InvalidCid);
+        }
+
+        if let Err(err) = Self::enforce_seeker_spending_limit(&env, &seeker, amount) {
+            return Err(err);
+        }
+
+        let profile = Self::assert_expert_can_accept_session(&env, expert.clone(), min_reputation)?;
+        if scheduled_start <= env.ledger().timestamp() {
+            return Err(Error::InvalidAmount);
+        }
+        if duration_cap == 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let min_deposit = Self::min_session_deposit(&env);
+        if amount < min_deposit {
+            return Err(Error::AmountBelowMinimum);
+        }
+
+        let min_escrow = profile
+            .rate_per_second
+            .saturating_mul(core::cmp::min(duration_cap, 300) as i128);
+        if amount < min_escrow {
+            return Err(Error::DepositTooLow);
+        }
+
+        let max_required = profile.rate_per_second.saturating_mul(duration_cap as i128);
+        if amount > max_required {
+            return Err(Error::InvalidAmount);
+        }
+
+        let token_client = token::Client::new(&env, &token);
+        if token_client.balance(&seeker) < amount {
+            return Err(Error::InsufficientBalance);
+        }
+
+        let locked_xlm_rate = if profile.rate_currency == RateCurrency::USD {
+            Self::lock_usd_rate_for_session(&env, &expert)
+        } else {
+            None
+        };
+
+        let session_id = Self::create_reserved_session(
+            &env,
+            seeker,
+            expert,
+            token,
+            profile.rate_per_second,
+            amount,
+            metadata_cid,
+            scheduled_start,
+            duration_cap,
+            profile.agency_address.clone(),
+            profile.agency_share_bps,
+            profile.rate_currency.clone(),
+            locked_xlm_rate,
+        );
+
+        Ok(session_id)
+    }
+
+    fn create_reserved_session(
+        env: &Env,
+        seeker: Address,
+        expert: Address,
+        token: Address,
+        rate_per_second: i128,
+        amount: i128,
+        metadata_cid: String,
+        scheduled_start: u64,
+        duration_cap: u64,
+        agency_address: Option<Address>,
+        agency_share_bps: u32,
+        rate_currency: RateCurrency,
+        locked_xlm_rate: Option<i128>,
+    ) -> u64 {
+        let token_client = token::Client::new(env, &token);
+        token_client.transfer(&seeker, &env.current_contract_address(), &amount);
+
+        let session_id = Self::next_session_id(env);
+        let start_ts = scheduled_start as u32;
+
+        let session = Session {
+            id: session_id,
+            seeker: seeker.clone(),
+            expert: expert.clone(),
+            token: token.clone(),
+            rate_per_second,
+            balance: amount,
+            last_settlement_timestamp: start_ts,
+            start_timestamp: start_ts,
+            scheduled_start: Some(scheduled_start),
+            duration_cap: Some(duration_cap),
+            accrued_amount: 0,
+            status: SessionStatus::Reserved,
+            metadata_cid: metadata_cid.clone(),
+            encrypted_notes_hash: None,
+            paused_at: None,
+            agency_address,
+            agency_share_bps,
+            rate_currency,
+            locked_xlm_rate,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Session(session_id), &session);
+        env.storage()
+            .persistent()
+            .set(&DataKey::SessionLastVerified(session_id), &(scheduled_start as u64));
+
+        events::publish_event(
+            env,
+            events::event_type::session_reserved(),
+            session_id,
+            (
+                seeker.clone(),
+                expert.clone(),
+                rate_per_second,
+                amount,
+                scheduled_start,
+                duration_cap,
+                metadata_cid,
+            ),
+        );
+
+        session_id
+    }
+
+    /// Cancels a reserved session before it begins.
+    ///
+    /// Full refund is available when cancellation happens before the
+    /// scheduled start minus the grace period. Later cancellations
+    /// forfeit a configurable fee.
+    pub fn cancel_reserved_session(
+        env: Env,
+        seeker: Address,
+        session_id: u64,
+    ) -> Result<(i128, i128), Error> {
+        seeker.require_auth();
+        let mut session = Self::get_session_or_error(&env, session_id)?;
+        if session.status != SessionStatus::Reserved {
+            return Err(Error::InvalidSessionState);
+        }
+        if seeker != session.seeker {
+            return Err(Error::Unauthorized);
+        }
+
+        let scheduled_start = session.scheduled_start.ok_or(Error::InvalidSessionState)?;
+        let now = env.ledger().timestamp();
+        if now >= scheduled_start {
+            return Err(Error::InvalidSessionState);
+        }
+
+        let fee_bps = Self::cancellation_fee_bps(&env);
+        let mut fee = 0i128;
+        if now > scheduled_start.saturating_sub(CANCELLATION_GRACE_PERIOD_SECS) {
+            fee = session.balance.saturating_mul(fee_bps as i128) / MAX_BPS as i128;
+        }
+        let refund = session.balance.saturating_sub(fee);
+        session.balance = 0;
+        session.accrued_amount = 0;
+        session.status = SessionStatus::Completed;
+        Self::save_session(&env, &session);
+
+        let token_client = token::Client::new(&env, &session.token);
+        if refund > 0 {
+            token_client.transfer(&env.current_contract_address(), &session.seeker, &refund);
+        }
+        if fee > 0 {
+            if let Some(treasury) = env
+                .storage()
+                .instance()
+                .get::<DataKey, Address>(&DataKey::TreasuryAddress)
+            {
+                token_client.transfer(&env.current_contract_address(), &treasury, &fee);
+            }
+        }
+
+        events::publish_event(
+            &env,
+            events::event_type::session_cancelled(),
+            session_id,
+            (refund, fee, scheduled_start),
+        );
+
+        Ok((refund, fee))
+    }
+
+    fn cancellation_fee_bps(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::CancellationFeeBps)
+            .unwrap_or(DEFAULT_CANCELLATION_FEE_BPS)
     }
 
     /// Seeker-imposed cap on the deposit amount for each new session (#241).
@@ -2508,6 +2774,12 @@ impl SkillSphereContract {
             return Err(Error::InvalidVoucher);
         }
 
+        let locked_xlm_rate = if profile.rate_currency == RateCurrency::USD {
+            Self::lock_usd_rate_for_session(&env, &voucher.expert)
+        } else {
+            None
+        };
+
         let max_escrow = voucher
             .rate_per_second
             .saturating_mul(voucher.max_duration as i128);
@@ -2539,6 +2811,12 @@ impl SkillSphereContract {
             voucher.rate_per_second,
             amount,
             metadata_cid,
+            None,
+            None,
+            profile.agency_address.clone(),
+            profile.agency_share_bps,
+            profile.rate_currency.clone(),
+            locked_xlm_rate,
         );
 
         events::publish_event(
@@ -3160,12 +3438,19 @@ impl SkillSphereContract {
         rate_per_second: i128,
         amount: i128,
         metadata_cid: String,
+        scheduled_start: Option<u64>,
+        duration_cap: Option<u64>,
+        agency_address: Option<Address>,
+        agency_share_bps: u32,
+        rate_currency: RateCurrency,
+        locked_xlm_rate: Option<i128>,
     ) -> u64 {
         let token_client = token::Client::new(env, &token);
         token_client.transfer(&seeker, &env.current_contract_address(), &amount);
 
         let session_id = Self::next_session_id(env);
         let now = env.ledger().timestamp() as u32;
+        let start_ts = scheduled_start.unwrap_or(now as u64) as u32;
 
         let session = Session {
             id: session_id,
@@ -3174,13 +3459,19 @@ impl SkillSphereContract {
             token: token.clone(),
             rate_per_second,
             balance: amount,
-            last_settlement_timestamp: now,
-            start_timestamp: now,
+            last_settlement_timestamp: start_ts,
+            start_timestamp: start_ts,
+            scheduled_start,
+            duration_cap,
             accrued_amount: 0,
             status: SessionStatus::Active,
             metadata_cid: metadata_cid.clone(),
             encrypted_notes_hash: None,
             paused_at: None,
+            agency_address,
+            agency_share_bps,
+            rate_currency: rate_currency.clone(),
+            locked_xlm_rate,
         };
 
         env.storage()
@@ -3206,11 +3497,51 @@ impl SkillSphereContract {
         session_id
     }
 
+    fn lock_usd_rate_for_session(env: &Env, expert: &Address) -> Option<i128> {
+        let cfg_opt: Option<ExpertPriceFeedConfig> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ExpertPriceFeed(expert.clone()));
+
+        let cfg = cfg_opt?;
+        let client = PriceOracleClient::new(env, &cfg.oracle_contract);
+        let (price, last_updated_at) = client.get_price(&cfg.asset_pair);
+        let now = env.ledger().timestamp() as u32;
+        if now.saturating_sub(last_updated_at) > cfg.max_staleness_seconds {
+            return None;
+        }
+
+        Some(price)
+    }
+
     fn get_session_or_error(env: &Env, session_id: u64) -> Result<Session, Error> {
-        env.storage()
+        let mut session: Session = env
+            .storage()
             .persistent()
             .get(&DataKey::Session(session_id))
-            .ok_or(Error::SessionNotFound)
+            .ok_or(Error::SessionNotFound)?;
+
+        if session.status == SessionStatus::Reserved {
+            if let Some(scheduled_start) = session.scheduled_start {
+                let now = env.ledger().timestamp();
+                if now >= scheduled_start {
+                    session.status = SessionStatus::Active;
+                    session.last_settlement_timestamp = scheduled_start as u32;
+                    session.start_timestamp = scheduled_start as u32;
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::Session(session.id), &session);
+                    events::publish_event(
+                        env,
+                        events::event_type::session_reserved_activated(),
+                        session.id,
+                        (session.expert.clone(), scheduled_start),
+                    );
+                }
+            }
+        }
+
+        Ok(session)
     }
 
     pub(crate) fn save_session(env: &Env, session: &Session) {
@@ -3462,12 +3793,23 @@ impl SkillSphereContract {
         // #196: per-asset fee override takes priority over the
         // tiered config for this session's funding token.
         let platform_fee = Self::platform_fee_for_token(env, &session.token, claimable)?;
+        let expert_earnings = claimable.saturating_sub(platform_fee);
         let referrer = Self::expert_referrer(env, &session.expert);
-        let referral_reward = if referrer.is_some() {
-            Self::calculate_referral_reward(platform_fee)
+        let referral_reward = if referrer.is_some()
+            && governance::referral_session_count(env, &session.expert)
+                < governance::referral_session_limit(env)
+        {
+            let potential = expert_earnings.saturating_mul(REFERRAL_COMMISSION_BPS as i128)
+                / MAX_BPS as i128;
+            if potential > platform_fee {
+                platform_fee
+            } else {
+                potential
+            }
         } else {
             0
         };
+
         // #197: slice 1% of the platform fee for the insurance fund
         // before it routes to treasury. Returns 0 when no vault is
         // configured, so deployments upgrade gracefully.
@@ -3479,7 +3821,13 @@ impl SkillSphereContract {
         let treasury_fee = platform_fee
             .saturating_sub(referral_reward)
             .saturating_sub(insurance_cut);
-        let mut expert_payout = claimable.saturating_sub(platform_fee);
+        let payout_before_agency = expert_earnings;
+        let agency_share = if let Some(_) = session.agency_address {
+            payout_before_agency.saturating_mul(session.agency_share_bps as i128) / MAX_BPS as i128
+        } else {
+            0
+        };
+        let mut expert_payout = payout_before_agency.saturating_sub(agency_share);
 
         // === EFFECTS ===
         session.balance -= claimable;
@@ -3499,8 +3847,28 @@ impl SkillSphereContract {
         // === INTERACTIONS ===
         let token_client = token::Client::new(env, &token);
         if referral_reward > 0 {
-            if let Some(referrer) = referrer {
+            if let Some(referrer) = referrer.clone() {
                 token_client.transfer(&env.current_contract_address(), &referrer, &referral_reward);
+                events::publish_event(
+                    env,
+                    events::event_type::referral_commission_paid(),
+                    session_id,
+                    (referrer, session.expert.clone(), referral_reward),
+                );
+            }
+        }
+
+        if session.agency_share_bps > 0 {
+            if let Some(agency) = session.agency_address.clone() {
+                if agency_share > 0 {
+                    token_client.transfer(&env.current_contract_address(), &agency, &agency_share);
+                }
+                events::publish_event(
+                    env,
+                    events::event_type::revenue_shared(),
+                    session_id,
+                    (expert_payout, agency_share),
+                );
             }
         }
 
@@ -3558,7 +3926,9 @@ impl SkillSphereContract {
         Self::maybe_emit_platform_stats(env, claimable);
 
         // Increment referral session count for referral commission tracking (Issue #52)
-        Self::increment_referral_session_count(env, &expert);
+        if referral_reward > 0 {
+            governance::increment_referral_session_count(env, &expert);
+        }
 
         // #204: accrue governance voting-power counters.
         governance::accrue_spent(env, &session.seeker, claimable);
@@ -3673,6 +4043,40 @@ impl SkillSphereContract {
         }
 
         let elapsed = current_time - session.last_settlement_timestamp as u64;
+        let base = (elapsed as i128).saturating_mul(session.rate_per_second);
+
+        if session.rate_currency == RateCurrency::USD {
+            if let Some(locked_rate) = session.locked_xlm_rate {
+                return base.saturating_mul(locked_rate) / MAX_BPS as i128;
+            }
+        }
+
+        base
+    }
+
+    fn expiry_timestamp_for_session(session: &Session) -> u64 {
+        if session.rate_per_second <= 0 || session.balance <= 0 {
+            return session.last_settlement_timestamp as u64;
+        }
+
+        let funded_seconds =
+            ((session.balance + session.rate_per_second - 1) / session.rate_per_second) as u64;
+        let expiry_by_balance = (session.last_settlement_timestamp as u64).saturating_add(funded_seconds);
+
+        if let Some(duration_cap) = session.duration_cap {
+            let start = session.scheduled_start.unwrap_or(session.start_timestamp as u64);
+            let expiry_by_cap = start.saturating_add(duration_cap);
+            if expiry_by_cap < expiry_by_balance {
+                expiry_by_cap
+            } else {
+                expiry_by_balance
+            }
+        } else {
+            expiry_by_balance
+        }
+    }
+
+        let elapsed = current_time - session.last_settlement_timestamp as u64;
         (elapsed as i128).saturating_mul(session.rate_per_second)
     }
 
@@ -3722,6 +4126,9 @@ impl SkillSphereContract {
                 rate_per_second: 0,
                 metadata_cid: String::from_str(env, ""),
                 referrer: None,
+                agency_address: None,
+                agency_share_bps: 0,
+                rate_currency: RateCurrency::XLM,
                 staked_balance: 0,
                 reputation: 0,
                 cross_chain_reputation: 0,
@@ -4046,6 +4453,9 @@ impl SkillSphereContract {
         profile.rate_per_second = rate;
         profile.metadata_cid = metadata_cid;
         profile.referrer = referrer_id.clone();
+        profile.agency_address = None;
+        profile.agency_share_bps = 0;
+        profile.rate_currency = RateCurrency::XLM;
 
         env.storage()
             .persistent()
@@ -5136,7 +5546,7 @@ mod test {
     #[should_panic(expected = "Error(Contract, #23)")]
     fn test_start_session_fails_if_expert_unavailable() {
         let (env, client, _, _, seeker, expert, token, _) = setup();
-        client.register_expert(&expert, &10, &test_cid(&env));
+        client.register_expert(&expert, &10, &test_cid(&env), &None, &None, &RateCurrency::XLM);
         client.set_availability(&expert, &false);
         client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
     }
@@ -5147,7 +5557,7 @@ mod test {
         let rate = 50;
         let cid = test_cid(&env);
 
-        client.register_expert(&expert, &rate, &cid);
+        client.register_expert(&expert, &rate, &cid, &None, &None, &RateCurrency::XLM);
         let profile = client.get_expert_profile(&expert);
         assert_eq!(profile.rate_per_second, rate);
         assert_eq!(profile.metadata_cid, cid);
@@ -5182,7 +5592,7 @@ mod test {
         rate: i128,
     ) {
         let cid = test_cid(env);
-        client.register_expert(expert, &rate, &cid);
+        client.register_expert(expert, &rate, &cid, &None, &None, &RateCurrency::XLM);
         client.set_availability(expert, &true);
     }
 
@@ -6935,7 +7345,7 @@ mod test {
     #[test]
     fn test_heartbeat_records_timestamp_and_emits_event() {
         let (env, client, _, _, _, expert, _, _) = setup();
-        client.register_expert(&expert, &10, &test_cid(&env));
+        client.register_expert(&expert, &10, &test_cid(&env), &None, &None, &RateCurrency::XLM);
 
         env.ledger().set_timestamp(2_000);
         client.heartbeat(&expert);
@@ -7127,7 +7537,7 @@ mod test {
     #[test]
     fn test_rate_limit_blocks_rapid_heartbeat_calls() {
         let (env, client, _, admin, _, expert, _, _) = setup();
-        client.register_expert(&expert, &10, &test_cid(&env));
+        client.register_expert(&expert, &10, &test_cid(&env), &None, &None, &RateCurrency::XLM);
         client.set_rate_limit_min_ledgers(&admin, &2);
 
         client.heartbeat(&expert);
