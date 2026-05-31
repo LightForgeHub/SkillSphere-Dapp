@@ -28,6 +28,8 @@ const FEE_REDUCTION_TIER_2_BPS: u32 = 200;
 const FEE_REDUCTION_TIER_3_BPS: u32 = 300;
 /// 90 days in seconds — minimum age of a completed session before archival.
 const ARCHIVE_DELAY_SECS: u64 = 90 * 24 * 60 * 60;
+/// Maximum number of sessions that can be archived in a single batch call.
+const MAX_ARCHIVE_BATCH_SIZE: u32 = 50;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -150,6 +152,13 @@ pub struct Session {
     pub metadata_cid: String,
     pub encrypted_notes_hash: Option<String>,
     pub paused_at: Option<u64>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArchiveSummary {
+    pub archived: u32,
+    pub skipped: u32,
 }
 
 #[contracttype]
@@ -1061,6 +1070,58 @@ impl SkillSphereContract {
     /// Read a session from temporary (archived) storage.
     pub fn get_archived_session(env: Env, session_id: u64) -> Option<Session> {
         storage::read_archive(&env, session_id)
+    }
+
+    /// Batch-archive up to `MAX_ARCHIVE_BATCH_SIZE` completed sessions.
+    /// Admin-only. Skips sessions that are not eligible without panicking.
+    pub fn batch_archive_sessions(
+        env: Env,
+        session_ids: Vec<u64>,
+    ) -> Result<ArchiveSummary, Error> {
+        Self::require_admin(&env)?;
+
+        if session_ids.len() > MAX_ARCHIVE_BATCH_SIZE {
+            return Err(Error::InvalidAmount);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut archived: u32 = 0;
+        let mut skipped: u32 = 0;
+
+        for session_id in session_ids.iter() {
+            let session = match env
+                .storage()
+                .persistent()
+                .get::<DataKey, Session>(&DataKey::Session(session_id))
+            {
+                Some(s) => s,
+                None => { skipped += 1; continue; }
+            };
+
+            let eligible = matches!(
+                session.status,
+                SessionStatus::Completed | SessionStatus::Resolved
+            ) && now >= (session.last_settlement_timestamp as u64).saturating_add(ARCHIVE_DELAY_SECS);
+
+            if !eligible {
+                skipped += 1;
+                continue;
+            }
+
+            storage::write_archive(&env, &session);
+            env.storage()
+                .persistent()
+                .remove(&DataKey::Session(session_id));
+
+            env.events().publish(
+                (symbol_short!("session"), symbol_short!("archived")),
+                (session_id, now),
+            );
+
+            archived += 1;
+        }
+
+        Ok(ArchiveSummary { archived, skipped })
     }
 
     /// Migrate storage schema to `new_version`. Admin-only, runs once per version bump.
@@ -2881,5 +2942,78 @@ mod test {
         let ninety_days: u64 = 90 * 24 * 60 * 60;
         env.ledger().set_timestamp(1_000 + ninety_days + 1);
         client.archive_session(&session_id);
+    }
+
+    // --- #249: batch_archive_sessions ---
+
+    #[test]
+    fn test_batch_archive_archives_eligible_sessions() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+        asset_admin.mint(&seeker, &6_000);
+
+        let s1 = client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+        let s2 = client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+
+        // Settle both sessions.
+        env.ledger().set_timestamp(1_300);
+        client.settle_session(&s1);
+        client.settle_session(&s2);
+
+        // Advance 90 days.
+        let ninety_days: u64 = 90 * 24 * 60 * 60;
+        env.ledger().set_timestamp(1_300 + ninety_days + 1);
+
+        let mut ids = Vec::new(&env);
+        ids.push_back(s1);
+        ids.push_back(s2);
+
+        let summary = client.batch_archive_sessions(&ids);
+        assert_eq!(summary.archived, 2);
+        assert_eq!(summary.skipped, 0);
+
+        assert!(client.get_archived_session(&s1).is_some());
+        assert!(client.get_archived_session(&s2).is_some());
+    }
+
+    #[test]
+    fn test_batch_archive_skips_ineligible_sessions() {
+        let (env, client, _, _, seeker, expert, token, _) = setup();
+        register_and_avail(&env, &client, &expert, 10);
+
+        // s1: completed and old enough
+        let s1 = client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+        env.ledger().set_timestamp(1_300);
+        client.settle_session(&s1);
+
+        let ninety_days: u64 = 90 * 24 * 60 * 60;
+        env.ledger().set_timestamp(1_300 + ninety_days + 1);
+
+        // s2: still active (not settled)
+        let asset_admin = token::StellarAssetClient::new(&env, &token);
+        asset_admin.mint(&seeker, &3_000);
+        let s2 = client.start_session(&seeker, &expert, &token, &3000, &0, &test_cid(&env));
+
+        // 999: non-existent
+        let mut ids = Vec::new(&env);
+        ids.push_back(s1);
+        ids.push_back(s2);
+        ids.push_back(999u64);
+
+        let summary = client.batch_archive_sessions(&ids);
+        assert_eq!(summary.archived, 1);
+        assert_eq!(summary.skipped, 2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_batch_archive_rejects_oversized_batch() {
+        let (env, client, _, _, _, _, _, _) = setup();
+        let mut ids = Vec::new(&env);
+        for i in 0u64..51 {
+            ids.push_back(i);
+        }
+        client.batch_archive_sessions(&ids);
     }
 }
