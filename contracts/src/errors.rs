@@ -63,4 +63,18 @@ pub enum Error {
 
     // #257
     TimelockActive = 57,
+
+    // #250 - Dispute cooling-off period
+    DisputeCoolingOff = 58,
+
+    // #251 - Dispute escalation to DAO
+    DisputeEscalated = 59,
+
+    // #252 - Expert handoff
+    HandoffProposalNotFound = 60,
+    HandoffExpired = 61,
+    InvalidHandoffTarget = 62,
+
+    // #253 - NFT minting
+    NftContractNotSet = 63,
 }

@@ -43,6 +43,15 @@ pub trait PriceOracle {
     fn get_price(env: Env, asset_pair: String) -> (i128, u32);
 }
 
+/// Cross-contract interface for the SkillSphere Profile NFT contract (issue #253).
+/// Mints soulbound profile tokens for experts on registration.
+#[contractclient(name = "ProfileNftClient")]
+pub trait ProfileNft {
+    /// Mint a profile NFT for the expert address with the given metadata CID.
+    /// Returns the token ID.
+    fn mint_profile(env: Env, expert: Address, metadata_cid: String) -> u64;
+}
+
 // Macro for panicking with an error
 macro_rules! panic_with_error {
     ($env:expr, $error:expr) => {
@@ -73,6 +82,12 @@ const FEE_REDUCTION_TIER_3_BPS: u32 = 300;
 const ARCHIVE_DELAY_SECS: u64 = 90 * 24 * 60 * 60;
 /// Maximum number of sessions that can be archived in a single batch call.
 const MAX_ARCHIVE_BATCH_SIZE: u32 = 50;
+/// Default dispute cooling-off period: 24 hours in seconds
+const DEFAULT_DISPUTE_COOLING_OFF_SECS: u64 = 24 * 60 * 60;
+/// Dispute escalation window: 7 days after raising
+const DISPUTE_ESCALATION_WINDOW_SECS: u64 = 7 * 24 * 60 * 60;
+/// Expert handoff proposal expiry: 30 minutes
+const HANDOFF_PROPOSAL_EXPIRY_SECS: u64 = 30 * 60;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -209,6 +224,15 @@ pub enum DataKey {
     LastOraclePrice,
     CircuitBreakerActive,
     MaxPriceDeviationBps,
+    // Issue #250 - Dispute cooling-off
+    DisputeCoolingOffDuration,
+    // Issue #251 - Dispute escalation
+    EscalatedDispute(u64),
+    // Issue #252 - Expert handoff
+    HandoffProposal(u64),
+    // Issue #253 - NFT minting
+    NftContractId,
+    ProfileNftMinted(Address),
 }
 
 #[contracttype]
@@ -283,6 +307,8 @@ pub struct Dispute {
     pub seeker_award_bps: u32,
     pub expert_award_bps: u32,
     pub auto_resolved: bool,
+    pub raised_at: u64,
+    pub escalated_to_dao: bool,
 }
 
 #[contracttype]
@@ -314,6 +340,17 @@ pub struct UpgradeTimelock {
     pub new_wasm_hash: BytesN<32>,
     pub initiated_at: u32,
     pub execute_after: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HandoffProposal {
+    pub session_id: u64,
+    pub current_expert: Address,
+    pub proposed_expert: Address,
+    pub proposed_at: u64,
+    pub expires_at: u64,
+    pub approved: bool,
 }
 
 #[contracttype]
@@ -522,14 +559,39 @@ impl SkillSphereContract {
 
         let mut profile = Self::expert_profile(&env, expert.clone());
         profile.rate_per_second = rate;
-        profile.metadata_cid = metadata_cid;
+        profile.metadata_cid = metadata_cid.clone();
         profile.agency_address = agency_address;
         profile.agency_share_bps = agency_share_bps;
         profile.rate_currency = rate_currency;
 
         env.storage()
             .persistent()
-            .set(&DataKey::ExpertProfile(expert), &profile);
+            .set(&DataKey::ExpertProfile(expert.clone()), &profile);
+
+        if let Some(nft_contract) = Self::get_nft_contract(&env) {
+            let nft_client = ProfileNftClient::new(&env, &nft_contract);
+            match nft_client.mint_profile(&expert, &metadata_cid) {
+                Ok(token_id) => {
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::ProfileNftMinted(expert.clone()), &token_id);
+                    events::publish_event(
+                        &env,
+                        events::event_type::expert_profile(),
+                        0,
+                        (symbol_short!("nftMint"), expert.clone(), token_id),
+                    );
+                }
+                Err(_) => {
+                    events::publish_event(
+                        &env,
+                        events::event_type::expert_profile(),
+                        0,
+                        (symbol_short!("nftFail"), expert.clone()),
+                    );
+                }
+            }
+        }
     }
 
     /// Updates an expert's agency split for future sessions only.
@@ -1171,15 +1233,18 @@ impl SkillSphereContract {
             .persistent()
             .set(&DataKey::FixedPriceSession(session_id), &fp);
 
+        let now = env.ledger().timestamp();
         let dispute = Dispute {
             session_id,
             reason,
             evidence_cid: evidence_cid.clone(),
-            created_at: env.ledger().timestamp() as u32,
+            created_at: now as u32,
             resolved: false,
             seeker_award_bps: 0,
             expert_award_bps: 0,
             auto_resolved: false,
+            raised_at: now,
+            escalated_to_dao: false,
         };
         env.storage()
             .persistent()
@@ -2016,6 +2081,45 @@ impl SkillSphereContract {
             .persistent()
             .get(&DataKey::TreasuryBalance(token))
             .unwrap_or(0i128)
+    }
+
+    /// Sets the SkillSphere Profile NFT contract address for profile NFT minting.
+    ///
+    /// # Arguments
+    /// * `env` - The environment.
+    /// * `nft_contract` - The address of the Profile NFT contract.
+    ///
+    /// # Errors
+    /// * `Error::Unauthorized` - If the caller is not the administrator.
+    pub fn set_nft_contract(env: Env, nft_contract: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::NftContractId, &nft_contract);
+        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("setNft"), nft_contract));
+        Ok(())
+    }
+
+    /// Retrieves the SkillSphere Profile NFT contract address.
+    pub fn get_nft_contract(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::NftContractId)
+    }
+
+    /// Sets the dispute cooling-off duration in seconds.
+    ///
+    /// # Arguments
+    /// * `env` - The environment.
+    /// * `duration_secs` - The cooling-off duration in seconds.
+    ///
+    /// # Errors
+    /// * `Error::Unauthorized` - If the caller is not the administrator.
+    pub fn set_dispute_cooling_off_duration(env: Env, duration_secs: u64) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::DisputeCoolingOffDuration, &duration_secs);
+        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("disCof"), duration_secs));
+        Ok(())
     }
 
     /// Collects fees from a session and adds them to the treasury balance.
@@ -3236,15 +3340,18 @@ impl SkillSphereContract {
         session.status = SessionStatus::Disputed;
         Self::save_session(&env, &session);
 
+        let now = env.ledger().timestamp();
         let dispute = Dispute {
             session_id,
             reason,
             evidence_cid: evidence_cid.clone(),
-            created_at: env.ledger().timestamp() as u32,
+            created_at: now as u32,
             resolved: false,
             seeker_award_bps: 0,
             expert_award_bps: 0,
             auto_resolved: false,
+            raised_at: now,
+            escalated_to_dao: false,
         };
 
         env.storage()
@@ -4850,14 +4957,163 @@ impl SkillSphereContract {
             return Err(Error::InvalidSplitBps);
         }
 
-        // Verify dispute exists
-        let _dispute = Self::get_session_or_error(&env, session_id)?;
+        // Verify dispute exists and check cooling-off period
+        let dispute = Self::get_dispute(&env, session_id)?;
+
+        let cooling_off_secs = env
+            .storage()
+            .instance()
+            .get::<DataKey, u64>(&DataKey::DisputeCoolingOffDuration)
+            .unwrap_or(DEFAULT_DISPUTE_COOLING_OFF_SECS);
+
+        let now = env.ledger().timestamp();
+        if now < dispute.raised_at + cooling_off_secs {
+            return Err(Error::DisputeCoolingOff);
+        }
 
         events::publish_event(
             &env,
             events::event_type::governance(),
             session_id,
             (symbol_short!("resProp"), seeker_award_bps),
+        );
+
+        Ok(())
+    }
+
+    // ===== Issue #251: Dispute Escalation to Community Vote =====
+    /// Escalate a dispute to DAO community vote for high-value disputes or
+    /// committee deadlock. Callable by either party if committee has not
+    /// resolved within 7 days.
+    pub fn escalate_to_dao(env: Env, caller: Address, dispute_id: u64) -> Result<(), Error> {
+        caller.require_auth();
+
+        let mut dispute = Self::get_dispute(&env, dispute_id)?;
+
+        if dispute.escalated_to_dao {
+            return Err(Error::DisputeEscalated);
+        }
+
+        let now = env.ledger().timestamp();
+        let escalation_deadline = dispute.raised_at + DISPUTE_ESCALATION_WINDOW_SECS;
+
+        if now > escalation_deadline {
+            return Err(Error::DisputeWindowActive);
+        }
+
+        dispute.escalated_to_dao = true;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Dispute(dispute_id), &dispute);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::EscalatedDispute(dispute_id), &dispute);
+
+        events::publish_event(
+            &env,
+            events::event_type::governance(),
+            dispute_id,
+            (symbol_short!("escal"), caller, now),
+        );
+
+        Ok(())
+    }
+
+    // ===== Issue #252: Assignment Transfer (Expert Handoff) =====
+    /// Expert proposes handing off a session to another registered expert.
+    /// The seeker must approve within 30 minutes.
+    pub fn propose_handoff(
+        env: Env,
+        expert: Address,
+        session_id: u64,
+        new_expert: Address,
+    ) -> Result<(), Error> {
+        expert.require_auth();
+
+        let session = Self::get_session_or_error(&env, session_id)?;
+
+        if session.expert != expert {
+            return Err(Error::Unauthorized);
+        }
+
+        let new_expert_profile = Self::expert_profile(&env, new_expert.clone());
+        if !new_expert_profile.availability_status {
+            return Err(Error::ExpertUnavailable);
+        }
+
+        let now = env.ledger().timestamp();
+        let proposal = HandoffProposal {
+            session_id,
+            current_expert: expert.clone(),
+            proposed_expert: new_expert.clone(),
+            proposed_at: now,
+            expires_at: now + HANDOFF_PROPOSAL_EXPIRY_SECS,
+            approved: false,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::HandoffProposal(session_id), &proposal);
+
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            session_id,
+            (symbol_short!("hndoff"), expert, new_expert),
+        );
+
+        Ok(())
+    }
+
+    /// Seeker approves the expert handoff proposal. Must be called within 30 minutes
+    /// of proposal. Upon approval, the old expert receives accrued earnings and the
+    /// new expert takes over.
+    pub fn approve_handoff(env: Env, seeker: Address, session_id: u64) -> Result<(), Error> {
+        seeker.require_auth();
+
+        let proposal = env
+            .storage()
+            .persistent()
+            .get::<DataKey, HandoffProposal>(&DataKey::HandoffProposal(session_id))
+            .ok_or(Error::HandoffProposalNotFound)?;
+
+        let now = env.ledger().timestamp();
+        if now > proposal.expires_at {
+            return Err(Error::HandoffExpired);
+        }
+
+        let mut session = Self::get_session_or_error(&env, session_id)?;
+        if session.seeker != seeker {
+            return Err(Error::Unauthorized);
+        }
+
+        let effective_time = Self::bounded_time(&session, now);
+        let claimable = Self::claimable_amount_for_session(&session, effective_time);
+
+        session.expert = proposal.proposed_expert.clone();
+        session.last_settlement_timestamp = effective_time as u32;
+        session.accrued_amount = 0;
+        Self::save_session(&env, &session);
+
+        if claimable > 0 {
+            let token_client = token::Client::new(&env, &session.token);
+            token_client.transfer(
+                &env.current_contract_address(),
+                &proposal.current_expert,
+                &claimable,
+            );
+        }
+
+        env.storage()
+            .persistent()
+            .remove(&DataKey::HandoffProposal(session_id));
+
+        events::publish_event(
+            &env,
+            events::event_type::expert_profile(),
+            session_id,
+            (symbol_short!("apprvl"), seeker, proposal.proposed_expert),
         );
 
         Ok(())
