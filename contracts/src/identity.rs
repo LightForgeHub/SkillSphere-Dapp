@@ -1,4 +1,5 @@
 //! # KYC/KYB Integration Hooks (Issue #215)
+//! # Data Deletion / Right to Be Forgotten (Issue #272)
 //!
 //! Optional KYC verification hooks for the identity contract.
 //! Allows accounts to require KYC verification before participating in sessions.
@@ -7,6 +8,7 @@
 
 use soroban_sdk::{
     contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, String,
+    Symbol,
 };
 
 #[contracterror]
@@ -109,6 +111,38 @@ impl IdentityContract {
     /// * `kyc_oracle` — The KYC oracle address
     pub fn initialize(env: Env, admin: Address, kyc_oracle: Address) {
         todo!()
+    }
+}
+
+/// Standalone data-deletion helper (Issue #272).
+///
+/// Replaces all `metadata_cid` and `notes_hash` fields associated with
+/// `address` in the main SkillSphere contract storage with the tombstone
+/// value `"DELETED"`. Only callable by the address owner or a SuperAdmin.
+/// Cannot delete data from active sessions.
+///
+/// # Storage keys touched (in the main contract's persistent storage)
+/// * `DataKey::ExpertProfile(address)` — `metadata_cid` field
+/// * `DataKey::Session(id)` — `metadata_cid` and `encrypted_notes_hash` for
+///   every completed/resolved session where `seeker == address || expert == address`
+///
+/// Because this module does not have direct access to the main contract's
+/// storage, the function is designed to be called from within the main
+/// `SkillSphereContract` impl (see `lib.rs`).
+pub mod data_deletion {
+    use soroban_sdk::{symbol_short, Address, Env, String};
+
+    /// Tombstone value used to overwrite deleted metadata fields.
+    pub fn tombstone(env: &Env) -> String {
+        String::from_str(env, "DELETED")
+    }
+
+    /// Emit the `DataDeletionRequested` event.
+    pub fn emit_deletion_event(env: &Env, address: &Address) {
+        env.events().publish(
+            (symbol_short!("dataDel"),),
+            (address.clone(), env.ledger().timestamp()),
+        );
     }
 }
 

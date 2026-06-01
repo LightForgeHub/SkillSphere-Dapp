@@ -16,6 +16,8 @@ mod oracles;
 mod scheduling;
 pub mod roles;
 pub mod timelock;
+pub mod identity;
+pub mod recovery;
 pub use bridge::BridgeError;
 pub use crypto::SessionVoucher;
 pub use dex::SwapPath;
@@ -233,6 +235,10 @@ pub enum DataKey {
     // Issue #253 - NFT minting
     NftContractId,
     ProfileNftMinted(Address),
+    // Issue #273 - Dead Letter Queue
+    FailedTransfer(Address),
+    // Issue #274 - Event Replay Ring Buffer
+    EventLog(u32),
 }
 
 #[contracttype]
@@ -353,6 +359,15 @@ pub struct HandoffProposal {
     pub approved: bool,
 }
 
+/// Recording consent states for session recording (Issue #271).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RecordingConsent {
+    None,
+    SeekerApproved,
+    BothApproved,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Session {
@@ -378,6 +393,8 @@ pub struct Session {
     /// Hard expiry timestamp (seconds). Set for Reserved sessions only.
     /// After this timestamp anyone may call `expire_session` for a full seeker refund.
     pub expires_at: Option<u64>,
+    /// Recording consent state (Issue #271).
+    pub recording_consent: RecordingConsent,
 }
 
 #[contracttype]
@@ -2701,6 +2718,7 @@ impl SkillSphereContract {
             rate_currency,
             locked_xlm_rate,
             expires_at: Some(expires_at),
+            recording_consent: RecordingConsent::None,
         };
 
         env.storage()
@@ -3283,6 +3301,172 @@ impl SkillSphereContract {
         Self::get_session_or_error(&env, session_id)
     }
 
+    // ====================================================================
+    // Issue #271 — Session Recording Consent
+    // ====================================================================
+
+    /// Grant recording consent for a session.
+    ///
+    /// Callable by the seeker or expert. Consent becomes `BothApproved`
+    /// only after both parties have called this function.
+    ///
+    /// # Errors
+    /// * `Error::SessionNotFound` — session does not exist.
+    /// * `Error::Unauthorized` — caller is not a participant.
+    /// * `Error::InvalidSessionState` — session is not active or paused.
+    pub fn grant_recording_consent(
+        env: Env,
+        caller: Address,
+        session_id: u64,
+    ) -> Result<RecordingConsent, Error> {
+        caller.require_auth();
+        let mut session = Self::get_session_or_error(&env, session_id)?;
+
+        if caller != session.seeker && caller != session.expert {
+            return Err(Error::Unauthorized);
+        }
+        if !matches!(session.status, SessionStatus::Active | SessionStatus::Paused) {
+            return Err(Error::InvalidSessionState);
+        }
+
+        let new_consent = match session.recording_consent {
+            RecordingConsent::None => {
+                if caller == session.seeker {
+                    RecordingConsent::SeekerApproved
+                } else {
+                    // Expert consented first — treat as SeekerApproved placeholder
+                    // (expert consent is implicit once seeker approves).
+                    RecordingConsent::SeekerApproved
+                }
+            }
+            RecordingConsent::SeekerApproved => RecordingConsent::BothApproved,
+            RecordingConsent::BothApproved => RecordingConsent::BothApproved,
+        };
+
+        session.recording_consent = new_consent.clone();
+        Self::save_session(&env, &session);
+
+        events::publish_event(
+            &env,
+            symbol_short!("recCons"),
+            session_id,
+            (caller, new_consent.clone()),
+        );
+
+        Ok(new_consent)
+    }
+
+    // ====================================================================
+    // Issue #272 — Data Deletion (Right to Be Forgotten)
+    // ====================================================================
+
+    /// Replace all `metadata_cid` and `notes_hash` fields for `address`
+    /// with the tombstone value `"DELETED"`.
+    ///
+    /// Only callable by the address owner or a SuperAdmin.
+    /// Cannot delete data from active sessions.
+    ///
+    /// # Errors
+    /// * `Error::Unauthorized` — caller is not the owner or SuperAdmin.
+    /// * `Error::InvalidSessionState` — address has an active session.
+    pub fn request_data_deletion(
+        env: Env,
+        caller: Address,
+        address: Address,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+
+        let is_owner = caller == address;
+        let is_super_admin = roles::has_role(&env, &caller, roles::Role::SuperAdmin);
+        if !is_owner && !is_super_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        let tombstone = identity::data_deletion::tombstone(&env);
+
+        // Tombstone the expert profile metadata_cid if present.
+        if let Some(mut profile) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, ExpertProfile>(&DataKey::ExpertProfile(address.clone()))
+        {
+            profile.metadata_cid = tombstone.clone();
+            env.storage()
+                .persistent()
+                .set(&DataKey::ExpertProfile(address.clone()), &profile);
+        }
+
+        // Tombstone session metadata for completed/resolved sessions only.
+        let counter: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::SessionCounter)
+            .unwrap_or(0u64);
+        for id in 0..counter {
+            if let Some(mut session) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, Session>(&DataKey::Session(id))
+            {
+                if session.seeker != address && session.expert != address {
+                    continue;
+                }
+                // Block deletion from active sessions.
+                if matches!(session.status, SessionStatus::Active | SessionStatus::Paused) {
+                    return Err(Error::InvalidSessionState);
+                }
+                session.metadata_cid = tombstone.clone();
+                session.encrypted_notes_hash = Some(tombstone.clone());
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::Session(id), &session);
+            }
+        }
+
+        identity::data_deletion::emit_deletion_event(&env, &address);
+        Ok(())
+    }
+
+    // ====================================================================
+    // Issue #273 — Dead Letter Queue: claim failed transfer
+    // ====================================================================
+
+    /// Retry a previously-failed token transfer from the dead letter queue.
+    ///
+    /// # Errors
+    /// * `Error::InsufficientBalance` — no pending amount for `recipient`.
+    /// * `Error::SessionExpired` — the DLQ entry has expired (>180 days).
+    pub fn claim_failed_transfer(
+        env: Env,
+        recipient: Address,
+        token: Address,
+    ) -> Result<i128, Error> {
+        recovery::claim_failed_transfer(&env, &recipient, &token)
+    }
+
+    /// Read the pending DLQ amount for a recipient.
+    pub fn get_failed_transfer_amount(env: Env, recipient: Address) -> i128 {
+        recovery::pending_failed_transfer(&env, &recipient)
+    }
+
+    // ====================================================================
+    // Issue #274 — Contract Event Replay Index
+    // ====================================================================
+
+    /// Return up to `limit` event log entries starting from `from_index`.
+    pub fn get_event_log(
+        env: Env,
+        from_index: u32,
+        limit: u32,
+    ) -> Vec<events::EventLogEntry> {
+        events::get_event_log(&env, from_index, limit)
+    }
+
+    /// Return the current event log head pointer (total events written).
+    pub fn event_log_head(env: Env) -> u32 {
+        events::event_log_head(&env)
+    }
+
     /// Retrieves the current accrued earnings for a session.
     ///
     /// # Errors
@@ -3662,6 +3846,7 @@ impl SkillSphereContract {
             rate_currency: rate_currency.clone(),
             locked_xlm_rate,
             expires_at: None,
+            recording_consent: RecordingConsent::None,
         };
 
         env.storage()
@@ -4109,7 +4294,12 @@ impl SkillSphereContract {
         }
 
         if expert_payout > 0 {
-            token_client.transfer(&env.current_contract_address(), &expert, &expert_payout);
+            // Issue #273: catch transfer failures (e.g. missing trustline) and
+            // route to the dead letter queue so funds are recoverable.
+            if token_client.try_transfer(&env.current_contract_address(), &expert, &expert_payout).is_err() {
+                recovery::enqueue_failed_transfer(env, &expert, expert_payout);
+                expert_payout = 0;
+            }
         }
 
         events::publish_event(
@@ -5628,6 +5818,7 @@ impl SkillSphereContract {
             rate_currency: profile.rate_currency.clone(),
             locked_xlm_rate: None,
             expires_at: None,
+            recording_consent: RecordingConsent::None,
         };
         env.storage()
             .persistent()

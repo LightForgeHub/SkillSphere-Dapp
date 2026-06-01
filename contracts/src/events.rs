@@ -1,12 +1,116 @@
 //! Standardized webhook event schema — Issue #243.
+//! Contract Event Replay Index (ring buffer) — Issue #274.
 //!
 //! Every contract event is published as a four-field envelope:
 //! `{ event_type, session_id, timestamp, payload }` under the `webhook`
 //! topic so off-chain relay daemons can parse a single shape.
+//!
+//! Additionally, every state-change event writes a compact summary entry
+//! into a ring buffer of the last 1000 events stored in Temporary storage
+//! (DataKey::EventLog(index)). Off-chain indexers that missed events can
+//! call `get_event_log(from_index, limit)` to re-fetch them without
+//! re-scanning the entire chain.
 
-use soroban_sdk::{symbol_short, Env, IntoVal, Symbol, Val};
+use soroban_sdk::{contracttype, symbol_short, Env, IntoVal, Symbol, Val, Vec};
 
-/// Publish a webhook envelope consumed by off-chain relay services.
+/// Maximum number of entries kept in the on-chain ring buffer.
+pub const EVENT_LOG_CAPACITY: u32 = 1000;
+
+/// Compact summary stored per ring-buffer slot.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EventLogEntry {
+    /// Monotonically increasing global index (wraps at EVENT_LOG_CAPACITY).
+    pub index: u32,
+    /// The event type symbol (mirrors the `event_type` module).
+    pub event_type: Symbol,
+    /// Session id (0 for non-session events).
+    pub session_id: u64,
+    /// Ledger timestamp at the time of the event.
+    pub timestamp: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Ring-buffer helpers
+// ---------------------------------------------------------------------------
+
+/// Storage key for the ring-buffer head pointer (next write position).
+fn head_key() -> Symbol {
+    symbol_short!("evtHead")
+}
+
+/// Write one entry into the ring buffer and advance the head pointer.
+fn append_to_ring(env: &Env, event_type: Symbol, session_id: u64) {
+    let head: u32 = env
+        .storage()
+        .temporary()
+        .get(&head_key())
+        .unwrap_or(0u32);
+
+    let slot = head % EVENT_LOG_CAPACITY;
+    let entry = EventLogEntry {
+        index: head,
+        event_type,
+        session_id,
+        timestamp: env.ledger().timestamp(),
+    };
+
+    let key = crate::DataKey::EventLog(slot);
+    env.storage().temporary().set(&key, &entry);
+
+    env.storage()
+        .temporary()
+        .set(&head_key(), &head.saturating_add(1));
+}
+
+/// Return up to `limit` entries starting from `from_index` (inclusive).
+/// Results are ordered oldest-first. Returns an empty vec if the requested
+/// range has been overwritten or does not yet exist.
+pub fn get_event_log(env: &Env, from_index: u32, limit: u32) -> Vec<EventLogEntry> {
+    let head: u32 = env
+        .storage()
+        .temporary()
+        .get(&head_key())
+        .unwrap_or(0u32);
+
+    let mut results: Vec<EventLogEntry> = Vec::new(env);
+    let count = limit.min(EVENT_LOG_CAPACITY);
+    let mut idx = from_index;
+    let mut fetched = 0u32;
+
+    while fetched < count && idx < head {
+        let slot = idx % EVENT_LOG_CAPACITY;
+        if let Some(entry) = env
+            .storage()
+            .temporary()
+            .get::<crate::DataKey, EventLogEntry>(&crate::DataKey::EventLog(slot))
+        {
+            // Confirm the slot hasn't been overwritten by a newer entry.
+            if entry.index == idx {
+                results.push_back(entry);
+                fetched += 1;
+            }
+        }
+        idx += 1;
+    }
+
+    results
+}
+
+/// Return the current head pointer (total events ever written, mod wraps internally).
+pub fn event_log_head(env: &Env) -> u32 {
+    env.storage()
+        .temporary()
+        .get(&head_key())
+        .unwrap_or(0u32)
+}
+
+// ---------------------------------------------------------------------------
+// Core publish helper
+// ---------------------------------------------------------------------------
+
+/// Publish a webhook envelope consumed by off-chain relay services,
+/// and append a compact summary to the on-chain ring buffer.
 pub fn publish_event<P>(
     env: &Env,
     event_type: Symbol,
@@ -18,12 +122,15 @@ pub fn publish_event<P>(
     env.events().publish(
         (symbol_short!("webhook"),),
         (
-            event_type,
+            event_type.clone(),
             session_id,
             env.ledger().timestamp(),
             payload.into_val(env),
         ),
     );
+
+    // Issue #274: write summary to ring buffer.
+    append_to_ring(env, event_type, session_id);
 }
 
 /// Session lifecycle events.
