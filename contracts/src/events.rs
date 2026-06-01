@@ -151,4 +151,10 @@ pub mod event_type {
     pub fn badge() -> Symbol {
         symbol_short!("badge")
     }
+    pub fn tier_upgraded() -> Symbol {
+        symbol_short!("tierUp")
+    }
+    pub fn session_expired() -> Symbol {
+        symbol_short!("sessExp")
+    }
 }

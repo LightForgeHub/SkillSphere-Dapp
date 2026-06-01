@@ -11,6 +11,9 @@ mod errors;
 mod events;
 mod governance;
 mod reputation;
+mod treasury;
+mod oracles;
+mod scheduling;
 pub mod roles;
 pub mod timelock;
 pub use bridge::BridgeError;
@@ -18,6 +21,7 @@ pub use crypto::SessionVoucher;
 pub use dex::SwapPath;
 pub use errors::Error;
 pub use reputation::BadgeRecord;
+pub use reputation::ExpertTier;
 
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, symbol_short, token, xdr::ToXdr, Address,
@@ -51,6 +55,8 @@ const TIMELOCK_DURATION: u64 = 48 * 60 * 60;
 const DISPUTE_EXPIRY_WINDOW: u64 = 30 * 24 * 60 * 60;
 const SESSION_ESCROW_TTL: u64 = 300; // 5 minutes for pause grace period
 const SESSION_NO_SHOW_REFUND_WINDOW: u64 = 600; // 10 minutes
+/// Minimum expiry buffer (2 hours) added to scheduled_start for reserved sessions.
+const SESSION_EXPIRY_BUFFER_SECS: u64 = 2 * 60 * 60;
 pub(crate) const MIN_SESSION_ESCROW: i128 = 10; // Dust cleanup threshold
 const DEFAULT_FEE_FIRST_TIER_LIMIT: i128 = 1_000;
 const DEFAULT_FEE_FIRST_TIER_BPS: u32 = 500;
@@ -68,7 +74,43 @@ const ARCHIVE_DELAY_SECS: u64 = 90 * 24 * 60 * 60;
 /// Maximum number of sessions that can be archived in a single batch call.
 const MAX_ARCHIVE_BATCH_SIZE: u32 = 50;
 
-
+#[contracterror]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum Error {
+    Unauthorized = 1,
+    SessionNotFound = 2,
+    InvalidSessionState = 3,
+    InsufficientBalance = 4,
+    InvalidAmount = 5,
+    NotStarted = 6,
+    AlreadyFinished = 7,
+    DisputeNotFound = 8,
+    UpgradeNotInitiated = 9,
+    TimelockNotExpired = 10,
+    EmptyDisputeReason = 11,
+    ProtocolPaused = 12,
+    ReputationTooLow = 13,
+    InvalidFeeBps = 14,
+    SessionExpired = 15,
+    InvalidCid = 16,
+    InvalidSplitBps = 17,
+    DisputeWindowActive = 18,
+    InvalidFeeConfig = 19,
+    InsufficientTreasuryBalance = 20,
+    AmountBelowMinimum = 21,
+    ExpertNotRegistered = 22,
+    ExpertUnavailable = 23,
+    InvalidReferrer = 24,
+    ReentrancyDetected = 25,
+    DepositTooLow = 26,
+    // Anti-spam session deposit
+    InsufficientAntiSpamDeposit = 27,
+    // Oracle circuit breaker
+    CircuitBreakerActive = 28,
+    // Session expiry
+    SessionNotExpired = 29,
+}
 const REFERRAL_COMMISSION_BPS: u32 = 500; // 5% commission of expert earnings paid from platform fee
 const DEFAULT_REFERRAL_SESSION_LIMIT: u32 = 50;
 const DEFAULT_CANCELLATION_FEE_BPS: u32 = 500;
@@ -151,6 +193,22 @@ pub enum DataKey {
     SessionCommit(BytesN<32>),
     SessionCommitConsumed(BytesN<32>),
     ExpertPriceFeed(Address),
+    ExpertCooldownLedgers,
+    ExpertCooldownUntil(Address),
+    SeekerSpendingLimit(Address),
+    ExpertVoucherPubkey(Address),
+    VoucherNonceConsumed(Address, u64),
+    ReferralSessionLimit,
+    CancellationFeeBps,
+    // Expert tier system
+    ExpertTier(Address),
+    ExpertCompletedSessions(Address),
+    // Anti-spam session deposit
+    SpamDepositAmount,
+    // Oracle circuit breaker
+    LastOraclePrice,
+    CircuitBreakerActive,
+    MaxPriceDeviationBps,
 }
 
 #[contracttype]
@@ -280,6 +338,9 @@ pub struct Session {
     pub agency_share_bps: u32,
     pub rate_currency: RateCurrency,
     pub locked_xlm_rate: Option<i128>,
+    /// Hard expiry timestamp (seconds). Set for Reserved sessions only.
+    /// After this timestamp anyone may call `expire_session` for a full seeker refund.
+    pub expires_at: Option<u64>,
 }
 
 #[contracttype]
@@ -907,6 +968,34 @@ impl SkillSphereContract {
             (symbol_short!("insWithdr"), vault, token, recipient, amount),
         );
         Ok(())
+    }
+
+    // ====================================================================
+    // Anti-Spam Session Deposit
+    // ====================================================================
+
+    /// Sets the non-refundable anti-spam deposit required on every new session.
+    ///
+    /// Set to `0` to disable (the default). Deposit is burned to the insurance
+    /// vault on session creation and does not count toward the session escrow.
+    pub fn set_spam_deposit_amount(env: Env, amount: i128) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+        treasury::set_spam_deposit_amount(&env, amount);
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("spamDep"), amount),
+        );
+        Ok(())
+    }
+
+    /// Returns the currently-configured anti-spam deposit amount.
+    pub fn get_spam_deposit_amount(env: Env) -> i128 {
+        treasury::spam_deposit_amount(&env)
     }
 
     // ====================================================================
@@ -2129,6 +2218,53 @@ impl SkillSphereContract {
         Self::protocol_paused(&env)
     }
 
+    // ====================================================================
+    // Oracle Circuit Breaker
+    // ====================================================================
+
+    /// Returns `true` when the oracle circuit breaker is active and new
+    /// sessions are blocked.
+    pub fn is_circuit_breaker_active(env: Env) -> bool {
+        oracles::is_circuit_breaker_active(&env)
+    }
+
+    /// Admin resets the circuit breaker after investigating the price anomaly.
+    pub fn reset_circuit_breaker(env: Env) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        oracles::reset_circuit_breaker(&env);
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("cbReset"),),
+        );
+        Ok(())
+    }
+
+    /// Sets the maximum allowable oracle price deviation in basis points.
+    ///
+    /// Default is 2 000 bps (20%). If the oracle price moves more than this
+    /// fraction in one update, the circuit breaker is tripped.
+    pub fn set_max_price_deviation_bps(env: Env, bps: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if bps > MAX_BPS {
+            return Err(Error::InvalidFeeBps);
+        }
+        oracles::set_max_price_deviation_bps(&env, bps);
+        events::publish_event(
+            &env,
+            events::event_type::admin_config(),
+            0,
+            (symbol_short!("maxDevBps"), bps),
+        );
+        Ok(())
+    }
+
+    /// Returns the configured maximum price-deviation threshold in bps.
+    pub fn get_max_price_deviation_bps(env: Env) -> u32 {
+        oracles::max_price_deviation_bps(&env)
+    }
+
     /// Manually sets an expert's reputation (admin only).
     ///
     /// # Arguments
@@ -2256,6 +2392,9 @@ impl SkillSphereContract {
         if Self::protocol_paused(&env) {
             panic_with_error!(&env, Error::ProtocolPaused);
         }
+        if oracles::is_circuit_breaker_active(&env) {
+            panic_with_error!(&env, Error::CircuitBreakerActive);
+        }
         if let Err(e) = admin::rate_limit(&env, &seeker, admin::rate_limit_min_ledgers(&env)) {
             panic_with_error!(&env, e);
         }
@@ -2295,6 +2434,11 @@ impl SkillSphereContract {
             panic_with_error!(&env, Error::InsufficientBalance);
         }
 
+        // Collect non-refundable anti-spam deposit (burned to insurance vault).
+        if let Err(e) = treasury::collect_spam_deposit(&env, &seeker, &token) {
+            panic_with_error!(&env, e);
+        }
+
         Self::create_active_session(
             &env,
             seeker,
@@ -2328,6 +2472,9 @@ impl SkillSphereContract {
     ) -> Result<u64, Error> {
         seeker.require_auth();
         Self::ensure_protocol_active(&env)?;
+        if oracles::is_circuit_breaker_active(&env) {
+            return Err(Error::CircuitBreakerActive);
+        }
         if let Err(e) = admin::rate_limit(&env, &seeker, admin::rate_limit_min_ledgers(&env)) {
             panic_with_error!(&env, e);
         }
@@ -2371,6 +2518,9 @@ impl SkillSphereContract {
         if token_client.balance(&seeker) < amount {
             return Err(Error::InsufficientBalance);
         }
+
+        // Collect non-refundable anti-spam deposit (burned to insurance vault).
+        treasury::collect_spam_deposit(&env, &seeker, &token)?;
 
         let locked_xlm_rate = if profile.rate_currency == RateCurrency::USD {
             Self::lock_usd_rate_for_session(&env, &expert)
@@ -2418,6 +2568,14 @@ impl SkillSphereContract {
         let session_id = Self::next_session_id(env);
         let start_ts = scheduled_start as u32;
 
+        // expires_at = scheduled_start + max(2 hours, duration_cap)
+        let expiry_buffer = if duration_cap > SESSION_EXPIRY_BUFFER_SECS {
+            duration_cap
+        } else {
+            SESSION_EXPIRY_BUFFER_SECS
+        };
+        let expires_at = scheduled_start.saturating_add(expiry_buffer);
+
         let session = Session {
             id: session_id,
             seeker: seeker.clone(),
@@ -2438,6 +2596,7 @@ impl SkillSphereContract {
             agency_share_bps,
             rate_currency,
             locked_xlm_rate,
+            expires_at: Some(expires_at),
         };
 
         env.storage()
@@ -2523,6 +2682,34 @@ impl SkillSphereContract {
         );
 
         Ok((refund, fee))
+    }
+
+    // ====================================================================
+    // Session Expiry Deadline & Auto-Close
+    // ====================================================================
+
+    /// Force-closes a Reserved (or Paused) session that has passed its
+    /// hard `expires_at` deadline without becoming Active.
+    ///
+    /// Callable by anyone — this is a permissionless safety valve so seekers
+    /// are never permanently locked out of their funds. The full escrow balance
+    /// is refunded to the seeker. Emits `SessionExpired { session_id, refund_amount }`.
+    ///
+    /// # Errors
+    /// * `Error::SessionNotFound`       — session does not exist
+    /// * `Error::InvalidSessionState`   — session has no `expires_at`, is Active, or
+    ///                                    is already in a terminal state
+    /// * `Error::SessionNotExpired`     — `ledger_timestamp < expires_at`
+    pub fn expire_session(env: Env, session_id: u64) -> Result<(), Error> {
+        let session = Self::get_session_or_error(&env, session_id)?;
+        let refund_amount = scheduling::do_expire_session(&env, session)?;
+        events::publish_event(
+            &env,
+            events::event_type::session_expired(),
+            session_id,
+            (session_id, refund_amount),
+        );
+        Ok(())
     }
 
     fn cancellation_fee_bps(env: &Env) -> u32 {
@@ -3367,6 +3554,7 @@ impl SkillSphereContract {
             agency_share_bps,
             rate_currency: rate_currency.clone(),
             locked_xlm_rate,
+            expires_at: None,
         };
 
         env.storage()
@@ -3403,6 +3591,13 @@ impl SkillSphereContract {
         let (price, last_updated_at) = client.get_price(&cfg.asset_pair);
         let now = env.ledger().timestamp() as u32;
         if now.saturating_sub(last_updated_at) > cfg.max_staleness_seconds {
+            return None;
+        }
+
+        // Check price deviation against the last known oracle price.
+        // If deviation exceeds the threshold the circuit breaker activates;
+        // we return None here so the caller falls back to the static rate.
+        if oracles::check_and_update_price(env, price).is_err() {
             return None;
         }
 
@@ -3682,7 +3877,13 @@ impl SkillSphereContract {
 
         // #196: per-asset fee override takes priority over the
         // tiered config for this session's funding token.
-        let platform_fee = Self::platform_fee_for_token(env, &session.token, claimable)?;
+        let base_platform_fee = Self::platform_fee_for_token(env, &session.token, claimable)?;
+        // Apply expert-tier discount: Gold = 0 fee, Silver = 50%, Bronze = full.
+        let platform_fee = match reputation::get_tier(env, &session.expert) {
+            ExpertTier::Gold => 0i128,
+            ExpertTier::Silver => base_platform_fee / 2,
+            ExpertTier::Bronze => base_platform_fee,
+        };
         let expert_earnings = claimable.saturating_sub(platform_fee);
         let referrer = Self::expert_referrer(env, &session.expert);
         let referral_reward = if referrer.is_some()
@@ -3724,7 +3925,8 @@ impl SkillSphereContract {
         session.accrued_amount = 0;
         session.last_settlement_timestamp = effective_time as u32;
 
-        if session.balance == 0 || now >= expiry {
+        let session_just_completed = session.balance == 0 || now >= expiry;
+        if session_just_completed {
             session.status = SessionStatus::Completed;
         }
 
@@ -3837,6 +4039,11 @@ impl SkillSphereContract {
             );
         }
 
+        // Recalculate expert tier on session completion.
+        if session_just_completed {
+            reputation::update_expert_tier_on_completion(env, &expert);
+        }
+
         Self::set_reentrancy_lock(env, false);
         Ok(expert_payout)
     }
@@ -3907,6 +4114,9 @@ impl SkillSphereContract {
             session.id,
             (final_claimable, final_remaining, finished_at),
         );
+
+        // Recalculate expert tier whenever a session is explicitly closed.
+        reputation::update_expert_tier_on_completion(env, &session.expert);
 
         Self::set_reentrancy_lock(env, false);
         Ok((final_claimable, final_remaining))
@@ -4295,6 +4505,25 @@ impl SkillSphereContract {
             .persistent()
             .get(&DataKey::ExpertRatingCount(expert))
             .unwrap_or(0)
+    }
+
+    // ====================================================================
+    // Expert Tier System
+    // ====================================================================
+
+    /// Returns the current performance tier of an expert.
+    ///
+    /// Defaults to `ExpertTier::Bronze` for experts with no completed sessions.
+    pub fn get_expert_tier(env: Env, expert: Address) -> ExpertTier {
+        reputation::get_tier(&env, &expert)
+    }
+
+    /// Returns the number of fully-completed sessions for an expert.
+    pub fn get_expert_completed_sessions(env: Env, expert: Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExpertCompletedSessions(expert))
+            .unwrap_or(0u32)
     }
 
     /// Registers a new expert with a referrer (Issue #52).
@@ -5142,6 +5371,7 @@ impl SkillSphereContract {
             agency_share_bps: profile.agency_share_bps,
             rate_currency: profile.rate_currency.clone(),
             locked_xlm_rate: None,
+            expires_at: None,
         };
         env.storage()
             .persistent()
