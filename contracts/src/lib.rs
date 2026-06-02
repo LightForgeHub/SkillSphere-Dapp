@@ -239,6 +239,15 @@ pub enum DataKey {
     FailedTransfer(Address),
     // Issue #274 - Event Replay Ring Buffer
     EventLog(u32),
+    // Issue #277 - Reputation Decay
+    ExpertLastActive(Address),
+    // Issue #275 - Idle Escrow Yield
+    YieldPoolId,
+    SessionDepositedToPool(u64),
+    // Issue #278 - Per-dimension rating averages
+    ExpertAvgRatingComm(Address),
+    ExpertAvgRatingExpertise(Address),
+    ExpertAvgRatingPunct(Address),
 }
 
 #[contracttype]
@@ -338,6 +347,13 @@ pub struct ExpertProfile {
     pub reputation: u32,
     pub cross_chain_reputation: u32,
     pub availability_status: bool,
+    /// Effective (decay-adjusted) average rating — 1–5 scale (issue #277/#278).
+    pub avg_rating: u32,
+    /// Per-dimension rolling averages (issue #278); 0 if not yet rated.
+    pub avg_comm: u32,
+    pub avg_expertise: u32,
+    pub avg_punct: u32,
+    pub avg_overall: u32,
 }
 
 #[contracttype]
@@ -403,12 +419,24 @@ pub struct ArchiveSummary {
     pub archived: u32,
     pub skipped: u32,
 }
+/// Multi-dimensional session rating submitted by the seeker (issue #278).
+/// Each score is 1–5.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SessionRating {
+    pub communication: u32,
+    pub expertise: u32,
+    pub punctuality: u32,
+    pub overall: u32,
+}
+
+/// On-chain record stored per session when a rating is submitted.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SessionRatingRecord {
     pub session_id: u64,
-    pub rater: Address,
-    pub rating: u32,
+    pub seeker: Address,
+    pub rating: SessionRating,
     pub created_at: u32,
 }
 
@@ -2057,8 +2085,45 @@ impl SkillSphereContract {
     }
 
     /// Retrieves the profile of an expert.
+    ///
+    /// The `avg_rating` field is the time-decayed effective session rating
+    /// (issue #277). The `avg_comm`, `avg_expertise`, `avg_punct`, and
+    /// `avg_overall` fields are rolling per-dimension averages (issue #278).
     pub fn get_expert_profile(env: Env, expert: Address) -> ExpertProfile {
-        Self::expert_profile(&env, expert)
+        let mut profile = Self::expert_profile(&env, expert.clone());
+
+        // Issue #278: populate per-dimension averages.
+        profile.avg_comm = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ExpertAvgRatingComm(expert.clone()))
+            .unwrap_or(0u32);
+        profile.avg_expertise = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ExpertAvgRatingExpertise(expert.clone()))
+            .unwrap_or(0u32);
+        profile.avg_punct = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ExpertAvgRatingPunct(expert.clone()))
+            .unwrap_or(0u32);
+        profile.avg_overall = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ExpertAverageRating(expert.clone()))
+            .unwrap_or(0u32);
+
+        // Issue #277: apply reputation decay to the overall avg rating.
+        let last_active: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ExpertLastActive(expert))
+            .unwrap_or(0u64);
+        let now = env.ledger().timestamp();
+        profile.avg_rating = reputation::effective_rating(profile.avg_overall, now, last_active);
+
+        profile
     }
 
     /// Retrieves the referrer of an expert.
@@ -4339,6 +4404,8 @@ impl SkillSphereContract {
         // Recalculate expert tier on session completion.
         if session_just_completed {
             reputation::update_expert_tier_on_completion(env, &expert);
+            // Issue #277: refresh the expert's last-active timestamp.
+            reputation::record_expert_activity(env, &expert);
         }
 
         Self::set_reentrancy_lock(env, false);
@@ -4366,6 +4433,66 @@ impl SkillSphereContract {
         let effective_time = Self::bounded_time(session, now);
         let claimable = Self::claimable_amount_for_session(session, effective_time);
         let remaining = session.balance - claimable;
+
+        // Issue #275: if the session balance was deposited to a yield pool,
+        // withdraw principal + yield and distribute the surplus.
+        let deposited_to_pool: Option<i128> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::SessionDepositedToPool(session.id));
+
+        if let Some(deposited) = deposited_to_pool {
+            if let Some(pool_contract) = env
+                .storage()
+                .instance()
+                .get::<DataKey, Address>(&DataKey::YieldPoolId)
+            {
+                // Attempt to withdraw from pool; on failure fall back to the
+                // original deposited amount stored in the session balance.
+                let withdrawn = dex::pool_withdraw(env, &pool_contract, &session.token, deposited);
+                if withdrawn > deposited {
+                    let yield_bonus = withdrawn - deposited;
+                    // Distribute yield: 50% seeker, 40% expert, 10% treasury.
+                    let seeker_yield = yield_bonus / 2;
+                    let expert_yield = yield_bonus * 40 / 100;
+                    let treasury_yield = yield_bonus - seeker_yield - expert_yield;
+                    let token_client_yield = token::Client::new(env, &session.token);
+                    if seeker_yield > 0 {
+                        token_client_yield.transfer(
+                            &env.current_contract_address(),
+                            &session.seeker,
+                            &seeker_yield,
+                        );
+                    }
+                    if expert_yield > 0 {
+                        token_client_yield.transfer(
+                            &env.current_contract_address(),
+                            &session.expert,
+                            &expert_yield,
+                        );
+                    }
+                    if treasury_yield > 0 {
+                        if let Some(treasury) = env
+                            .storage()
+                            .instance()
+                            .get::<DataKey, Address>(&DataKey::TreasuryAddress)
+                        {
+                            token_client_yield.transfer(
+                                &env.current_contract_address(),
+                                &treasury,
+                                &treasury_yield,
+                            );
+                        }
+                    }
+                    events::publish_event(
+                        env,
+                        events::event_type::yield_distributed(),
+                        session.id,
+                        (session.id, seeker_yield, expert_yield, treasury_yield),
+                    );
+                }
+            }
+        }
 
         // === EFFECTS ===
         session.balance = 0;
@@ -4414,6 +4541,8 @@ impl SkillSphereContract {
 
         // Recalculate expert tier whenever a session is explicitly closed.
         reputation::update_expert_tier_on_completion(env, &session.expert);
+        // Issue #277: refresh the expert's last-active timestamp.
+        reputation::record_expert_activity(env, &session.expert);
 
         Self::set_reentrancy_lock(env, false);
         Ok((final_claimable, final_remaining))
@@ -4515,6 +4644,11 @@ impl SkillSphereContract {
                 reputation: 0,
                 cross_chain_reputation: 0,
                 availability_status: false,
+                avg_rating: 0,
+                avg_comm: 0,
+                avg_expertise: 0,
+                avg_punct: 0,
+                avg_overall: 0,
             })
     }
 
@@ -4703,21 +4837,29 @@ impl SkillSphereContract {
     /// * `Error::InvalidRating` - If the rating is not between 1-5.
     /// * `Error::RatingAlreadySubmitted` - If the seeker already rated this session.
     /// * `Error::InvalidSessionState` - If the session is not completed.
-    pub fn rate_expert(env: Env, session_id: u64, rating: u32) -> Result<(), Error> {
+    /// Rate a completed session using a multi-dimensional `SessionRating`
+    /// (issue #278).  Each dimension (communication, expertise, punctuality,
+    /// overall) must be in the range 1–5.
+    pub fn rate_expert(env: Env, session_id: u64, rating: SessionRating) -> Result<(), Error> {
         let session = Self::get_session_or_error(&env, session_id)?;
         session.seeker.require_auth();
 
-        // Validate rating is between 1-5
-        if rating < RATING_SCALE_MIN || rating > RATING_SCALE_MAX {
-            return Err(Error::InvalidRating);
+        // Validate every dimension is within 1–5.
+        for score in [
+            rating.communication,
+            rating.expertise,
+            rating.punctuality,
+            rating.overall,
+        ] {
+            if score < RATING_SCALE_MIN || score > RATING_SCALE_MAX {
+                return Err(Error::InvalidRating);
+            }
         }
 
-        // Check if session is completed
         if session.status != SessionStatus::Completed && session.status != SessionStatus::Resolved {
             return Err(Error::InvalidSessionState);
         }
 
-        // Check if rating already exists for this session
         if env
             .storage()
             .persistent()
@@ -4726,43 +4868,54 @@ impl SkillSphereContract {
             return Err(Error::RatingSubmitted);
         }
 
-        // Store the rating
-        let rating_record = SessionRating {
+        // Store the per-session record.
+        let record = SessionRatingRecord {
             session_id,
-            rater: session.seeker.clone(),
-            rating,
+            seeker: session.seeker.clone(),
+            rating: rating.clone(),
             created_at: env.ledger().timestamp() as u32,
         };
         env.storage()
             .persistent()
-            .set(&DataKey::SessionRating(session_id), &rating_record);
+            .set(&DataKey::SessionRating(session_id), &record);
 
-        // Update expert's average rating
         let expert = session.expert.clone();
-        let current_avg: u32 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::ExpertAverageRating(expert.clone()))
-            .unwrap_or(0);
         let count: u32 = env
             .storage()
             .persistent()
             .get(&DataKey::ExpertRatingCount(expert.clone()))
             .unwrap_or(0);
-
         let new_count = count.saturating_add(1);
-        let new_avg = if count == 0 {
-            rating
-        } else {
-            (((current_avg as u64)
-                .saturating_mul(count as u64)
-                .saturating_add(rating as u64))
-                / new_count as u64) as u32
-        };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::ExpertAverageRating(expert.clone()), &new_avg);
+        // Update rolling average for each dimension.
+        let cur_comm: u32 = env.storage().persistent()
+            .get(&DataKey::ExpertAvgRatingComm(expert.clone())).unwrap_or(0);
+        let new_comm = if count == 0 { rating.communication } else {
+            (((cur_comm as u64).saturating_mul(count as u64).saturating_add(rating.communication as u64)) / new_count as u64) as u32
+        };
+        env.storage().persistent().set(&DataKey::ExpertAvgRatingComm(expert.clone()), &new_comm);
+
+        let cur_exp: u32 = env.storage().persistent()
+            .get(&DataKey::ExpertAvgRatingExpertise(expert.clone())).unwrap_or(0);
+        let new_exp = if count == 0 { rating.expertise } else {
+            (((cur_exp as u64).saturating_mul(count as u64).saturating_add(rating.expertise as u64)) / new_count as u64) as u32
+        };
+        env.storage().persistent().set(&DataKey::ExpertAvgRatingExpertise(expert.clone()), &new_exp);
+
+        let cur_punct: u32 = env.storage().persistent()
+            .get(&DataKey::ExpertAvgRatingPunct(expert.clone())).unwrap_or(0);
+        let new_punct = if count == 0 { rating.punctuality } else {
+            (((cur_punct as u64).saturating_mul(count as u64).saturating_add(rating.punctuality as u64)) / new_count as u64) as u32
+        };
+        env.storage().persistent().set(&DataKey::ExpertAvgRatingPunct(expert.clone()), &new_punct);
+
+        let cur_overall: u32 = env.storage().persistent()
+            .get(&DataKey::ExpertAverageRating(expert.clone())).unwrap_or(0);
+        let new_overall_avg = if count == 0 { rating.overall } else {
+            (((cur_overall as u64).saturating_mul(count as u64).saturating_add(rating.overall as u64)) / new_count as u64) as u32
+        };
+        env.storage().persistent().set(&DataKey::ExpertAverageRating(expert.clone()), &new_overall_avg);
+
         env.storage()
             .persistent()
             .set(&DataKey::ExpertRatingCount(expert.clone()), &new_count);
@@ -4771,7 +4924,14 @@ impl SkillSphereContract {
             &env,
             events::event_type::rating(),
             session_id,
-            (expert, rating, new_avg),
+            (expert.clone(), session.seeker.clone(), rating.overall, new_overall_avg),
+        );
+        // Issue #278: SessionRated event with full multi-dimensional payload.
+        events::publish_event(
+            &env,
+            events::event_type::session_rated(),
+            session_id,
+            (session_id, session.seeker.clone(), expert, rating.communication, rating.expertise, rating.punctuality, rating.overall),
         );
 
         Ok(())
@@ -4781,7 +4941,7 @@ impl SkillSphereContract {
     ///
     /// # Errors
     /// * `Error::SessionNotFound` - If no rating exists for the session.
-    pub fn get_session_rating(env: Env, session_id: u64) -> Result<SessionRating, Error> {
+    pub fn get_session_rating(env: Env, session_id: u64) -> Result<SessionRatingRecord, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::SessionRating(session_id))
@@ -5722,6 +5882,26 @@ impl SkillSphereContract {
         env.storage().instance().get(&symbol_short!("dex_addr"))
     }
 
+    // ====================================================================
+    // #275 — Idle Escrow Yield via Liquidity Pool
+    // ====================================================================
+
+    /// Admin configures the whitelisted Soroban liquidity pool that will
+    /// receive idle escrow funds.
+    pub fn set_yield_pool(env: Env, pool_addr: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::YieldPoolId, &pool_addr);
+        events::publish_event(&env, events::event_type::integration(), 0, (symbol_short!("yldPool"), pool_addr));
+        Ok(())
+    }
+
+    /// Returns the configured yield pool address, if any.
+    pub fn get_yield_pool(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::YieldPoolId)
+    }
+
     /// Starts a streaming session where the seeker pays in `offer_token` but
     /// the expert is paid in `ask_token`.  The DEX swap happens atomically.
     ///
@@ -5733,6 +5913,10 @@ impl SkillSphereContract {
     /// * `path`          — intermediate asset hops (empty = direct pair)
     /// * `offer_amount`  — amount of `offer_token` to spend
     /// * `metadata_cid`  — IPFS CID for session metadata
+    /// `expected_output` is the ask-token amount the seeker received in a
+    /// prior DEX quote.  `max_slippage_bps` defaults to 50 bps (0.5%) when
+    /// `None` is supplied.  The transaction reverts (fully refunding the
+    /// seeker) if the actual swap output falls outside this tolerance.
     pub fn start_session_with_swap(
         env: Env,
         seeker: Address,
@@ -5741,6 +5925,8 @@ impl SkillSphereContract {
         ask_token: Address,
         path: Vec<Address>,
         offer_amount: i128,
+        expected_output: i128,
+        max_slippage_bps: Option<u32>,
         metadata_cid: String,
     ) -> Result<u64, Error> {
         seeker.require_auth();
@@ -5794,6 +5980,12 @@ impl SkillSphereContract {
             return Err(Error::SwapFailed);
         }
 
+        // Issue #276: slippage guard — revert (and auto-refund) if deviation
+        // exceeds tolerance.  Default is 50 bps (0.5%).
+        let slippage_bps = max_slippage_bps.unwrap_or(dex::DEFAULT_MAX_SLIPPAGE_BPS);
+        dex::check_slippage(expected_output, ask_amount, slippage_bps)?;
+
+
         let session_id = Self::next_session_id(&env);
         let now = env.ledger().timestamp() as u32;
 
@@ -5828,6 +6020,19 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::SessionLastVerified(session_id), &(now as u64));
+
+        // Issue #275: if a yield pool is configured, deposit the session
+        // balance into it so idle escrow earns yield while the session runs.
+        if let Some(pool_contract) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::YieldPoolId)
+        {
+            dex::pool_deposit(&env, &pool_contract, &ask_token, ask_amount);
+            env.storage()
+                .persistent()
+                .set(&DataKey::SessionDepositedToPool(session_id), &ask_amount);
+        }
 
         events::publish_event(
             &env,

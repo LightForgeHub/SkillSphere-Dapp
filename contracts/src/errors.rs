@@ -77,4 +77,13 @@ pub enum Error {
 
     // #253 - NFT minting
     NftContractNotSet = 63,
+
+    // #276 - Slippage protection
+    SlippageExceeded = 64,
+
+    // #277 - Reputation decay / #278 - Session quality score (shared)
+    InvalidDimensionRating = 65,
+
+    // #275 - Idle escrow yield
+    YieldPoolNotSet = 66,
 }

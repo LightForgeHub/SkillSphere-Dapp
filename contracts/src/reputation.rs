@@ -31,6 +31,60 @@ use soroban_sdk::{contracttype, symbol_short, Address, Env, IntoVal, Symbol, Vec
 
 use crate::{DataKey, events};
 
+// ---------------------------------------------------------------------------
+// Issue #277 — Reputation Decay for Inactive Experts
+// ---------------------------------------------------------------------------
+
+/// Seconds in 30 days.
+const DECAY_PERIOD_SECS: u64 = 30 * 24 * 60 * 60;
+/// Retention per period in basis points (95% = 9500 bps, i.e. 5% decay).
+const DECAY_RETENTION_BPS: u64 = 9_500;
+/// Floor: rating cannot fall below 50% of original (5000 bps).
+const DECAY_FLOOR_BPS: u64 = 5_000;
+
+/// Returns the retention factor in basis points (0–10000) given how long the
+/// expert has been inactive.  Pure function — safe to call anywhere.
+///
+/// For every 30-day period of inactivity, 5% is removed (multiplicatively).
+/// The result is floored at 50% so `effective ≥ stored / 2`.
+pub fn decay_factor_bps(now: u64, last_active: u64) -> u64 {
+    if now <= last_active {
+        return 10_000;
+    }
+    let elapsed = now - last_active;
+    let periods = elapsed / DECAY_PERIOD_SECS;
+    if periods == 0 {
+        return 10_000;
+    }
+    // Each period retains 95% = 9500 bps.
+    let mut factor: u64 = 10_000;
+    for _ in 0..periods {
+        factor = factor.saturating_mul(DECAY_RETENTION_BPS) / 10_000;
+        if factor <= DECAY_FLOOR_BPS {
+            return DECAY_FLOOR_BPS;
+        }
+    }
+    factor.max(DECAY_FLOOR_BPS)
+}
+
+/// Applies decay to `stored_rating` (1–5 scale expressed in hundredths for
+/// precision).  Returns the effective rating on the same 1–5 scale.
+pub fn effective_rating(stored_rating: u32, now: u64, last_active: u64) -> u32 {
+    if stored_rating == 0 {
+        return 0;
+    }
+    let factor = decay_factor_bps(now, last_active);
+    // Multiply rating × factor (bps) then divide by 10000.
+    ((stored_rating as u64).saturating_mul(factor) / 10_000) as u32
+}
+
+/// Update the expert's `last_active` timestamp in persistent storage.
+pub fn record_expert_activity(env: &Env, expert: &Address) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::ExpertLastActive(expert.clone()), &env.ledger().timestamp());
+}
+
 /// Threshold: 100 hours expressed in seconds.
 pub const BADGE_HOURS_THRESHOLD_SECS: u64 = 100 * 60 * 60;
 

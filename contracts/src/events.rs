@@ -264,4 +264,12 @@ pub mod event_type {
     pub fn session_expired() -> Symbol {
         symbol_short!("sessExp")
     }
+    /// Issue #275 — yield distributed from idle escrow pool.
+    pub fn yield_distributed() -> Symbol {
+        symbol_short!("yieldDist")
+    }
+    /// Issue #278 — session rated with multi-dimensional score.
+    pub fn session_rated() -> Symbol {
+        symbol_short!("sessRated")
+    }
 }
