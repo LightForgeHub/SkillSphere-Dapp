@@ -77,20 +77,19 @@ pub fn cancel_session_by_expert(
     session_id: u64,
     reason_cid: String,
 ) -> Result<(i128, i128), Error> {
-    SkillSphereContract::assert_not_locked(env)?;
-    SkillSphereContract::set_reentrancy_lock(env, true);
+    crate::security::ReentrancyGuard::non_reentrant(env)?;
 
     expert.require_auth();
 
     if !SkillSphereContract::is_valid_ipfs_cid(&reason_cid) {
-        SkillSphereContract::set_reentrancy_lock(env, false);
+        crate::security::ReentrancyGuard::clear(env);
         return Err(Error::InvalidCid);
     }
 
     let mut session = SkillSphereContract::get_session_or_error(env, session_id)?;
 
     if expert != session.expert {
-        SkillSphereContract::set_reentrancy_lock(env, false);
+        crate::security::ReentrancyGuard::clear(env);
         return Err(Error::Unauthorized);
     }
 
@@ -98,7 +97,7 @@ pub fn cancel_session_by_expert(
         session.status,
         SessionStatus::Active | SessionStatus::Paused
     ) {
-        SkillSphereContract::set_reentrancy_lock(env, false);
+        crate::security::ReentrancyGuard::clear(env);
         return Err(Error::InvalidSessionState);
     }
 
@@ -151,6 +150,6 @@ pub fn cancel_session_by_expert(
         (expert, expert_payout, seeker_refund, reason_cid),
     );
 
-    SkillSphereContract::set_reentrancy_lock(env, false);
+    crate::security::ReentrancyGuard::clear(env);
     Ok((expert_payout, seeker_refund))
 }

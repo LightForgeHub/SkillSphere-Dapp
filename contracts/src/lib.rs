@@ -18,6 +18,7 @@ pub mod roles;
 pub mod timelock;
 pub mod identity;
 pub mod recovery;
+pub mod security;
 pub use bridge::BridgeError;
 pub use crypto::SessionVoucher;
 pub use dex::SwapPath;
@@ -26,7 +27,7 @@ pub use reputation::BadgeRecord;
 pub use reputation::ExpertTier;
 
 use soroban_sdk::{
-    contract, contractclient, contractimpl, contracttype, symbol_short, token, xdr::ToXdr, Address,
+    contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, token, xdr::ToXdr, Address,
     Bytes, BytesN, Env, Map, String, Vec,
 };
 
@@ -91,43 +92,7 @@ const DISPUTE_ESCALATION_WINDOW_SECS: u64 = 7 * 24 * 60 * 60;
 /// Expert handoff proposal expiry: 30 minutes
 const HANDOFF_PROPOSAL_EXPIRY_SECS: u64 = 30 * 60;
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u32)]
-pub enum Error {
-    Unauthorized = 1,
-    SessionNotFound = 2,
-    InvalidSessionState = 3,
-    InsufficientBalance = 4,
-    InvalidAmount = 5,
-    NotStarted = 6,
-    AlreadyFinished = 7,
-    DisputeNotFound = 8,
-    UpgradeNotInitiated = 9,
-    TimelockNotExpired = 10,
-    EmptyDisputeReason = 11,
-    ProtocolPaused = 12,
-    ReputationTooLow = 13,
-    InvalidFeeBps = 14,
-    SessionExpired = 15,
-    InvalidCid = 16,
-    InvalidSplitBps = 17,
-    DisputeWindowActive = 18,
-    InvalidFeeConfig = 19,
-    InsufficientTreasuryBalance = 20,
-    AmountBelowMinimum = 21,
-    ExpertNotRegistered = 22,
-    ExpertUnavailable = 23,
-    InvalidReferrer = 24,
-    ReentrancyDetected = 25,
-    DepositTooLow = 26,
-    // Anti-spam session deposit
-    InsufficientAntiSpamDeposit = 27,
-    // Oracle circuit breaker
-    CircuitBreakerActive = 28,
-    // Session expiry
-    SessionNotExpired = 29,
-}
+
 const REFERRAL_COMMISSION_BPS: u32 = 500; // 5% commission of expert earnings paid from platform fee
 const DEFAULT_REFERRAL_SESSION_LIMIT: u32 = 50;
 const DEFAULT_CANCELLATION_FEE_BPS: u32 = 500;
@@ -400,7 +365,7 @@ pub struct Session {
     pub accrued_amount: i128,
     pub status: SessionStatus,
     pub metadata_cid: String,
-    pub encrypted_notes_hash: Option<String>,
+    pub encrypted_notes_cid: Option<String>,
     pub paused_at: Option<u64>,
     pub agency_address: Option<Address>,
     pub agency_share_bps: u32,
@@ -1124,6 +1089,9 @@ impl SkillSphereContract {
     ) -> Result<u64, Error> {
         seeker.require_auth();
         Self::ensure_protocol_active(&env)?;
+        if Self::is_emergency_paused(&env) {
+            return Err(Error::ProtocolPaused);
+        }
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
@@ -1600,7 +1568,7 @@ impl SkillSphereContract {
         if caller != session.seeker && caller != session.expert {
             return Err(Error::Unauthorized);
         }
-        session.encrypted_notes_hash = Some(notes_hash);
+        session.encrypted_notes_cid = Some(notes_hash);
         env.storage()
             .persistent()
             .set(&DataKey::Session(session_id), &session);
@@ -2393,10 +2361,29 @@ impl SkillSphereContract {
         Ok(())
     }
 
-    /// Unpauses protocol activities (admin only).
     pub fn unpause_protocol(env: Env) -> Result<(), Error> {
         Self::require_admin(&env)?;
         Self::resume_protocol_internal(&env)
+    }
+
+    pub fn is_emergency_paused(env: &Env) -> bool {
+        env.storage().instance().get(&symbol_short!("emg_pause")).unwrap_or(false)
+    }
+
+    pub fn emergency_pause(env: Env, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+        crate::roles::require_role(&env, &caller, crate::roles::Role::SuperAdmin)?;
+        env.storage().instance().set(&symbol_short!("emg_pause"), &true);
+        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("emg_pause"), true));
+        Ok(())
+    }
+
+    pub fn emergency_unpause(env: Env, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+        crate::roles::require_role(&env, &caller, crate::roles::Role::SuperAdmin)?;
+        env.storage().instance().set(&symbol_short!("emg_pause"), &false);
+        events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("emg_pause"), false));
+        Ok(())
     }
 
     /// Checks if the protocol is currently paused.
@@ -2575,7 +2562,7 @@ impl SkillSphereContract {
         metadata_cid: String,
     ) -> u64 {
         seeker.require_auth();
-        if Self::protocol_paused(&env) {
+        if Self::protocol_paused(&env) || Self::is_emergency_paused(&env) {
             panic_with_error!(&env, Error::ProtocolPaused);
         }
         if oracles::is_circuit_breaker_active(&env) {
@@ -2658,6 +2645,9 @@ impl SkillSphereContract {
     ) -> Result<u64, Error> {
         seeker.require_auth();
         Self::ensure_protocol_active(&env)?;
+        if Self::is_emergency_paused(&env) {
+            return Err(Error::ProtocolPaused);
+        }
         if oracles::is_circuit_breaker_active(&env) {
             return Err(Error::CircuitBreakerActive);
         }
@@ -2776,7 +2766,7 @@ impl SkillSphereContract {
             accrued_amount: 0,
             status: SessionStatus::Reserved,
             metadata_cid: metadata_cid.clone(),
-            encrypted_notes_hash: None,
+            encrypted_notes_cid: None,
             paused_at: None,
             agency_address,
             agency_share_bps,
@@ -3214,7 +3204,7 @@ impl SkillSphereContract {
     /// * `Error::InvalidSessionState` - If the session is already finished or disputed.
     pub fn settle_session(env: Env, session_id: u64) -> Result<i128, Error> {
         Self::ensure_protocol_active(&env)?;
-        Self::assert_not_locked(&env)?;
+        crate::security::ReentrancyGuard::non_reentrant(&env)?;
         let session = Self::get_session_or_error(&env, session_id)?;
         session.expert.require_auth();
         Self::internal_settle(&env, session)
@@ -3275,7 +3265,7 @@ impl SkillSphereContract {
     /// * `Error::SessionNotFound` - If the session doesn't exist.
     /// * `Error::Unauthorized` - If the caller is not a participant.
     pub fn end_session(env: Env, caller: Address, session_id: u64) -> Result<(), Error> {
-        Self::assert_not_locked(&env)?;
+        crate::security::ReentrancyGuard::non_reentrant(&env)?;
         caller.require_auth();
         let mut session = Self::get_session_or_error(&env, session_id)?;
         Self::require_participant(&session, &caller)?;
@@ -3481,7 +3471,7 @@ impl SkillSphereContract {
                     return Err(Error::InvalidSessionState);
                 }
                 session.metadata_cid = tombstone.clone();
-                session.encrypted_notes_hash = Some(tombstone.clone());
+                session.encrypted_notes_cid = Some(tombstone.clone());
                 env.storage()
                     .persistent()
                     .set(&DataKey::Session(id), &session);
@@ -3790,26 +3780,6 @@ impl SkillSphereContract {
             .unwrap_or(false)
     }
 
-    fn reentrancy_locked(env: &Env) -> bool {
-        env.storage()
-            .instance()
-            .get(&DataKey::ReentrancyLock)
-            .unwrap_or(false)
-    }
-
-    pub(crate) fn set_reentrancy_lock(env: &Env, locked: bool) {
-        env.storage()
-            .instance()
-            .set(&DataKey::ReentrancyLock, &locked);
-    }
-
-    pub(crate) fn assert_not_locked(env: &Env) -> Result<(), Error> {
-        if Self::reentrancy_locked(env) {
-            return Err(Error::Reentrancy);
-        }
-        Ok(())
-    }
-
     fn ensure_protocol_active(env: &Env) -> Result<(), Error> {
         if Self::protocol_paused(env) {
             return Err(Error::ProtocolPaused);
@@ -3904,7 +3874,7 @@ impl SkillSphereContract {
             accrued_amount: 0,
             status: SessionStatus::Active,
             metadata_cid: metadata_cid.clone(),
-            encrypted_notes_hash: None,
+            encrypted_notes_cid: None,
             paused_at: None,
             agency_address,
             agency_share_bps,
@@ -4186,8 +4156,8 @@ impl SkillSphereContract {
 
     fn internal_settle(env: &Env, mut session: Session) -> Result<i128, Error> {
         // === REENTRANCY GUARD ===
-        Self::assert_not_locked(env)?;
-        Self::set_reentrancy_lock(env, true);
+        crate::security::ReentrancyGuard::non_reentrant(&env)?;
+        
 
         // === CHECKS ===
         if matches!(
@@ -4197,7 +4167,7 @@ impl SkillSphereContract {
                 | SessionStatus::Resolved
                 | SessionStatus::CancelledByExpert
         ) {
-            Self::set_reentrancy_lock(env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Err(Error::InvalidSessionState);
         }
 
@@ -4208,7 +4178,7 @@ impl SkillSphereContract {
             .get(&DataKey::SessionFrozenFlag(session.id))
             .unwrap_or(false);
         if is_frozen {
-            Self::set_reentrancy_lock(env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Err(Error::SessionFrozen);
         }
 
@@ -4225,10 +4195,10 @@ impl SkillSphereContract {
                 session.status = SessionStatus::Completed;
                 session.last_settlement_timestamp = expiry as u32;
                 Self::save_session(env, &session);
-                Self::set_reentrancy_lock(env, false);
+                crate::security::ReentrancyGuard::clear(&env);
                 return Err(Error::SessionExpired);
             }
-            Self::set_reentrancy_lock(env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Ok(0);
         }
 
@@ -4408,14 +4378,14 @@ impl SkillSphereContract {
             reputation::record_expert_activity(env, &expert);
         }
 
-        Self::set_reentrancy_lock(env, false);
+        crate::security::ReentrancyGuard::clear(&env);
         Ok(expert_payout)
     }
 
     fn close_session(env: &Env, session: &mut Session) -> Result<(i128, i128), Error> {
         // === REENTRANCY GUARD ===
-        Self::assert_not_locked(env)?;
-        Self::set_reentrancy_lock(env, true);
+        crate::security::ReentrancyGuard::non_reentrant(&env)?;
+        
 
         // === CHECKS ===
         if matches!(
@@ -4425,7 +4395,7 @@ impl SkillSphereContract {
                 | SessionStatus::Resolved
                 | SessionStatus::CancelledByExpert
         ) {
-            Self::set_reentrancy_lock(env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Err(Error::InvalidSessionState);
         }
 
@@ -4544,7 +4514,7 @@ impl SkillSphereContract {
         // Issue #277: refresh the expert's last-active timestamp.
         reputation::record_expert_activity(env, &session.expert);
 
-        Self::set_reentrancy_lock(env, false);
+        crate::security::ReentrancyGuard::clear(&env);
         Ok((final_claimable, final_remaining))
     }
 
@@ -5569,33 +5539,33 @@ impl SkillSphereContract {
     /// * `Error::InvalidSessionState` - If the session has already accrued earnings.
     pub fn claim_no_show_refund(env: Env, seeker: Address, session_id: u64) -> Result<i128, Error> {
         // === REENTRANCY GUARD ===
-        Self::assert_not_locked(&env)?;
-        Self::set_reentrancy_lock(&env, true);
+        crate::security::ReentrancyGuard::non_reentrant(&env)?;
+        
 
         // === CHECKS ===
         seeker.require_auth();
         let mut session = Self::get_session_or_error(&env, session_id)?;
 
         if seeker != session.seeker {
-            Self::set_reentrancy_lock(&env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Err(Error::Unauthorized);
         }
 
         if session.status != SessionStatus::Active {
-            Self::set_reentrancy_lock(&env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Err(Error::InvalidSessionState);
         }
 
         let now = env.ledger().timestamp();
         if now <= session.start_timestamp as u64 + SESSION_NO_SHOW_REFUND_WINDOW {
-            Self::set_reentrancy_lock(&env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Err(Error::NotStarted);
         }
 
         if session.accrued_amount > 0
             || session.last_settlement_timestamp != session.start_timestamp
         {
-            Self::set_reentrancy_lock(&env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Err(Error::InvalidSessionState);
         }
 
@@ -5622,7 +5592,7 @@ impl SkillSphereContract {
             (refund_amount, now),
         );
 
-        Self::set_reentrancy_lock(&env, false);
+        crate::security::ReentrancyGuard::clear(&env);
         Ok(refund_amount)
     }
 
@@ -5642,8 +5612,8 @@ impl SkillSphereContract {
     /// * `Error::InsufficientBalance` - If the session balance is less than accrued (should not happen).
     pub fn withdraw_accrued(env: Env, session_id: u64) -> Result<i128, Error> {
         // === REENTRANCY GUARD ===
-        Self::assert_not_locked(&env)?;
-        Self::set_reentrancy_lock(&env, true);
+        crate::security::ReentrancyGuard::non_reentrant(&env)?;
+        
 
         // === CHECKS ===
         let mut session = Self::get_session_or_error(&env, session_id)?;
@@ -5653,7 +5623,7 @@ impl SkillSphereContract {
 
         // Verify session is active
         if session.status != SessionStatus::Active {
-            Self::set_reentrancy_lock(&env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Err(Error::InvalidSessionState);
         }
 
@@ -5666,13 +5636,13 @@ impl SkillSphereContract {
         let total_claimable = session.accrued_amount.saturating_add(newly_accrued);
 
         if total_claimable <= 0 {
-            Self::set_reentrancy_lock(&env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Err(Error::InvalidAmount);
         }
 
         // Verify session has sufficient balance
         if session.balance < total_claimable {
-            Self::set_reentrancy_lock(&env, false);
+            crate::security::ReentrancyGuard::clear(&env);
             return Err(Error::InsufficientBalance);
         }
 
@@ -5697,7 +5667,7 @@ impl SkillSphereContract {
             (symbol_short!("withdraw"), total_claimable, now),
         );
 
-        Self::set_reentrancy_lock(&env, false);
+        crate::security::ReentrancyGuard::clear(&env);
         Ok(total_claimable)
     }
 
@@ -6003,7 +5973,7 @@ impl SkillSphereContract {
             accrued_amount: 0,
             status: SessionStatus::Active,
             metadata_cid: metadata_cid.clone(),
-            encrypted_notes_hash: None,
+            encrypted_notes_cid: None,
             paused_at: None,
             agency_address: profile.agency_address.clone(),
             agency_share_bps: profile.agency_share_bps,
@@ -6341,7 +6311,7 @@ mod test {
         client.update_session_notes(&seeker, &session_id, &notes_cid);
 
         let session = client.get_session(&session_id);
-        assert_eq!(session.encrypted_notes_hash, Some(notes_cid));
+        assert_eq!(session.encrypted_notes_cid, Some(notes_cid));
     }
 
     use super::*;

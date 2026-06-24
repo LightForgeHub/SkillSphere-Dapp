@@ -8,7 +8,7 @@ use soroban_sdk::{contracttype, Address, Env, String};
 use crate::{DataKey, Session, SessionStatus};
 
 // ---------------------------------------------------------------------------
-// V1 schema – the original Session layout (no `encrypted_notes_hash` / `paused_at`)
+// V1 schema – the original Session layout (no `encrypted_notes_cid` / `paused_at`)
 // ---------------------------------------------------------------------------
 
 #[contracttype]
@@ -41,7 +41,7 @@ pub fn run(env: &Env, from: u32, to: u32) {
 }
 
 // ---------------------------------------------------------------------------
-// v1 → v2: add `encrypted_notes_hash` (None) and `paused_at` (None) fields
+// v1 → v2: add `encrypted_notes_cid` (None) and `paused_at` (None) fields
 // ---------------------------------------------------------------------------
 
 fn migrate_v1_to_v2(env: &Env) {
@@ -78,7 +78,7 @@ fn migrate_v1_to_v2(env: &Env) {
                     accrued_amount: v1.accrued_amount,
                     status: v1.status,
                     metadata_cid: v1.metadata_cid,
-                    encrypted_notes_hash: None,
+                    encrypted_notes_cid: None,
                     paused_at: None,
                     agency_address: None,
                     agency_share_bps: 0,
@@ -160,7 +160,7 @@ mod test {
         assert_eq!(session.seeker, seeker);
         assert_eq!(session.expert, expert);
         assert_eq!(session.balance, 3_000);
-        assert_eq!(session.encrypted_notes_hash, None);
+        assert_eq!(session.encrypted_notes_cid, None);
         assert_eq!(session.paused_at, None);
 
         // Version should now be 2.

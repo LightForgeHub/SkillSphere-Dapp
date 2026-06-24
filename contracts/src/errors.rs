@@ -23,12 +23,12 @@ pub enum Error {
     InvalidSplitBps = 17,
     DisputeWindowActive = 18,
     InvalidFeeConfig = 19,
-    InsuffTreasuryBal = 20,
+    InsufficientTreasuryBalance = 20,
     AmountBelowMinimum = 21,
     ExpertNotRegistered = 22,
     ExpertUnavailable = 23,
     InvalidReferrer = 24,
-    Reentrancy = 25,
+    ReentrantCall = 25,
     DepositTooLow = 26,
     AlreadyInitialized = 27,
     InvalidRating = 28,
@@ -84,6 +84,8 @@ pub enum Error {
     // #277 - Reputation decay / #278 - Session quality score (shared)
     InvalidDimensionRating = 65,
 
-    // #275 - Idle escrow yield
     YieldPoolNotSet = 66,
+    InsufficientAntiSpamDeposit = 67,
+    CircuitBreakerActive = 68,
+    SessionNotExpired = 69,
 }

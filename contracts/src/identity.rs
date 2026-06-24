@@ -123,7 +123,7 @@ impl IdentityContract {
 ///
 /// # Storage keys touched (in the main contract's persistent storage)
 /// * `DataKey::ExpertProfile(address)` — `metadata_cid` field
-/// * `DataKey::Session(id)` — `metadata_cid` and `encrypted_notes_hash` for
+/// * `DataKey::Session(id)` — `metadata_cid` and `encrypted_notes_cid` for
 ///   every completed/resolved session where `seeker == address || expert == address`
 ///
 /// Because this module does not have direct access to the main contract's
