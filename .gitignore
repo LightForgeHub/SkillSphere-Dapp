@@ -43,3 +43,5 @@ yarn-error.log*
 next-env.d.ts
 
 target/
+issue.md
+pr.md
