@@ -213,6 +213,21 @@ pub enum DataKey {
     ExpertAvgRatingComm(Address),
     ExpertAvgRatingExpertise(Address),
     ExpertAvgRatingPunct(Address),
+    // Issue #284 - Jury Selection
+    JurySession(u64),
+    JurySize,
+    // Issue #285 - Appeal Mechanism
+    Appeal(u64),
+    AppealBondAmount,
+    // Issue #286 - Fee Auto-Conversion
+    SkillTokenAddress,
+    FeeBuybackEnabled,
+    FeeBuybackSlippageBps,
+    // Issue #287 - Surge Pricing
+    CategoryActiveSessions(String),
+    SurgePricingEnabled,
+    ExpertCategory(Address),
+    SurgeConfig,
 }
 
 #[contracttype]
@@ -6230,6 +6245,225 @@ impl SkillSphereContract {
     // status badge.
     pub fn is_paused(env: Env) -> bool {
         Self::protocol_paused(&env)
+    }
+
+    // ── Issue #284 — Jury Selection ──────────────────────────────────────────
+
+    /// Select a jury panel for `dispute_id` from the provided `candidates`.
+    ///
+    /// Only the admin may call this.  `jury_size = 0` uses the configured
+    /// default (`DataKey::JurySize`, default 3).
+    pub fn select_jury(
+        env: Env,
+        dispute_id: u64,
+        candidates: Vec<Address>,
+        jury_size: u32,
+    ) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        disputes::select_jury(&env, dispute_id, candidates, jury_size)
+    }
+
+    /// Cast a vote as a juror for `dispute_id`.
+    pub fn cast_jury_vote(
+        env: Env,
+        juror: Address,
+        dispute_id: u64,
+        vote_for_seeker: bool,
+    ) -> Result<(), Error> {
+        disputes::cast_jury_vote(&env, juror, dispute_id, vote_for_seeker)
+    }
+
+    /// Finalize the jury verdict and return `(seeker_bps, expert_bps)`.
+    ///
+    /// Requires all jurors to have voted or a majority to have been reached.
+    pub fn finalize_jury_verdict(env: Env, dispute_id: u64) -> Result<(u32, u32), Error> {
+        disputes::finalize_jury_verdict(&env, dispute_id)
+    }
+
+    /// Read the current jury vote record for `dispute_id`.
+    pub fn get_jury_session(
+        env: Env,
+        dispute_id: u64,
+    ) -> Result<disputes::JuryVoteRecord, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::JurySession(dispute_id))
+            .ok_or(Error::JuryNotSelected)
+    }
+
+    /// Set the default jury size (admin-only).
+    pub fn set_jury_size(env: Env, size: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage().instance().set(&DataKey::JurySize, &size);
+        Ok(())
+    }
+
+    // ── Issue #285 — Appeal Mechanism ────────────────────────────────────────
+
+    /// File an appeal against an open dispute ruling.
+    ///
+    /// If an appeal bond is configured, it is collected from `appellant` and
+    /// held until `resolve_appeal` is called.
+    pub fn appeal_dispute(
+        env: Env,
+        appellant: Address,
+        dispute_id: u64,
+        bond_token: Address,
+    ) -> Result<(), Error> {
+        disputes::appeal_dispute(&env, appellant, dispute_id, bond_token)
+    }
+
+    /// Resolve an appeal with a new ruling (admin-only).
+    ///
+    /// Applies the new `seeker_award_bps` / `expert_award_bps` split to the
+    /// underlying dispute and returns the bond to the appellant.
+    /// `seeker_award_bps + expert_award_bps` must equal 10 000.
+    pub fn resolve_appeal(
+        env: Env,
+        dispute_id: u64,
+        seeker_award_bps: u32,
+        expert_award_bps: u32,
+    ) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        disputes::resolve_appeal(&env, dispute_id, seeker_award_bps, expert_award_bps)
+    }
+
+    /// Read the appeal record for `dispute_id`.
+    pub fn get_appeal(env: Env, dispute_id: u64) -> Result<disputes::AppealRecord, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Appeal(dispute_id))
+            .ok_or(Error::AppealNotFound)
+    }
+
+    /// Set the appeal bond amount (admin-only).
+    pub fn set_appeal_bond_amount(env: Env, amount: i128) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        disputes::set_appeal_bond_amount(&env, amount);
+        Ok(())
+    }
+
+    // ── Issue #286 — Fee Auto-Conversion ────────────────────────────────────
+
+    /// Set the SKILL governance token address used for fee buybacks (admin-only).
+    pub fn set_skill_token(env: Env, token_addr: Address) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::SkillTokenAddress, &token_addr);
+        Ok(())
+    }
+
+    /// Enable or disable automated fee-to-SKILL conversion (admin-only).
+    pub fn set_fee_buyback_enabled(env: Env, enabled: bool) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeBuybackEnabled, &enabled);
+        Ok(())
+    }
+
+    /// Set the max slippage tolerance in bps for fee buyback swaps (admin-only).
+    pub fn set_fee_buyback_slippage(env: Env, bps: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeBuybackSlippageBps, &bps);
+        Ok(())
+    }
+
+    /// Swap `fee_amount` of `source_token` into SKILL tokens via the DEX
+    /// (admin-only).
+    pub fn convert_fees_to_skill(
+        env: Env,
+        fee_amount: i128,
+        source_token: Address,
+        expected_skill_out: i128,
+    ) -> Result<i128, Error> {
+        Self::require_admin(&env)?;
+        treasury::convert_fees_to_skill(&env, fee_amount, source_token, expected_skill_out)
+    }
+
+    // ── Issue #287 — Surge Pricing ───────────────────────────────────────────
+
+    /// Update the surge pricing configuration (admin-only).
+    pub fn set_surge_config(
+        env: Env,
+        config: reputation::SurgeConfig,
+    ) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        reputation::set_surge_config(&env, config);
+        Ok(())
+    }
+
+    /// Enable or disable surge pricing globally (admin-only).
+    pub fn set_surge_pricing_enabled(env: Env, enabled: bool) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        reputation::set_surge_enabled(&env, enabled);
+        Ok(())
+    }
+
+    /// Assign an expert to a named skill category (admin-only).
+    pub fn set_expert_category(env: Env, expert: Address, category: String) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        reputation::set_expert_category(&env, &expert, category);
+        Ok(())
+    }
+
+    /// Returns the current surge multiplier in bps for `expert`'s category.
+    /// Returns 10 000 (no surge) when surge is disabled or category has few sessions.
+    pub fn get_surge_multiplier(env: Env, expert: Address) -> u32 {
+        reputation::get_surge_multiplier_bps(&env, &expert)
+    }
+
+    /// Start a session with surge-pricing awareness.
+    ///
+    /// If the expert's category is in surge, `surge_accepted` must be `true`
+    /// or the call panics.  Increments the category's active session counter.
+    pub fn start_session_with_surge(
+        env: Env,
+        seeker: Address,
+        expert: Address,
+        token: Address,
+        amount: i128,
+        min_reputation: u32,
+        metadata_cid: String,
+        surge_accepted: bool,
+    ) -> u64 {
+        seeker.require_auth();
+        if Self::protocol_paused(&env) || Self::is_emergency_paused(&env) {
+            panic_with_error!(&env, Error::ProtocolPaused);
+        }
+
+        let multiplier = reputation::get_surge_multiplier_bps(&env, &expert);
+        if multiplier > 10_000 && !surge_accepted {
+            panic_with_error!(&env, Error::SurgeNotAccepted);
+        }
+
+        if multiplier > 10_000 {
+            events::publish_event(
+                &env,
+                events::event_type::surge_accepted(),
+                0,
+                (expert.clone(), multiplier, seeker.clone()),
+            );
+        }
+
+        reputation::increment_category_sessions(&env, &expert);
+
+        Self::start_session(env, seeker, expert, token, amount, min_reputation, metadata_cid)
+    }
+
+    /// Decrement a category's active-session counter after a surge session ends.
+    ///
+    /// Must be called by a session participant (`seeker` or `expert`) once
+    /// the session has been settled, cancelled, or resolved.
+    pub fn end_surge_session(env: Env, caller: Address, session_id: u64) -> Result<(), Error> {
+        caller.require_auth();
+        let session = Self::get_session_or_error(&env, session_id)?;
+        Self::require_participant(&session, &caller)?;
+        reputation::decrement_category_sessions(&env, &session.expert);
+        Ok(())
     }
 }
 

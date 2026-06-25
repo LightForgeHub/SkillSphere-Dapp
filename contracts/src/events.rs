@@ -272,4 +272,32 @@ pub mod event_type {
     pub fn session_rated() -> Symbol {
         symbol_short!("sessRated")
     }
+    /// Issue #284 — jury selected for a disputed session.
+    pub fn jury_selected() -> Symbol {
+        symbol_short!("jurySlct")
+    }
+    /// Issue #284 — a juror cast their vote.
+    pub fn jury_vote_cast() -> Symbol {
+        symbol_short!("juryVote")
+    }
+    /// Issue #284 — jury voting finalized, verdict reached.
+    pub fn jury_verdict() -> Symbol {
+        symbol_short!("juryVrdt")
+    }
+    /// Issue #285 — appeal filed against a dispute ruling.
+    pub fn appeal_filed() -> Symbol {
+        symbol_short!("appFiled")
+    }
+    /// Issue #285 — appeal resolved by admin with new ruling.
+    pub fn appeal_resolved() -> Symbol {
+        symbol_short!("appResl")
+    }
+    /// Issue #286 — platform fees converted to SKILL token.
+    pub fn fee_buyback() -> Symbol {
+        symbol_short!("feeBybak")
+    }
+    /// Issue #287 — seeker accepted surge-priced session.
+    pub fn surge_accepted() -> Symbol {
+        symbol_short!("surgeAcc")
+    }
 }

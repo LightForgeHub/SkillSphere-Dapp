@@ -88,4 +88,22 @@ pub enum Error {
     InsufficientAntiSpamDeposit = 67,
     CircuitBreakerActive = 68,
     SessionNotExpired = 69,
+
+    // #284 - Jury Selection
+    JuryNotSelected = 70,
+    JuryAlreadyVoted = 71,
+    JuryVotingClosed = 72,
+    InsufficientCandidates = 73,
+
+    // #285 - Appeal Mechanism
+    AppealBondRequired = 74,
+    AppealAlreadyFiled = 75,
+    AppealNotFound = 76,
+
+    // #286 - Fee Auto-Conversion
+    SkillTokenNotSet = 78,
+    BuybackDisabled = 79,
+
+    // #287 - Surge Pricing
+    SurgeNotAccepted = 82,
 }

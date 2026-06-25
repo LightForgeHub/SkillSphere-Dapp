@@ -196,6 +196,148 @@ pub fn update_expert_tier_on_completion(env: &Env, expert: &Address) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Issue #287 — Surge Pricing
+// ---------------------------------------------------------------------------
+
+/// Active sessions per category before surge pricing activates.
+pub const DEFAULT_SURGE_THRESHOLD: u32 = 10;
+/// Maximum surge multiplier in basis points (20000 = 2×).
+pub const DEFAULT_SURGE_MAX_BPS: u32 = 20_000;
+/// Every this many additional sessions above threshold adds one step.
+pub const DEFAULT_SURGE_STEP_SESSIONS: u32 = 5;
+/// Basis points added per step (1000 = +10% per step).
+pub const DEFAULT_SURGE_STEP_BPS: u32 = 1_000;
+
+/// Admin-configurable surge pricing parameters.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SurgeConfig {
+    /// Active sessions per category required before surge kicks in.
+    pub threshold_sessions: u32,
+    /// Maximum surge multiplier in bps (e.g. 20000 = 2×).
+    pub max_multiplier_bps: u32,
+    /// Sessions above threshold per pricing step.
+    pub step_sessions: u32,
+    /// Basis points added to the multiplier per step.
+    pub step_bps: u32,
+}
+
+/// Returns the current surge configuration (or safe defaults).
+pub fn get_surge_config(env: &Env) -> SurgeConfig {
+    env.storage()
+        .instance()
+        .get(&DataKey::SurgeConfig)
+        .unwrap_or(SurgeConfig {
+            threshold_sessions: DEFAULT_SURGE_THRESHOLD,
+            max_multiplier_bps: DEFAULT_SURGE_MAX_BPS,
+            step_sessions: DEFAULT_SURGE_STEP_SESSIONS,
+            step_bps: DEFAULT_SURGE_STEP_BPS,
+        })
+}
+
+/// Persist a new surge configuration. Callable only by admin.
+pub fn set_surge_config(env: &Env, config: SurgeConfig) {
+    env.storage()
+        .instance()
+        .set(&DataKey::SurgeConfig, &config);
+}
+
+/// Returns whether surge pricing is currently active.
+pub fn is_surge_enabled(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKey::SurgePricingEnabled)
+        .unwrap_or(false)
+}
+
+/// Enable or disable surge pricing.
+pub fn set_surge_enabled(env: &Env, enabled: bool) {
+    env.storage()
+        .instance()
+        .set(&DataKey::SurgePricingEnabled, &enabled);
+}
+
+/// Assign an expert to a named skill category.
+pub fn set_expert_category(env: &Env, expert: &Address, category: soroban_sdk::String) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::ExpertCategory(expert.clone()), &category);
+}
+
+/// Return the expert's assigned category, or `None` if unset.
+pub fn get_expert_category(env: &Env, expert: &Address) -> Option<soroban_sdk::String> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::ExpertCategory(expert.clone()))
+}
+
+/// Increment the active-session counter for the expert's category.
+/// No-op if the expert has no assigned category.
+pub fn increment_category_sessions(env: &Env, expert: &Address) {
+    if let Some(category) = get_expert_category(env, expert) {
+        let key = DataKey::CategoryActiveSessions(category);
+        let count: u32 = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or(0u32);
+        env.storage()
+            .instance()
+            .set(&key, &count.saturating_add(1));
+    }
+}
+
+/// Decrement the active-session counter for the expert's category.
+/// No-op if the expert has no assigned category or count is already zero.
+pub fn decrement_category_sessions(env: &Env, expert: &Address) {
+    if let Some(category) = get_expert_category(env, expert) {
+        let key = DataKey::CategoryActiveSessions(category);
+        let count: u32 = env
+            .storage()
+            .instance()
+            .get(&key)
+            .unwrap_or(0u32);
+        if count > 0 {
+            env.storage()
+                .instance()
+                .set(&key, &count.saturating_sub(1));
+        }
+    }
+}
+
+/// Returns the surge multiplier in basis points for the expert's category.
+///
+/// Returns `10_000` (no surge) when surge is disabled, the expert has no
+/// category, or the category's active session count is below the threshold.
+pub fn get_surge_multiplier_bps(env: &Env, expert: &Address) -> u32 {
+    if !is_surge_enabled(env) {
+        return 10_000;
+    }
+
+    let category = match get_expert_category(env, expert) {
+        Some(c) => c,
+        None => return 10_000,
+    };
+
+    let active: u32 = env
+        .storage()
+        .instance()
+        .get(&DataKey::CategoryActiveSessions(category))
+        .unwrap_or(0u32);
+
+    let config = get_surge_config(env);
+    if active < config.threshold_sessions {
+        return 10_000;
+    }
+
+    let step_sessions = config.step_sessions.max(1);
+    let steps_above = (active - config.threshold_sessions) / step_sessions;
+    let extra_bps = steps_above.saturating_mul(config.step_bps);
+    let multiplier = 10_000u32.saturating_add(extra_bps);
+    multiplier.min(config.max_multiplier_bps)
+}
+
 /// Cross-contract call: invokes `mint_badge(expert, badge_id)` on the
 /// external SBT contract.  The SBT contract must implement a function with
 /// the symbol `"mint_bdg"` that accepts an `Address` and a `u64` badge ID.
