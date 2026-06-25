@@ -1,0 +1,35 @@
+meta {
+  name: Add Dispute Evidence
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Seeker, expert, or admin appends new evidence CID to an unresolved dispute (Issue #198). Replaces previous evidence CID. Emits dispute_evidence event.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Evidence submitted", () => {
+    expect(response).to.have.property("result");
+  });
+}

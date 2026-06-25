@@ -1,0 +1,35 @@
+meta {
+  name: End Session
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Seeker or expert ends a session. Settles accrued earnings to expert, refunds remaining balance to seeker. Session status becomes Completed.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Transaction accepted", () => {
+    expect(response).to.have.property("result");
+  });
+}

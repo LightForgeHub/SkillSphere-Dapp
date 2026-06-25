@@ -1,0 +1,35 @@
+meta {
+  name: Propose / Approve Handoff
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Expert proposes handing off a session to another registered expert (Issue #252). Seeker must approve within 30 minutes. Pays accrued earnings to old expert on approval.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Handoff operation accepted", () => {
+    expect(response).to.have.property("result");
+  });
+}

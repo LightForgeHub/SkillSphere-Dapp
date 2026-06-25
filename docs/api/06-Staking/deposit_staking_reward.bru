@@ -1,0 +1,35 @@
+meta {
+  name: Deposit Staking Reward
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Admin/treasury deposits reward tokens into the staking reward pool. Bumps the per-share accumulator so existing stakers earn proportionally.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Valid JSON-RPC response", () => {
+    expect(response.jsonrpc).to.equal("2.0");
+  });
+}

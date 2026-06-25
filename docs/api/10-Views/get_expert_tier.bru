@@ -1,0 +1,35 @@
+meta {
+  name: Get Expert Tier
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Returns the expert's performance tier (Bronze, Silver, or Gold) based on completed sessions and average rating (Issue #202).
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "simulateTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Tier data returned", () => {
+    expect(response).to.have.property("result");
+  });
+}

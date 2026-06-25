@@ -1,0 +1,38 @@
+meta {
+  name: Start Session with Voucher
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Starts a session using an off-chain expert-signed voucher (Issue #242). Seeker provides voucher + signature. Contract verifies ed25519 signature against expert's registered public key.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Voucher session created", () => {
+    expect(response).to.have.property("result");
+  });
+  test("Valid JSON-RPC response", () => {
+    expect(response.jsonrpc).to.equal("2.0");
+  });
+}

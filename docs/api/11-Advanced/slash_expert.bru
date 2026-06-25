@@ -1,0 +1,35 @@
+meta {
+  name: Slash Expert
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Admin slashes an expert's staked balance for malicious behavior. Transfers slashed tokens to treasury. Emits slashing event with reason.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Slash executed", () => {
+    expect(response).to.have.property("result");
+  });
+}

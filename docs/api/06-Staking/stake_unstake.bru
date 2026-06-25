@@ -1,0 +1,40 @@
+meta {
+  name: Stake / Unstake Tokens
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Staker stakes tokens to earn reward shares. Unstake withdraws tokens and settles pending rewards. Uses lazy accumulator pattern for reward distribution (Issue #214).
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Staking operation accepted", () => {
+    if (response.result) {
+      expect(response.result).to.have.property("hash");
+    }
+  });
+  test("No error", () => {
+    expect(response).to.not.have.property("error");
+  });
+}

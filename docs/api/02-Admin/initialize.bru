@@ -1,0 +1,46 @@
+meta {
+  name: Initialize Contract
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: One-time admin bootstrap. Sets the contract admin and initializes default fee config, session counter, and protocol state. Panics if already initialized.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status is 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("JSON-RPC 2.0 format", () => {
+    expect(response.jsonrpc).to.equal("2.0");
+  });
+  test("Transaction hash returned", () => {
+    if (response.result) {
+      expect(response.result).to.have.property("hash");
+      expect(response.result.hash).to.match(/^[a-f0-9]{64}$/);
+    }
+  });
+  test("Status indicates pending or success", () => {
+    if (response.result && response.result.status) {
+      expect(["PENDING", "SUCCESS"]).to.include(response.result.status);
+    }
+  });
+}

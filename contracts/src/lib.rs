@@ -498,8 +498,10 @@ impl SkillSphereContract {
         admin.require_auth();
 
         env.storage().instance().set(&DataKey::Admin, &admin);
+        storage::extend_instance_ttl(&env, &DataKey::Admin);
         let key = (symbol_short!("role"), admin.clone());
         env.storage().persistent().set(&key, &roles::Role::SuperAdmin);
+        storage::extend_persistent_ttl(&env, &key);
         env.storage()
             .instance()
             .set(&DataKey::SessionCounter, &0u64);
@@ -584,6 +586,9 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::ExpertProfile(expert.clone()), &profile);
+
+        // #282: bump persistent TTL so the expert profile does not expire.
+        storage::extend_persistent_ttl(&env, &DataKey::ExpertProfile(expert.clone()));
 
         if let Some(nft_contract) = Self::get_nft_contract(&env) {
             let nft_client = ProfileNftClient::new(&env, &nft_contract);
@@ -1745,6 +1750,46 @@ impl SkillSphereContract {
     /// Returns the configured rate-limit cooldown in ledgers.
     pub fn get_rate_limit_min_ledgers(env: Env) -> u32 {
         admin::rate_limit_min_ledgers(&env)
+    }
+
+    // ====================================================================
+    // #282 — Configurable TTL Thresholds
+    // ====================================================================
+
+    /// Admin sets the minimum TTL extension in ledgers for persistent/instance
+    /// storage keys. Defaults to 100,000 ledgers (~5.8 days).
+    pub fn set_min_ttl_ledgers(env: Env, ledgers: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if ledgers == 0 {
+            return Err(Error::InvalidAmount);
+        }
+        storage::set_min_ttl_ledgers(&env, ledgers);
+        env.events()
+            .publish((symbol_short!("ttlMin"),), ledgers);
+        Ok(())
+    }
+
+    /// Returns the configured minimum TTL threshold in ledgers.
+    pub fn get_min_ttl_ledgers(env: Env) -> u32 {
+        storage::min_ttl_ledgers(&env)
+    }
+
+    /// Admin sets the maximum TTL extension in ledgers for persistent/instance
+    /// storage keys. Defaults to 2,000,000 ledgers (~115.7 days).
+    pub fn set_max_ttl_ledgers(env: Env, ledgers: u32) -> Result<(), Error> {
+        Self::require_admin(&env)?;
+        if ledgers == 0 {
+            return Err(Error::InvalidAmount);
+        }
+        storage::set_max_ttl_ledgers(&env, ledgers);
+        env.events()
+            .publish((symbol_short!("ttlMax"),), ledgers);
+        Ok(())
+    }
+
+    /// Returns the configured maximum TTL threshold in ledgers.
+    pub fn get_max_ttl_ledgers(env: Env) -> u32 {
+        storage::max_ttl_ledgers(&env)
     }
 
     // ====================================================================
@@ -3852,9 +3897,14 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::Session(session_id), &session);
+
+        // #282: bump persistent TTL so the session key does not expire.
+        storage::extend_persistent_ttl(&env, &DataKey::Session(session_id));
+
         env.storage()
             .persistent()
             .set(&DataKey::SessionLastVerified(session_id), &(now as u64));
+        storage::extend_persistent_ttl(&env, &DataKey::SessionLastVerified(session_id));
 
         events::publish_event(
             env,
@@ -3930,6 +3980,8 @@ impl SkillSphereContract {
         env.storage()
             .persistent()
             .set(&DataKey::Session(session.id), session);
+        // #282: bump persistent TTL every time a session is written.
+        storage::extend_persistent_ttl(env, &DataKey::Session(session.id));
     }
 
     // #214 helpers.

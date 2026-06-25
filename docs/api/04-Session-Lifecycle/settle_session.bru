@@ -1,0 +1,41 @@
+meta {
+  name: Settle Session
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Expert settles an active session, transferring accrued funds from escrow. Applies platform fee, referral reward, insurance cut, and burn. Returns expert payout amount.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Settlement result present", () => {
+    if (response.result && response.result.status === "SUCCESS") {
+      expect(response.result).to.have.property("hash");
+    }
+  });
+  test("Result shape is valid", () => {
+    expect(response).to.have.property("jsonrpc");
+    expect(response).to.have.property("id");
+  });
+}
