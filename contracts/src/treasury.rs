@@ -12,9 +12,9 @@
 //! - `set_spam_deposit_amount(env, amount)` — FeeManager / admin only
 //! - `get_spam_deposit_amount(env)` — returns the current deposit requirement
 
-use soroban_sdk::{token, Address, Env};
+use soroban_sdk::{symbol_short, token, Address, Env, Vec};
 
-use crate::{DataKey, Error};
+use crate::{dex, events, DataKey, Error};
 
 /// Default spam deposit: 0 (disabled until explicitly configured by admin).
 pub const DEFAULT_SPAM_DEPOSIT_AMOUNT: i128 = 0;
@@ -71,4 +71,77 @@ pub fn collect_spam_deposit(
         .set(&DataKey::InsuranceVaultBalance(token.clone()), &vault_bal);
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Issue #286 — Fee Auto-Conversion (SKILL token buyback)
+// ---------------------------------------------------------------------------
+
+/// Swap `fee_amount` of `source_token` into the SKILL governance token via
+/// the configured DEX, crediting the acquired tokens back to the contract.
+///
+/// # Errors
+/// - `BuybackDisabled` — fee buyback is not enabled by admin.
+/// - `SkillTokenNotSet` — no SKILL token address has been configured.
+/// - `ContractUnset` — no DEX contract address has been configured.
+/// - `SwapFailed` — the DEX returned zero or negative output.
+/// - `SlippageExceeded` — actual output deviates from `expected_skill_out`
+///   beyond the configured slippage tolerance.
+pub fn convert_fees_to_skill(
+    env: &Env,
+    fee_amount: i128,
+    source_token: Address,
+    expected_skill_out: i128,
+) -> Result<i128, Error> {
+    let enabled: bool = env
+        .storage()
+        .instance()
+        .get(&DataKey::FeeBuybackEnabled)
+        .unwrap_or(false);
+    if !enabled {
+        return Err(Error::BuybackDisabled);
+    }
+
+    let skill_token: Address = env
+        .storage()
+        .instance()
+        .get(&DataKey::SkillTokenAddress)
+        .ok_or(Error::SkillTokenNotSet)?;
+
+    let dex_contract: Address = env
+        .storage()
+        .instance()
+        .get(&symbol_short!("dex_addr"))
+        .ok_or(Error::ContractUnset)?;
+
+    let slippage_bps: u32 = env
+        .storage()
+        .instance()
+        .get(&DataKey::FeeBuybackSlippageBps)
+        .unwrap_or(100u32);
+
+    let path: Vec<Address> = Vec::new(env);
+    let received = dex::cross_contract_swap(
+        env,
+        &dex_contract,
+        &source_token,
+        &skill_token,
+        &path,
+        fee_amount,
+    );
+
+    if received <= 0 {
+        return Err(Error::SwapFailed);
+    }
+
+    dex::check_slippage(expected_skill_out, received, slippage_bps)?;
+
+    events::publish_event(
+        env,
+        events::event_type::fee_buyback(),
+        0,
+        (source_token, skill_token, fee_amount, received),
+    );
+
+    Ok(received)
 }
