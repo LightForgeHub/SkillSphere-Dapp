@@ -166,8 +166,16 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { address, network } = useWallet();
 
   return (
+    <>
+      {/* Network mismatch alert banner */}
+      {address && network !== null && network !== "TESTNET" && (
+        <div className="w-full bg-red-900/80 border-b border-red-500/50 py-2 px-4 text-center text-sm font-medium text-red-200">
+          Freighter Wallet is set to {network}. Please switch to TESTNET in Freighter extension settings.
+        </div>
+      )}
     <header className="sticky top-0 z-30 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
@@ -226,5 +234,6 @@ export default function Navbar() {
         </nav>
       )}
     </header>
+    </>
   );
 }
