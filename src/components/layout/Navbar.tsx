@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Wallet, LogOut, Copy, Check, Menu, X, Zap } from "lucide-react";
 import { useWallet } from "@/providers/WalletProvider";
+import { useCurrency, type DisplayCurrency } from "@/hooks/useCurrency";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -24,7 +25,12 @@ function networkBadgeColor(network: string | null): string {
 
 // ─── WalletButton ─────────────────────────────────────────────────────────────
 
-function WalletButton() {
+interface WalletButtonProps {
+  convert: (xlmAmount: number) => string;
+  selectedCurrency: DisplayCurrency;
+}
+
+function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
   const { address, network, balance, isLoading, error, connect, disconnect } =
     useWallet();
   const [copied, setCopied] = useState(false);
@@ -74,10 +80,10 @@ function WalletButton() {
           </span>
         )}
 
-        {/* Balance */}
+        {/* Balance (converted to selected currency) */}
         {balance !== null && (
           <span className="hidden sm:inline text-zinc-300 font-mono text-xs">
-            {balance} XLM
+            {convert(Number(balance))}
           </span>
         )}
 
@@ -111,9 +117,16 @@ function WalletButton() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-zinc-400">Balance</span>
-                <span className="text-sm font-mono font-medium text-zinc-200">
-                  {balance !== null ? `${balance} XLM` : "—"}
-                </span>
+                <div className="text-right">
+                  <span className="text-sm font-mono font-medium text-zinc-200">
+                    {balance !== null ? convert(Number(balance)) : "—"}
+                  </span>
+                  {balance !== null && selectedCurrency !== "XLM" && (
+                    <p className="text-[10px] text-zinc-500 font-mono">
+                      {balance} XLM
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -164,9 +177,12 @@ const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
 ];
 
+const DISPLAY_CURRENCIES: DisplayCurrency[] = ["XLM", "USD", "EUR", "GBP", "JPY"];
+
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { address, network } = useWallet();
+  const { selectedCurrency, setSelectedCurrency, convert } = useCurrency();
 
   return (
     <>
@@ -202,7 +218,21 @@ export default function Navbar() {
 
         {/* Right side */}
         <div className="flex items-center gap-3">
-          <WalletButton />
+          {/* Currency selector */}
+          <select
+            value={selectedCurrency}
+            onChange={(e) => setSelectedCurrency(e.target.value as DisplayCurrency)}
+            className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-2 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
+            aria-label="Select display currency"
+          >
+            {DISPLAY_CURRENCIES.map((c) => (
+              <option key={c} value={c} className="bg-zinc-900">
+                {c}
+              </option>
+            ))}
+          </select>
+
+          <WalletButton convert={convert} selectedCurrency={selectedCurrency} />
 
           {/* Mobile menu toggle */}
           <button
