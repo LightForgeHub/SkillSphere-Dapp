@@ -1,0 +1,35 @@
+meta {
+  name: Mint Soulbound Badge
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Expert mints a soulbound skill badge (Issue #202) after accumulating 100+ hours of settled session time. Cross-contract call to SBT contract. Returns BadgeRecord.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Badge mint accepted", () => {
+    expect(response).to.have.property("result");
+  });
+}

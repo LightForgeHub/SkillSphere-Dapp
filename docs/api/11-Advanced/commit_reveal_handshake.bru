@@ -1,0 +1,38 @@
+meta {
+  name: Commit / Reveal Handshake
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Privacy-preserving session handshake (Issue #206). Commit registers a hash commitment. Reveal discloses the preimage (salt, seeker, expert). Contract verifies sha256 match.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Handshake accepted", () => {
+    expect(response).to.have.property("result");
+  });
+  test("No error", () => {
+    expect(response).to.not.have.property("error");
+  });
+}

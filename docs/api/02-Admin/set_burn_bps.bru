@@ -1,0 +1,35 @@
+meta {
+  name: Set Burn BPS
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Admin sets the bps of treasury-bound fee that gets burned on settlement (Issue #213). 0 disables burning. Capped at MAX_BPS (10,000).
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Valid response shape", () => {
+    expect(response).to.have.property("jsonrpc");
+  });
+}

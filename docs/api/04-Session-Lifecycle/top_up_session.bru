@@ -1,0 +1,35 @@
+meta {
+  name: Top Up Session
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Seeker adds more tokens to an active session's escrow balance (Issue #237). Returns new balance.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Valid response", () => {
+    expect(response).to.have.property("jsonrpc");
+  });
+}

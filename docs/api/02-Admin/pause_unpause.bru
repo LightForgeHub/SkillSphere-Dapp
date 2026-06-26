@@ -1,0 +1,46 @@
+meta {
+  name: Pause / Unpause Protocol
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Admin-only emergency pause or resume. When paused, new sessions, settlements, and other state-modifying operations are blocked. Uses JSON-RPC simulation.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "simulateTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status is 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Result contains simulation results", () => {
+    expect(response).to.have.property("result");
+    if (response.result) {
+      expect(response.result).to.have.property("results");
+    }
+  });
+  test("No contract error in simulation", () => {
+    if (response.result && response.result.results) {
+      const result = response.result.results[0];
+      if (result.error) {
+        expect(result.error).to.not.contain("Error(Contract");
+      }
+    }
+  });
+}

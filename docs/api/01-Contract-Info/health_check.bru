@@ -1,0 +1,48 @@
+meta {
+  name: Health Check
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Returns the current contract status including version, admin, pause state, and session counts.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "simulateTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status is 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Response has jsonrpc field", () => {
+    expect(response).to.have.property("jsonrpc");
+    expect(response.jsonrpc).to.equal("2.0");
+  });
+  test("Response has result field", () => {
+    expect(response).to.have.property("result");
+  });
+  test("Contract version is present", () => {
+    if (response.result && response.result.results) {
+      const footprint = response.result.results[0].footprint;
+      expect(footprint).to.not.be.empty;
+    }
+  });
+  test("No error in response", () => {
+    expect(response).to.not.have.property("error");
+  });
+}

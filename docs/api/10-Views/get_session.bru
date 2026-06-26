@@ -1,0 +1,41 @@
+meta {
+  name: Get Session
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Reads a session by ID. Returns full session state including seeker, expert, token, rate, balance, timestamps, status, and metadata. View function.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "simulateTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Session data returned", () => {
+    expect(response).to.have.property("result");
+    if (response.result) {
+      expect(response.result).to.have.property("results");
+    }
+  });
+  test("No error", () => {
+    expect(response).to.not.have.property("error");
+  });
+}

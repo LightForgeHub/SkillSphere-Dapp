@@ -1,0 +1,38 @@
+meta {
+  name: Platform Stats
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Returns rolled-up platform statistics (Issue #200): total_sessions_settled and total_volume_settled. Emitted every 100 settled sessions.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "simulateTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Stats data returned", () => {
+    expect(response).to.have.property("result");
+  });
+  test("Valid response shape", () => {
+    expect(response.jsonrpc).to.equal("2.0");
+  });
+}

@@ -1,0 +1,35 @@
+meta {
+  name: Get Contract Version
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Returns the current contract schema version number.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "simulateTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status is 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Has result property", () => {
+    expect(response).to.have.property("result");
+  });
+}

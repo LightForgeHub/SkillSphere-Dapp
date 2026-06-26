@@ -1,0 +1,35 @@
+meta {
+  name: Set Admin
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Transfers contract admin role to a new address. Both old and new admin must authenticate.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status is 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("No RPC error returned", () => {
+    expect(response).to.not.have.property("error");
+  });
+}

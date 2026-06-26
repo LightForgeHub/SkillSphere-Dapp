@@ -1,0 +1,35 @@
+meta {
+  name: Escalate to DAO
+  method: POST
+  url: {{rpcUrl}}
+  type: json
+  description: Escalates an unresolved dispute to DAO community vote (Issue #251). Callable by either party after 7 days. Sets escalated_to_dao flag.
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "sendTransaction",
+    "params": {
+      "transaction": "AAAAAgAAAAB4c2VjcmV0...base64-encoded-xdr...",
+      "resourceConfig": {
+        "instructionLeeway": 1000000
+      }
+    }
+  }
+}
+
+tests {
+  const response = res.getBody();
+  test("Response status 200", () => {
+    expect(res.status).to.equal(200);
+  });
+  test("Escalation submitted", () => {
+    expect(response).to.have.property("result");
+  });
+}
