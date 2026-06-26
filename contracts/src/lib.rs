@@ -8703,4 +8703,87 @@ mod test {
 
         assert_eq!(client.get_fee(), 600);
     }
+
+    // --- #283: archived expert profile restoration (StateArchival) ---
+
+    /// Env with explicit TTL network settings for archival simulation tests.
+    fn create_archival_test_env() -> Env {
+        let env = Env::default();
+        env.ledger().with_mut(|li| {
+            li.sequence_number = 100_000;
+            li.min_persistent_entry_ttl = 500;
+            li.min_temp_entry_ttl = 100;
+            li.max_entry_ttl = 15_000;
+        });
+        env
+    }
+
+    /// When an expert profile's persistent TTL expires it is archived. A
+    /// subsequent `get_expert_profile` read auto-restores the entry so the
+    /// profile data is readable again (Soroban StateArchival / CAP-0066).
+    #[test]
+    fn test_archived_expert_profile_restored_and_readable() {
+        let env = create_archival_test_env();
+        env.mock_all_auths();
+        env.ledger().set_timestamp(1_000);
+
+        let contract_id = env.register_contract(None, SkillSphereContract);
+        let client = SkillSphereContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let expert = Address::generate(&env);
+        client.initialize(&admin);
+
+        let rate = 50i128;
+        let cid = test_cid(&env);
+        client.register_expert(&expert, &rate, &cid, &None, &None, &RateCurrency::XLM);
+
+        let profile = client.get_expert_profile(&expert);
+        assert_eq!(profile.rate_per_second, rate);
+        assert_eq!(profile.metadata_cid, cid);
+
+        env.as_contract(&contract_id, || {
+            let ttl = env
+                .storage()
+                .persistent()
+                .get_ttl(&DataKey::ExpertProfile(expert.clone()));
+            assert_eq!(ttl, 499);
+        });
+
+        // Extend then expire the persistent ExpertProfile entry.
+        env.as_contract(&contract_id, || {
+            env.storage()
+                .persistent()
+                .extend_ttl(&DataKey::ExpertProfile(expert.clone()), 1000, 5000);
+        });
+        env.ledger().with_mut(|li| {
+            li.sequence_number += 5001;
+        });
+
+        env.as_contract(&contract_id, || {
+            assert_eq!(
+                env.storage()
+                    .persistent()
+                    .get_ttl(&DataKey::ExpertProfile(expert.clone())),
+                0
+            );
+        });
+
+        let restored = client.get_expert_profile(&expert);
+        assert_eq!(restored.rate_per_second, rate);
+        assert_eq!(restored.metadata_cid, cid);
+        assert!(!restored.availability_status);
+
+        let resources = env.cost_estimate().resources();
+        assert!(resources.disk_read_bytes > 0);
+        assert!(resources.write_bytes > 0);
+        assert_eq!(resources.write_entries, 1);
+
+        env.as_contract(&contract_id, || {
+            let ttl = env
+                .storage()
+                .persistent()
+                .get_ttl(&DataKey::ExpertProfile(expert.clone()));
+            assert!(ttl > 0);
+        });
+    }
 }
