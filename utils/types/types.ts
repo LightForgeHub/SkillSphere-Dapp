@@ -38,13 +38,18 @@ export interface Session {
     id: string;
     title: string;
     expertName: string;
+    expertId: string;
     expertAvatar: string;
+    seekerName: string;
+    seekerAvatar: string;
     date: string;
     time: string;
     duration: string;
     status: "active" | "upcoming" | "completed" | "cancelled";
     price: string;
     category: string;
+    transactionHash?: string;
+    network?: 'testnet' | 'mainnet';
 }
 
 export interface Expert {
@@ -56,4 +61,30 @@ export interface Expert {
     reviews: number;
     hourlyRate: string;
     availability: boolean;
+    bio?: string;
+    skills?: string[];
+    pastReviews?: Review[];
+    responseTime?: string;
+    totalSessions?: number;
+    walletAddress?: string;
+}
+
+export interface Review {
+    id: string;
+    reviewer: string;
+    reviewerAvatar: string;
+    rating: number;
+    comment: string;
+    date: string;
+}
+
+export interface Transaction {
+    id: string;
+    hash: string;
+    type: 'deposit' | 'settlement' | 'withdrawal';
+    amount: string;
+    date: string;
+    status: 'completed' | 'pending' | 'failed';
+    network: 'testnet' | 'mainnet';
+    sessionId?: string;
 }

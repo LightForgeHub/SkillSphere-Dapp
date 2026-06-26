@@ -1,4 +1,4 @@
-import { Collection, ExpertCollection, NFT, Session, Expert } from "../types/types";
+import { Collection, ExpertCollection, NFT, Session, Expert, Review, Transaction } from "../types/types";
 
 export const mockExpert: ExpertCollection[] = [
     {
@@ -232,49 +232,68 @@ export const mockSessions: Session[] = [
         id: '1',
         title: 'Advanced React Patterns',
         expertName: 'Sarah Chen',
+        expertId: '1',
         expertAvatar: '/assets/Avatar.svg',
+        seekerName: 'You',
+        seekerAvatar: '/assets/Avatar.svg',
         date: '2025-06-15',
         time: '2:00 PM',
         duration: '60 mins',
         status: 'upcoming',
         price: '$50',
         category: 'Web Development',
+        network: 'testnet',
     },
     {
         id: '2',
         title: 'Blockchain Fundamentals',
         expertName: 'Alex Kumar',
+        expertId: '2',
         expertAvatar: '/assets/Avatar.svg',
+        seekerName: 'You',
+        seekerAvatar: '/assets/Avatar.svg',
         date: '2025-06-10',
         time: '10:30 AM',
         duration: '90 mins',
         status: 'active',
         price: '$75',
         category: 'Blockchain',
+        network: 'testnet',
+        transactionHash: 'b234567890abcdef1234567890abcdef1234567890abcdef1234567890abce',
     },
     {
         id: '3',
         title: 'UI/UX Design Workshop',
         expertName: 'Emma Wilson',
+        expertId: '3',
         expertAvatar: '/assets/Avatar.svg',
+        seekerName: 'You',
+        seekerAvatar: '/assets/Avatar.svg',
         date: '2025-06-05',
         time: '3:00 PM',
         duration: '60 mins',
         status: 'completed',
         price: '$60',
         category: 'Design',
+        network: 'testnet',
+        transactionHash: 'c345678901bcdef1234567890abcdef1234567890abcdef1234567890abcef',
     },
     {
         id: '4',
         title: 'Node.js Best Practices',
         expertName: 'Marcus Johnson',
+        expertId: '4',
         expertAvatar: '/assets/Avatar.svg',
+        seekerName: 'You',
+        seekerAvatar: '/assets/Avatar.svg',
         date: '2025-05-28',
         time: '5:00 PM',
         duration: '75 mins',
         status: 'completed',
         price: '$65',
         category: 'Backend',
+        network: 'mainnet',
+        transactionHash: 'e567890123def1234567890abcdef1234567890abcdef1234567890abce01f',
     },
 ];
 
@@ -288,6 +307,37 @@ export const mockExperts: Expert[] = [
         reviews: 127,
         hourlyRate: '$50/hr',
         availability: true,
+        bio: 'Senior Full-Stack Developer with 8+ years of experience in React, Node.js, and cloud technologies. Passionate about mentoring the next generation of developers.',
+        skills: ['React', 'Next.js', 'Node.js', 'TypeScript', 'AWS', 'PostgreSQL'],
+        responseTime: '< 1 hour',
+        totalSessions: 342,
+        walletAddress: 'GBRPYHIL2CI27JTLZM3XYDNOH5Q5JQRQGCFBBZLT3JE5VPWLJ7JQWWZ',
+        pastReviews: [
+            {
+                id: '1',
+                reviewer: 'John Doe',
+                reviewerAvatar: '/assets/Avatar.svg',
+                rating: 5,
+                comment: 'Excellent mentor! Really helped me understand advanced React patterns.',
+                date: '2025-06-01'
+            },
+            {
+                id: '2',
+                reviewer: 'Jane Smith',
+                reviewerAvatar: '/assets/Avatar.svg',
+                rating: 5,
+                comment: 'Sarah is knowledgeable and patient. Highly recommended!',
+                date: '2025-05-28'
+            },
+            {
+                id: '3',
+                reviewer: 'Mike Johnson',
+                reviewerAvatar: '/assets/Avatar.svg',
+                rating: 4,
+                comment: 'Great session on Next.js optimization. Very practical advice.',
+                date: '2025-05-20'
+            }
+        ]
     },
     {
         id: '2',
@@ -298,6 +348,29 @@ export const mockExperts: Expert[] = [
         reviews: 95,
         hourlyRate: '$75/hr',
         availability: true,
+        bio: 'Blockchain architect with 6+ years in smart contract development. Specialized in Stellar, Solana, and EVM chains. DeFi protocol expert.',
+        skills: ['Solidity', 'Rust', 'Stellar SDK', 'DeFi', 'Smart Contracts', 'Web3.js'],
+        responseTime: '< 30 mins',
+        totalSessions: 289,
+        walletAddress: 'GBDNRQQQO6ZCNFPWL5BL2ZHQXP7XFYTQGCM45KGLPUUWQPVS4WO7IJNN',
+        pastReviews: [
+            {
+                id: '4',
+                reviewer: 'Alice Wang',
+                reviewerAvatar: '/assets/Avatar.svg',
+                rating: 5,
+                comment: 'Deeply understands blockchain mechanics. Best mentor I\'ve had!',
+                date: '2025-06-02'
+            },
+            {
+                id: '5',
+                reviewer: 'Tom Brown',
+                reviewerAvatar: '/assets/Avatar.svg',
+                rating: 5,
+                comment: 'Helped me deploy my first smart contract successfully.',
+                date: '2025-05-25'
+            }
+        ]
     },
     {
         id: '3',
@@ -308,6 +381,21 @@ export const mockExperts: Expert[] = [
         reviews: 156,
         hourlyRate: '$60/hr',
         availability: false,
+        bio: 'Creative UI/UX Designer specializing in fintech and Web3 interfaces. Former Design Lead at a top tech startup.',
+        skills: ['Figma', 'UI Design', 'UX Research', 'Web3 Design', 'Prototyping', 'Design Systems'],
+        responseTime: '< 2 hours',
+        totalSessions: 412,
+        walletAddress: 'GCEXRDW4THMYSLVHW2F4ETWPXQH3MCIWFVVK3JDCBZXC3RLQWYQWVWV',
+        pastReviews: [
+            {
+                id: '6',
+                reviewer: 'Lisa Chen',
+                reviewerAvatar: '/assets/Avatar.svg',
+                rating: 5,
+                comment: 'Emma transformed my UI completely. Worth every penny!',
+                date: '2025-05-30'
+            }
+        ]
     },
     {
         id: '4',
@@ -318,5 +406,61 @@ export const mockExperts: Expert[] = [
         reviews: 84,
         hourlyRate: '$65/hr',
         availability: true,
+        bio: 'Backend systems engineer with expertise in microservices, APIs, and distributed systems. 5+ years building scalable infrastructure.',
+        skills: ['Python', 'Go', 'Kubernetes', 'Docker', 'GraphQL', 'PostgreSQL', 'Redis'],
+        responseTime: '< 1 hour',
+        totalSessions: 198,
+        walletAddress: 'GB3YXVGWVF5MJXGQ3HHHLVXQMIJLYVRQAXDDBJ5FJKPIHSJTQR6SWVBO',
+];
+
+export const mockTransactions: Transaction[] = [
+    {
+        id: '1',
+        hash: 'a123456789abcdef1234567890abcdef1234567890abcdef1234567890abcd',
+        type: 'deposit',
+        amount: '50 XLM',
+        date: '2025-06-10',
+        status: 'completed',
+        network: 'testnet',
+        sessionId: '2'
+    },
+    {
+        id: '2',
+        hash: 'b234567890abcdef1234567890abcdef1234567890abcdef1234567890abce',
+        type: 'settlement',
+        amount: '75 XLM',
+        date: '2025-06-05',
+        status: 'completed',
+        network: 'testnet',
+        sessionId: '3'
+    },
+    {
+        id: '3',
+        hash: 'c345678901bcdef1234567890abcdef1234567890abcdef1234567890abcef',
+        type: 'deposit',
+        amount: '60 XLM',
+        date: '2025-06-01',
+        status: 'completed',
+        network: 'mainnet',
+        sessionId: '4'
+    },
+    {
+        id: '4',
+        hash: 'd456789012cdef1234567890abcdef1234567890abcdef1234567890abcdf0',
+        type: 'withdrawal',
+        amount: '100 XLM',
+        date: '2025-05-28',
+        status: 'pending',
+        network: 'testnet'
+    },
+    {
+        id: '5',
+        hash: 'e567890123def1234567890abcdef1234567890abcdef1234567890abce01f',
+        type: 'deposit',
+        amount: '120 XLM',
+        date: '2025-05-20',
+        status: 'completed',
+        network: 'mainnet',
+        sessionId: '1'
     },
 ];
