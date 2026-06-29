@@ -2,9 +2,10 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Star, Clock, CheckCircle } from 'lucide-react';
+import { Star, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Expert } from '@/utils/types/types';
 import { prefetchExpert } from '@/hooks/useExperts';
+import { useSurgeMultiplier } from '@/hooks/useSurgeMultiplier';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface ExpertCardProps {
@@ -13,10 +14,14 @@ interface ExpertCardProps {
 
 export default function ExpertCard({ expert }: ExpertCardProps) {
   const queryClient = useQueryClient();
+  const { multiplier, isSurgeActive } = useSurgeMultiplier();
 
   const handleMouseEnter = () => {
     prefetchExpert(queryClient, expert.id);
   };
+
+  // Calculate surge percentage for display
+  const surgePercent = Math.round((multiplier - 1) * 100);
 
   return (
     <Link href={`/explore-experts/${expert.id}`}>
@@ -58,7 +63,24 @@ export default function ExpertCard({ expert }: ExpertCardProps) {
 
           {/* Rate and Availability */}
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-purple-500/10">
-            <span className="font-bold text-lg text-purple-400">{expert.hourlyRate}</span>
+            <div className="flex flex-col gap-1">
+              <span
+                className="font-bold text-lg text-purple-400 cursor-help"
+                title="Rate may increase during high demand periods"
+              >
+                {expert.hourlyRate}
+              </span>
+              {isSurgeActive && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border border-amber-300 w-fit"
+                  role="alert"
+                  aria-label={`Surge pricing is active. Rate increased by ${surgePercent}%`}
+                >
+                  <AlertTriangle size={12} className="flex-shrink-0" />
+                  Surge Pricing Active (+{surgePercent}%)
+                </span>
+              )}
+            </div>
             {expert.is_busy ? (
               <div className="flex items-center gap-1 px-3 py-1 bg-red-500/20 border border-red-500/50 rounded-full">
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
