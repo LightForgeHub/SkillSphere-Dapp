@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { LiveCounter } from "@/components/session/LiveCounter";
+import { SessionNotes } from "@/components/session/SessionNotes";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -74,6 +75,14 @@ export default function SessionPage() {
       router.push(`/dashboard/sessions/${sessionId}`);
     }, 2000);
   }, [router, sessionId]);
+
+  const saveNotesToServer = useCallback(async (content: string) => {
+    await fetch(`/api/session/${sessionId}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+  }, [sessionId]);
 
   const formatTime = (seconds: number): string => {
     const m = Math.floor(seconds / 60);
@@ -245,6 +254,15 @@ export default function SessionPage() {
                       </Button>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="py-4">
+                  <SessionNotes
+                    sessionId={sessionId}
+                    onSaveToServer={saveNotesToServer}
+                  />
                 </CardContent>
               </Card>
 
