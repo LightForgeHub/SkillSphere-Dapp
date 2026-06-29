@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { LiveCounter } from "@/components/session/LiveCounter";
 import { SessionNotes } from "@/components/session/SessionNotes";
+import { AppealFormModal } from "@/components/session/AppealForm";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -21,8 +22,10 @@ import {
   Gauge,
   AlertTriangle,
   Code2,
+  Gavel,
 } from "lucide-react";
 import { cn } from "@/components/ui/utils";
+import type { Dispute } from "../../../../utils/types/types";
 
 interface SessionData {
   id: string;
@@ -44,6 +47,23 @@ const MOCK_SESSION: SessionData = {
   status: "active",
 };
 
+/**
+ * Mock dispute — represents a settled dispute on this session that the seeker
+ * may wish to appeal. In production this would come from the contract / API.
+ */
+const MOCK_DISPUTE: Dispute = {
+  id: "d1",
+  sessionId: "s1",
+  raisedBy: "seeker",
+  reason: "Expert did not cover the agreed topics and ended the session early.",
+  status: "resolved",
+  verdict: "favour_expert",
+  verdictNote: "Insufficient evidence provided by seeker.",
+  evidence: [],
+  createdAt: "2025-06-20T10:00:00Z",
+  resolvedAt: "2025-06-22T14:30:00Z",
+};
+
 const SESSION_TIMEOUT_SECONDS = 3600;
 
 export default function SessionPage() {
@@ -62,6 +82,14 @@ export default function SessionPage() {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
+  const [showAppealModal, setShowAppealModal] = useState(false);
+
+  /**
+   * A resolved dispute attached to this session, if any.
+   * Only render the appeal entry-point when this is non-null and the
+   * dispute status is "resolved".
+   */
+  const sessionDispute: Dispute | null = MOCK_DISPUTE;
 
   useEffect(() => {
     const start = Date.now();
@@ -272,6 +300,20 @@ export default function SessionPage() {
                 </CardContent>
               </Card>
 
+              {/* Appeal button — only visible when there is a resolved dispute */}
+              {sessionDispute?.status === "resolved" && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full gap-2 border-amber-500/40 text-amber-300 hover:bg-amber-500/10 hover:border-amber-400/60"
+                  onClick={() => setShowAppealModal(true)}
+                  type="button"
+                >
+                  <Gavel className="size-5" />
+                  Appeal Dispute Decision
+                </Button>
+              )}
+
               <Button
                 variant="destructive"
                 size="lg"
@@ -315,6 +357,17 @@ export default function SessionPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Appeal Form Modal — only mounted when a resolved dispute exists */}
+      {sessionDispute?.status === "resolved" && (
+        <AppealFormModal
+          isOpen={showAppealModal}
+          onClose={() => setShowAppealModal(false)}
+          dispute={sessionDispute}
+          sessionTitle={session.category}
+          onAppealSubmitted={() => setShowAppealModal(false)}
+        />
+      )}
     </div>
   );
 }

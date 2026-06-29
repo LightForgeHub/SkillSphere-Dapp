@@ -89,3 +89,32 @@ export interface Transaction {
     network: 'testnet' | 'mainnet';
     sessionId?: string;
 }
+
+export type DisputeVerdict = 'favour_expert' | 'favour_seeker' | 'split';
+
+export interface DisputeEvidence {
+    id: string;
+    submittedBy: 'expert' | 'seeker';
+    description: string;
+    attachmentUrl?: string;
+    submittedAt: string;
+}
+
+export interface Dispute {
+    id: string;
+    sessionId: string;
+    raisedBy: 'expert' | 'seeker';
+    reason: string;
+    status: 'open' | 'under_review' | 'resolved' | 'escalated_to_dao';
+    verdict?: DisputeVerdict;
+    verdictNote?: string;
+    evidence: DisputeEvidence[];
+    createdAt: string;
+    resolvedAt?: string;
+}
+
+export interface AppealFormData {
+    grounds: string;
+    newEvidenceDescription: string;
+    attachments: File[];
+}
