@@ -48,12 +48,17 @@ export default function ExpertCard({ expert }: ExpertCardProps) {
           {/* Rate and Availability */}
           <div className="flex items-center justify-between mb-4 pb-4 border-b border-purple-500/10">
             <span className="font-bold text-lg text-purple-400">{expert.hourlyRate}</span>
-            {expert.availability && (
+            {expert.is_busy ? (
+              <div className="flex items-center gap-1 px-3 py-1 bg-red-500/20 border border-red-500/50 rounded-full">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-xs font-medium text-red-400">In Call</span>
+              </div>
+            ) : expert.availability ? (
               <div className="flex items-center gap-1 px-3 py-1 bg-green-500/20 border border-green-500/50 rounded-full">
                 <CheckCircle size={14} className="text-green-400" />
                 <span className="text-xs font-medium text-green-400">Available</span>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Response Time */}

@@ -307,6 +307,7 @@ export const mockExperts: Expert[] = [
         reviews: 127,
         hourlyRate: '$50/hr',
         availability: true,
+        is_busy: false,
         bio: 'Senior Full-Stack Developer with 8+ years of experience in React, Node.js, and cloud technologies. Passionate about mentoring the next generation of developers.',
         skills: ['React', 'Next.js', 'Node.js', 'TypeScript', 'AWS', 'PostgreSQL'],
         responseTime: '< 1 hour',
@@ -348,6 +349,7 @@ export const mockExperts: Expert[] = [
         reviews: 95,
         hourlyRate: '$75/hr',
         availability: true,
+        is_busy: true,
         bio: 'Blockchain architect with 6+ years in smart contract development. Specialized in Stellar, Solana, and EVM chains. DeFi protocol expert.',
         skills: ['Solidity', 'Rust', 'Stellar SDK', 'DeFi', 'Smart Contracts', 'Web3.js'],
         responseTime: '< 30 mins',
@@ -381,6 +383,7 @@ export const mockExperts: Expert[] = [
         reviews: 156,
         hourlyRate: '$60/hr',
         availability: false,
+        is_busy: false,
         bio: 'Creative UI/UX Designer specializing in fintech and Web3 interfaces. Former Design Lead at a top tech startup.',
         skills: ['Figma', 'UI Design', 'UX Research', 'Web3 Design', 'Prototyping', 'Design Systems'],
         responseTime: '< 2 hours',
@@ -406,11 +409,13 @@ export const mockExperts: Expert[] = [
         reviews: 84,
         hourlyRate: '$65/hr',
         availability: true,
+        is_busy: false,
         bio: 'Backend systems engineer with expertise in microservices, APIs, and distributed systems. 5+ years building scalable infrastructure.',
         skills: ['Python', 'Go', 'Kubernetes', 'Docker', 'GraphQL', 'PostgreSQL', 'Redis'],
         responseTime: '< 1 hour',
         totalSessions: 198,
         walletAddress: 'GB3YXVGWVF5MJXGQ3HHHLVXQMIJLYVRQAXDDBJ5FJKPIHSJTQR6SWVBO',
+    },
 ];
 
 export const mockTransactions: Transaction[] = [

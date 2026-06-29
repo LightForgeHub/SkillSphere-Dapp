@@ -72,6 +72,7 @@ export default function ExpertProfilePage({ params }: ExpertProfilePageProps) {
   }
 
   const handleBookClick = () => {
+    if (expert.is_busy) return;
     // Store expert info for the booking flow and navigate to marketplace
     sessionStorage.setItem('selectedExpertId', expert.id);
     sessionStorage.setItem('selectedExpertName', expert.name);

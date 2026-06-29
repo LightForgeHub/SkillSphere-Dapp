@@ -36,12 +36,17 @@ export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProp
                 <Clock size={16} />
                 {expert.responseTime}
               </span>
-              {expert.availability && (
+              {expert.is_busy ? (
+                <span className="px-4 py-2 bg-red-500/20 border border-red-500/50 rounded-full text-sm font-medium flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  In Call
+                </span>
+              ) : expert.availability ? (
                 <span className="px-4 py-2 bg-green-500/20 border border-green-500/50 rounded-full text-sm font-medium flex items-center gap-1">
                   <CheckCircle size={16} />
                   Available Now
                 </span>
-              )}
+              ) : null}
             </div>
 
             {/* Rating */}
@@ -78,12 +83,21 @@ export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProp
             </div>
 
             {/* Book Button */}
-            <button
-              onClick={onBookClick}
-              className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105"
-            >
-              Book Session
-            </button>
+            <div className="relative group">
+              <button
+                onClick={onBookClick}
+                disabled={expert.is_busy}
+                className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 disabled:hover:scale-100"
+              >
+                Book Session
+              </button>
+              {expert.is_busy && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-gray-200 text-xs rounded-lg shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                  Expert is currently in another consultation. Please try again later.
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
