@@ -1,0 +1,23 @@
+{
+  "name": "skillsphere-indexer-ts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Off-chain event ingestion daemon for SkillSphere Soroban contract events",
+  "scripts": {
+    "dev": "ts-node src/sync.ts",
+    "build": "tsc",
+    "start": "node dist/src/sync.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@prisma/client": "6.9.0",
+    "stellar-sdk": "13.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.1",
+    "prisma": "6.9.0",
+    "ts-node": "10.9.2",
+    "typescript": "5.8.3"
+  }
+}
