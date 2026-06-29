@@ -61,6 +61,7 @@ export interface Expert {
     reviews: number;
     hourlyRate: string;
     availability: boolean;
+    is_busy?: boolean;
     bio?: string;
     skills?: string[];
     pastReviews?: Review[];
