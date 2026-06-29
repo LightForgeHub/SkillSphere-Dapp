@@ -6602,6 +6602,7 @@ mod test {
 
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger};
+    use soroban_sdk::testutils::storage::Persistent as _;
     use soroban_sdk::{token, Address, Env, IntoVal, String, Vec};
 
     fn register_and_avail(
@@ -6621,11 +6622,11 @@ mod test {
 
     fn whitelist_token(
         client: &SkillSphereContractClient,
-        admin: &Address,
+        _admin: &Address,
         token: &Address,
     ) {
         if !client.is_token_approved(token) {
-            client.add_approved_token(admin, token);
+            client.add_approved_token(token);
         }
     }
 
@@ -6655,7 +6656,7 @@ mod test {
 
         client.initialize(&admin);
 
-        client.add_approved_token(&admin, &token_address);
+        client.add_approved_token(&token_address);
 
         let asset_admin = token::StellarAssetClient::new(&env, &token_address);
         asset_admin.mint(&seeker, &100_000);
@@ -7509,7 +7510,7 @@ mod test {
 
     #[test]
     fn test_batch_settle_settles_multiple_sessions() {
-        let (env, client, _, _, seeker, expert, token, token_admin) = setup();
+        let (env, client, _, _, seeker, expert, token, _token_admin) = setup();
         register_and_avail(&env, &client, &expert, 10);
         let asset_admin = token::StellarAssetClient::new(&env, &token);
         asset_admin.mint(&seeker, &2_000);
@@ -8115,7 +8116,7 @@ mod test {
 
     #[test]
     fn test_insurance_vault_accrues_and_admin_can_withdraw() {
-        let (env, client, _, admin, seeker, expert, token, _) = setup();
+        let (env, client, _, _admin, seeker, expert, token, _) = setup();
         let vault = Address::generate(&env);
         client.set_insurance_vault(&vault);
 
@@ -8580,7 +8581,7 @@ mod test {
     #[test]
     #[should_panic(expected = "Error(Contract, #30)")]
     fn test_start_session_rejects_non_whitelisted_token() {
-        let (env, client, _, admin, seeker, expert, token, _) = setup();
+        let (env, client, _, _admin, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
         client.remove_approved_token(&token);
         client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
@@ -8701,7 +8702,7 @@ mod test {
 
     #[test]
     fn test_admin_token_whitelist_add_and_remove() {
-        let (env, client, _, admin, _, _, token, _) = setup();
+        let (env, client, _, _admin, _, _, token, _) = setup();
         let extra = Address::generate(&env);
 
         assert!(client.is_token_approved(&token));
@@ -8936,7 +8937,7 @@ mod test {
     #[test]
     #[should_panic]
     fn test_batch_archive_rejects_oversized_batch() {
-        let (env, client, _, _, _, _, _, _) = setup();
+        let (env, _client, _, _, _, _, _, _) = setup();
         let mut ids = Vec::new(&env);
         for i in 0u64..51 {
             ids.push_back(i);

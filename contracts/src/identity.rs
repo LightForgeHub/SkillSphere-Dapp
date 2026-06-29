@@ -168,7 +168,7 @@ mod test {
 
     #[test]
     fn test_kyc_status_variants() {
-        let env = Env::default();
+        let _env = Env::default();
 
         let not_required = KycStatus::NotRequired;
         let required = KycStatus::Required;
@@ -201,7 +201,7 @@ mod test {
 
     #[test]
     fn test_kyc_status_transitions() {
-        let env = Env::default();
+        let _env = Env::default();
 
         // Verify status equality for state transitions
         let status = KycStatus::Required;
