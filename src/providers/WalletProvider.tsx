@@ -14,6 +14,12 @@ import {
   setAllowed,
 } from "@stellar/freighter-api";
 
+// Mock wallet configuration for CI/testing environments
+const MOCK_ENABLED = process.env.NEXT_PUBLIC_MOCK_WALLET === "true";
+const MOCK_ADDRESS = "GBRPYHIL2CI3WHZDTOOQFC6EB4KJJGUJQNZVIU3TWCYGIQUI5GUDFQD";
+const MOCK_NETWORK = "TESTNET";
+const MOCK_BALANCE = "1000.00";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface WalletState {
@@ -73,9 +79,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     error: null,
   });
 
-  // Re-hydrate state (address + network + balance) from Freighter
+  // Re-hydrate state (address + network + balance) from Freighter or mock
   const refresh = useCallback(async () => {
     try {
+      if (MOCK_ENABLED) {
+        setState((prev) => ({
+          ...prev,
+          address: MOCK_ADDRESS,
+          network: MOCK_NETWORK,
+          balance: MOCK_BALANCE,
+          error: null,
+        }));
+        return;
+      }
+
       const connResult = await isConnected();
       if (!connResult.isConnected) return;
 
@@ -102,10 +119,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   // Poll for network / account changes every 3 s while connected.
-  // Freighter doesn't expose DOM events in all environments, so polling is
-  // the most reliable cross-browser approach.
+  // Skip polling if using mock wallet.
   useEffect(() => {
-    if (!state.address) return;
+    if (!state.address || MOCK_ENABLED) return;
 
     const id = setInterval(async () => {
       try {
@@ -154,6 +170,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const connect = useCallback(async () => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
+      if (MOCK_ENABLED) {
+        setState((prev) => ({
+          ...prev,
+          address: MOCK_ADDRESS,
+          network: MOCK_NETWORK,
+          balance: MOCK_BALANCE,
+          isLoading: false,
+          error: null,
+        }));
+        return;
+      }
+
       // setAllowed() opens the Freighter approval popup if not yet authorised
       const allowResult = await setAllowed();
       if (allowResult.error) {
