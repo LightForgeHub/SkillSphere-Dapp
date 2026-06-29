@@ -11,6 +11,8 @@ import NavBar from "@/components/home/layout/navbar";
 import Footer from "@/components/home/layout/footer";
 import AppLayout from "@/components/layout/AppLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { WalletProvider } from "@/providers/WalletProvider";
+import { ModalProvider } from "@/providers/ModalProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -74,12 +76,16 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AppLayout
-            headerSlot={<NavBar />}
-            footerSlot={<Footer />}
-          >
-            {children}
-          </AppLayout>
+          <WalletProvider>
+            <ModalProvider>
+              <AppLayout
+                headerSlot={<NavBar />}
+                footerSlot={<Footer />}
+              >
+                {children}
+              </AppLayout>
+            </ModalProvider>
+          </WalletProvider>
         </ThemeProvider>
       </body>
     </html>

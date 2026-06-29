@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Wallet, LogOut, Copy, Check, Menu, X, Zap } from "lucide-react";
 import { useWallet } from "@/providers/WalletProvider";
+import { useModal } from "@/providers/ModalProvider";
 import { useCurrency, type DisplayCurrency } from "@/hooks/useCurrency";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -31,8 +32,9 @@ interface WalletButtonProps {
 }
 
 function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
-  const { address, network, balance, isLoading, error, connect, disconnect } =
+  const { address, network, balance, isLoading, error, disconnect } =
     useWallet();
+  const { openModal } = useModal();
   const [copied, setCopied] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -48,7 +50,7 @@ function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
     return (
       <div className="flex flex-col items-end gap-1">
         <button
-          onClick={connect}
+          onClick={() => openModal("connectWallet")}
           disabled={isLoading}
           className="flex items-center gap-2 rounded-lg border border-violet-500/50 bg-violet-600/20 px-4 py-2 text-sm font-medium text-violet-200 transition-all hover:bg-violet-600/40 hover:border-violet-400 disabled:opacity-50 disabled:cursor-not-allowed"
         >
