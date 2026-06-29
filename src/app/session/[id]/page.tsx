@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { useWallet } from "@/providers/WalletProvider";
+import { CodeWorkspace } from "@/components/session/CodeWorkspace";
 import {
   User,
   Wallet,
@@ -18,6 +19,7 @@ import {
   Coins,
   Gauge,
   AlertTriangle,
+  Code2,
 } from "lucide-react";
 import { cn } from "@/components/ui/utils";
 
@@ -55,6 +57,7 @@ export default function SessionPage() {
   const [elapsed, setElapsed] = useState(0);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
+  const [showCodeEditor, setShowCodeEditor] = useState(false);
 
   useEffect(() => {
     const start = Date.now();
@@ -82,21 +85,33 @@ export default function SessionPage() {
   const hourlyRate = session.ratePerSecond * 3600;
 
   return (
-    <div className="min-h-screen bg-[#0B0113]">
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-        <button
-          onClick={() => router.back()}
-          className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-white/80 transition-colors mb-6"
-        >
-          <ArrowLeft className="size-4" />
-          Back
-        </button>
+    <div className="min-h-screen bg-[#0B0113] flex flex-col">
+      <div className="flex-1 w-full px-4 py-6 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => router.back()}
+            className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-white/80 transition-colors"
+          >
+            <ArrowLeft className="size-4" />
+            Back
+          </button>
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setShowCodeEditor(!showCodeEditor)}
+            className={cn("gap-2", showCodeEditor && "bg-white/10 text-white")}
+          >
+            <Code2 className="size-4" />
+            {showCodeEditor ? "Hide Editor" : "Open Code Editor"}
+          </Button>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <Card variant="glow" className="relative overflow-hidden">
+        <div className={cn("grid gap-6", showCodeEditor ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 lg:grid-cols-3 max-w-5xl mx-auto")}>
+          <div className={cn("space-y-6 flex flex-col", showCodeEditor ? "" : "lg:col-span-2")}>
+            <Card variant="glow" className="relative overflow-hidden flex-1 min-h-[300px]">
               <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
-              <CardContent className="flex flex-col items-center justify-center py-16">
+              <CardContent className="flex flex-col items-center justify-center h-full py-16">
                 <LiveCounter
                   ratePerSecond={session.ratePerSecond}
                   onTotalChange={setTotalStreamed}
@@ -116,7 +131,7 @@ export default function SessionPage() {
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
               {[
                 {
                   icon: Timer,
@@ -126,17 +141,17 @@ export default function SessionPage() {
                 {
                   icon: Coins,
                   label: "Rate",
-                  value: `${hourlyRate.toFixed(4)} XLM/hr`,
+                  value: `${hourlyRate.toFixed(4)} /hr`,
                 },
                 {
                   icon: Wallet,
                   label: "Escrow",
-                  value: `${session.escrowBalance.toFixed(2)} XLM`,
+                  value: `${session.escrowBalance.toFixed(2)}`,
                 },
                 {
                   icon: Gauge,
                   label: "Remaining",
-                  value: `${remainingBalance.toFixed(4)} XLM`,
+                  value: `${remainingBalance.toFixed(4)}`,
                   highlight: remainingBalance < session.escrowBalance * 0.2,
                 },
               ].map((stat) => (
@@ -160,85 +175,91 @@ export default function SessionPage() {
             </div>
           </div>
 
-          <div className="space-y-4">
-            <Card>
-              <CardContent className="py-6 space-y-5">
-                <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-                  <User className="size-4 text-white/50" />
-                  Expert
-                </h3>
+          {showCodeEditor ? (
+            <div className="h-[600px] xl:h-auto">
+              <CodeWorkspace onClose={() => setShowCodeEditor(false)} />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <Card>
+                <CardContent className="py-6 space-y-5">
+                  <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                    <User className="size-4 text-white/50" />
+                    Expert
+                  </h3>
 
-                <div className="flex items-center gap-3">
-                  <div className="size-12 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
-                    {session.expertName.charAt(0)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">
-                      {session.expertName}
-                    </p>
-                    <p className="text-xs text-white/50 truncate">
-                      {session.category}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="py-6 space-y-4">
-                <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-                  <Wallet className="size-4 text-white/50" />
-                  Wallet
-                </h3>
-
-                {wallet.address ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-white/50">Connected</span>
-                      <Badge variant="success" className="text-[10px]">
-                        {wallet.network ?? "Unknown"}
-                      </Badge>
+                  <div className="flex items-center gap-3">
+                    <div className="size-12 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
+                      {session.expertName.charAt(0)}
                     </div>
-                    <p className="font-mono text-xs text-white/70 truncate">
-                      {wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}
-                    </p>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-white/50">Balance</span>
-                      <span className="text-white font-mono">
-                        {wallet.balance ?? "—"} XLM
-                      </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">
+                        {session.expertName}
+                      </p>
+                      <p className="text-xs text-white/50 truncate">
+                        {session.category}
+                      </p>
                     </div>
                   </div>
-                ) : (
-                  <div className="text-center space-y-3">
-                    <p className="text-xs text-white/50">
-                      Connect your wallet to stream payments
-                    </p>
-                    <Button
-                      variant="glow"
-                      size="sm"
-                      onClick={wallet.connect}
-                      disabled={wallet.isLoading}
-                      className="w-full"
-                    >
-                      {wallet.isLoading ? "Connecting..." : "Connect Wallet"}
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            <Button
-              variant="destructive"
-              size="lg"
-              className="w-full"
-              disabled={isEnding}
-              onClick={() => setShowEndConfirm(true)}
-            >
-              <CircleStop className="size-5" />
-              {isEnding ? "Settling..." : "End Session"}
-            </Button>
-          </div>
+              <Card>
+                <CardContent className="py-6 space-y-4">
+                  <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
+                    <Wallet className="size-4 text-white/50" />
+                    Wallet
+                  </h3>
+
+                  {wallet.address ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-white/50">Connected</span>
+                        <Badge variant="success" className="text-[10px]">
+                          {wallet.network ?? "Unknown"}
+                        </Badge>
+                      </div>
+                      <p className="font-mono text-xs text-white/70 truncate">
+                        {wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}
+                      </p>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-white/50">Balance</span>
+                        <span className="text-white font-mono">
+                          {wallet.balance ?? "—"} XLM
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center space-y-3">
+                      <p className="text-xs text-white/50">
+                        Connect your wallet to stream payments
+                      </p>
+                      <Button
+                        variant="glow"
+                        size="sm"
+                        onClick={wallet.connect}
+                        disabled={wallet.isLoading}
+                        className="w-full"
+                      >
+                        {wallet.isLoading ? "Connecting..." : "Connect Wallet"}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Button
+                variant="destructive"
+                size="lg"
+                className="w-full"
+                disabled={isEnding}
+                onClick={() => setShowEndConfirm(true)}
+              >
+                <CircleStop className="size-5" />
+                {isEnding ? "Settling..." : "End Session"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

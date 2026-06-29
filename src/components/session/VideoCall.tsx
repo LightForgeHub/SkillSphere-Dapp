@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Video, VideoOff, Phone, Settings, Maximize2, MessageCircle } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, Phone, Settings, Maximize2, MessageCircle, MonitorUp } from 'lucide-react';
 
 interface VideoCallProps {
   expertName: string;
@@ -25,6 +25,9 @@ export default function VideoCall({
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  
   const videoRefLocal = useRef<HTMLVideoElement>(null);
   const videoRefRemote = useRef<HTMLVideoElement>(null);
 
@@ -44,6 +47,44 @@ export default function VideoCall({
     return `${hrs > 0 ? hrs + ':' : ''}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const showToast = (message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const toggleScreenShare = async () => {
+    try {
+      if (!isScreenSharing) {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        if (videoRefLocal.current) {
+          videoRefLocal.current.srcObject = stream;
+        }
+        setIsScreenSharing(true);
+        showToast("Screen sharing started");
+        
+        // Listen for the user stopping screen share via browser UI
+        stream.getVideoTracks()[0].onended = () => {
+          setIsScreenSharing(false);
+          showToast("Screen sharing ended");
+          if (videoRefLocal.current) {
+             videoRefLocal.current.srcObject = null;
+          }
+        };
+      } else {
+        setIsScreenSharing(false);
+        showToast("Screen sharing ended");
+        if (videoRefLocal.current && videoRefLocal.current.srcObject) {
+          const tracks = (videoRefLocal.current.srcObject as MediaStream).getTracks();
+          tracks.forEach(track => track.stop());
+          videoRefLocal.current.srcObject = null;
+        }
+      }
+    } catch (err) {
+      console.error("Error sharing screen", err);
+      showToast("Failed to share screen");
+    }
+  };
+
   if (isPictureInPicture) {
     return (
       <div className="fixed bottom-4 right-4 w-80 z-40">
@@ -59,7 +100,7 @@ export default function VideoCall({
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent"></div>
 
             {/* Local Video - Small Corner */}
-            <div className="absolute bottom-2 right-2 w-20 h-20 rounded-lg overflow-hidden border-2 border-purple-500/50">
+            <div className="absolute bottom-2 right-2 w-20 h-20 rounded-lg overflow-hidden border-2 border-purple-500/50 bg-black">
               <video
                 ref={videoRefLocal}
                 className="w-full h-full object-cover"
@@ -153,18 +194,18 @@ export default function VideoCall({
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none"></div>
         </div>
 
-        {/* Local Video (Seeker) */}
+        {/* Local Video (Seeker / Screen Share) */}
         <div className="relative bg-gradient-to-br from-purple-900/20 to-black rounded-2xl overflow-hidden border border-purple-500/30 flex items-center justify-center">
           <video
             ref={videoRefLocal}
-            className="w-full h-full object-cover mirror"
+            className={`w-full h-full object-cover ${!isScreenSharing ? 'mirror' : ''}`}
             autoPlay
             playsInline
             muted
           />
 
-          {/* Fallback Avatar if video unavailable */}
-          {!isVideoOn && (
+          {/* Fallback Avatar if video unavailable and not sharing screen */}
+          {(!isVideoOn && !isScreenSharing && !videoRefLocal.current?.srcObject) && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-purple-600/30 to-pink-600/30">
               <img
                 src={seekerAvatar}
@@ -178,13 +219,23 @@ export default function VideoCall({
           {/* Status Badge - Seeker */}
           <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg">
             <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="font-semibold text-white">You</span>
+            <span className="font-semibold text-white">{isScreenSharing ? "Your Screen" : "You"}</span>
           </div>
 
           {/* Gradient Overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none"></div>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
+          <div className="bg-purple-900/90 text-white px-4 py-2 rounded-full shadow-lg border border-purple-500/50 text-sm flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            {toastMessage}
+          </div>
+        </div>
+      )}
 
       {/* Control Bar */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent p-6">
@@ -215,9 +266,22 @@ export default function VideoCall({
             {isVideoOn ? <Video size={24} /> : <VideoOff size={24} />}
           </button>
 
+          {/* Screen Share Toggle */}
+          <button
+            onClick={toggleScreenShare}
+            className={`p-4 rounded-full transition-all transform hover:scale-110 ${
+              isScreenSharing
+                ? 'bg-blue-600/80 border border-blue-400 hover:bg-blue-600 text-white'
+                : 'bg-purple-600/20 border border-purple-500/50 hover:bg-purple-600/30 text-white'
+            }`}
+            title={isScreenSharing ? 'Stop sharing screen' : 'Share screen'}
+          >
+            <MonitorUp size={24} />
+          </button>
+
           {/* Settings */}
           <button
-            className="p-4 bg-purple-600/20 border border-purple-500/50 hover:bg-purple-600/30 rounded-full transition-all transform hover:scale-110"
+            className="p-4 bg-purple-600/20 border border-purple-500/50 hover:bg-purple-600/30 rounded-full transition-all transform hover:scale-110 text-white"
             title="Settings"
           >
             <Settings size={24} />
@@ -225,7 +289,7 @@ export default function VideoCall({
 
           {/* Chat */}
           <button
-            className="p-4 bg-purple-600/20 border border-purple-500/50 hover:bg-purple-600/30 rounded-full transition-all transform hover:scale-110"
+            className="p-4 bg-purple-600/20 border border-purple-500/50 hover:bg-purple-600/30 rounded-full transition-all transform hover:scale-110 text-white"
             title="Open chat"
           >
             <MessageCircle size={24} />
@@ -234,7 +298,7 @@ export default function VideoCall({
           {/* Picture in Picture */}
           <button
             onClick={onTogglePIP}
-            className="p-4 bg-purple-600/20 border border-purple-500/50 hover:bg-purple-600/30 rounded-full transition-all transform hover:scale-110"
+            className="p-4 bg-purple-600/20 border border-purple-500/50 hover:bg-purple-600/30 rounded-full transition-all transform hover:scale-110 text-white"
             title="Picture in picture"
           >
             <Maximize2 size={24} />
@@ -243,7 +307,7 @@ export default function VideoCall({
           {/* End Call */}
           <button
             onClick={onEndCall}
-            className="p-4 bg-red-600/20 border border-red-500/50 hover:bg-red-600/30 rounded-full transition-all transform hover:scale-110"
+            className="p-4 bg-red-600/20 border border-red-500/50 hover:bg-red-600/30 rounded-full transition-all transform hover:scale-110 text-white"
             title="End call"
           >
             <Phone size={24} className="text-red-400" />
