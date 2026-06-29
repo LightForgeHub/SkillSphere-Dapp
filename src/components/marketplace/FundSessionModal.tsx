@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useState } from 'react';
-import { X, ChevronRight, CheckCircle } from 'lucide-react';
+import { X, ChevronRight, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useWallet } from '@/providers/WalletProvider';
+
+/** Minimum native XLM kept aside for Stellar transaction fees. */
+const MIN_XLM_FOR_FEES = 1;
 
 interface FundSessionModalProps {
   expertName: string;
@@ -20,6 +24,7 @@ export default function FundSessionModal({
   onClose,
   onSuccess,
 }: FundSessionModalProps) {
+  const { balance, address, isLoading, error } = useWallet();
   const [currentStep, setCurrentStep] = useState<Step>('duration');
   const [duration, setDuration] = useState<number>(60); // minutes
   const [isProcessing, setIsProcessing] = useState(false);
@@ -28,11 +33,24 @@ export default function FundSessionModal({
   const amount = (hourlyRate * duration) / 60;
   const sessionId = `SESSION_${Date.now()}`;
 
+  const walletBalance = balance !== null ? parseFloat(balance) : null;
+  const isBalanceUnavailable =
+    isLoading ||
+    error !== null ||
+    !address ||
+    walletBalance === null ||
+    Number.isNaN(walletBalance);
+  const hasInsufficientBalance =
+    !isBalanceUnavailable && walletBalance < amount + MIN_XLM_FOR_FEES;
+  const cannotProceed = isBalanceUnavailable || hasInsufficientBalance;
+
   const handleDurationChange = (value: number) => {
     setDuration(value);
   };
 
   const handleConfirm = async () => {
+    if (cannotProceed) return;
+
     setIsProcessing(true);
     // Simulate wallet transaction
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -47,6 +65,18 @@ export default function FundSessionModal({
   };
 
   if (!isOpen) return null;
+
+  const insufficientBalanceBanner = hasInsufficientBalance ? (
+    <div
+      role="alert"
+      className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4"
+    >
+      <AlertTriangle size={20} className="text-amber-400 shrink-0 mt-0.5" />
+      <p className="text-sm text-amber-200">
+        Insufficient XLM for transaction fees
+      </p>
+    </div>
+  ) : null;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -121,10 +151,13 @@ export default function FundSessionModal({
                 </div>
               </div>
 
+              {insufficientBalanceBanner}
+
               {/* Next Button */}
               <button
                 onClick={() => setCurrentStep('confirm')}
-                className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+                disabled={cannotProceed}
+                className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-purple-600/50 disabled:to-pink-600/50 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
               >
                 Continue
                 <ChevronRight size={20} />
@@ -150,6 +183,8 @@ export default function FundSessionModal({
                 </div>
               </div>
 
+              {insufficientBalanceBanner}
+
               {/* Wallet Info */}
               <div className="bg-blue-600/10 border border-blue-500/20 rounded-lg p-4">
                 <p className="text-sm text-gray-300">
@@ -161,7 +196,7 @@ export default function FundSessionModal({
               <div className="space-y-3">
                 <button
                   onClick={handleConfirm}
-                  disabled={isProcessing}
+                  disabled={isProcessing || cannotProceed}
                   className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-purple-600/50 disabled:to-pink-600/50 rounded-lg font-semibold transition-all disabled:cursor-not-allowed"
                 >
                   {isProcessing ? 'Processing...' : 'Confirm & Pay'}
