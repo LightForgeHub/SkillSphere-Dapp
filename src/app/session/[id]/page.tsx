@@ -44,6 +44,8 @@ const MOCK_SESSION: SessionData = {
   status: "active",
 };
 
+const SESSION_TIMEOUT_SECONDS = 3600;
+
 export default function SessionPage() {
   const params = useParams();
   const router = useRouter();
@@ -56,6 +58,7 @@ export default function SessionPage() {
   }));
   const [totalStreamed, setTotalStreamed] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [remainingSeconds, setRemainingSeconds] = useState(SESSION_TIMEOUT_SECONDS);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
@@ -64,6 +67,8 @@ export default function SessionPage() {
     const start = Date.now();
     const interval = setInterval(() => {
       setElapsed((Date.now() - start) / 1000);
+      const remaining = Math.max(0, SESSION_TIMEOUT_SECONDS - (Date.now() - start) / 1000);
+      setRemainingSeconds(remaining);
     }, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -124,6 +129,7 @@ export default function SessionPage() {
                 <LiveCounter
                   ratePerSecond={session.ratePerSecond}
                   onTotalChange={setTotalStreamed}
+                  remainingSeconds={remainingSeconds}
                   className="mb-8"
                 />
 

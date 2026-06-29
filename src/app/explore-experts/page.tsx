@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 import ExpertCard from '@/components/marketplace/ExpertCard';
-import { mockExperts } from '@/utils/data/mock-data';
+import { useExperts } from '@/hooks/useExperts';
 
 export default function ExploreExpertsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -11,9 +11,11 @@ export default function ExploreExpertsPage() {
   const [rateFilter, setRateFilter] = useState<string>("all");
   const [ratingFilter, setRatingFilter] = useState<string>("all");
 
-  const categories = Array.from(new Set(mockExperts.map((e) => e.category)));
+  const { data: experts = [], isLoading, error } = useExperts();
 
-  const filteredExperts = mockExperts.filter((expert) => {
+  const categories = Array.from(new Set(experts.map((e) => e.category)));
+
+  const filteredExperts = experts.filter((expert) => {
     const matchesSearch = expert.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          expert.category.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !selectedCategory || expert.category === selectedCategory;
@@ -131,7 +133,9 @@ export default function ExploreExpertsPage() {
 
         {/* Results Count */}
         <div className="mb-8 text-gray-400">
-          Showing {filteredExperts.length} expert{filteredExperts.length !== 1 ? 's' : ''}
+          {isLoading && "Loading experts..."}
+          {error && "Error loading experts"}
+          {!isLoading && !error && `Showing ${filteredExperts.length} expert${filteredExperts.length !== 1 ? 's' : ''}`}
         </div>
 
         {/* Experts Grid */}

@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ExpertDetails from '@/components/profile/ExpertDetails';
-import { mockExperts } from '@/utils/data/mock-data';
-import { Expert } from '@/utils/types/types';
+import { useExpert } from '@/hooks/useExperts';
 
 interface ExpertProfilePageProps {
   params: {
@@ -14,25 +13,22 @@ interface ExpertProfilePageProps {
 
 export default function ExpertProfilePage({ params }: ExpertProfilePageProps) {
   const router = useRouter();
-  const [expert, setExpert] = useState<Expert | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: expert, isLoading, error } = useExpert(params.id);
 
-  React.useEffect(() => {
-    // Simulate fetching expert data
-    const expertId = params.id;
-    const foundExpert = mockExperts.find((e) => e.id === expertId);
+  const handleBookClick = () => {
+    if (expert?.is_busy) return;
+    sessionStorage.setItem('selectedExpertId', expert!.id);
+    sessionStorage.setItem('selectedExpertName', expert!.name);
+    router.push('/marketplace?action=book&expertId=' + expert!.id);
+  };
 
-    if (foundExpert) {
-      setExpert(foundExpert);
-      setLoading(false);
-    } else {
-      setError('Expert not found');
-      setLoading(false);
+  useEffect(() => {
+    if (expert?.is_busy) {
+      // optional: handle busy state
     }
-  }, [params.id]);
+  }, [expert]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen w-full flex items-center justify-center">
         <div className="space-y-4 text-center">
@@ -59,7 +55,7 @@ export default function ExpertProfilePage({ params }: ExpertProfilePageProps) {
       >
         <div className="max-w-2xl mx-auto px-4 text-center">
           <h1 className="text-5xl md:text-6xl font-bold mb-4">Expert Not Found</h1>
-          <p className="text-gray-400 text-lg mb-8">{error || 'The expert you are looking for does not exist.'}</p>
+          <p className="text-gray-400 text-lg mb-8">{error ? String(error) : 'The expert you are looking for does not exist.'}</p>
           <button
             onClick={() => router.push('/explore-experts')}
             className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold transition-all duration-300"
@@ -70,14 +66,6 @@ export default function ExpertProfilePage({ params }: ExpertProfilePageProps) {
       </div>
     );
   }
-
-  const handleBookClick = () => {
-    if (expert.is_busy) return;
-    // Store expert info for the booking flow and navigate to marketplace
-    sessionStorage.setItem('selectedExpertId', expert.id);
-    sessionStorage.setItem('selectedExpertName', expert.name);
-    router.push('/marketplace?action=book&expertId=' + expert.id);
-  };
 
   return (
     <div

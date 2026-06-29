@@ -4,15 +4,26 @@ import React from 'react';
 import Link from 'next/link';
 import { Star, Clock, CheckCircle } from 'lucide-react';
 import { Expert } from '@/utils/types/types';
+import { prefetchExpert } from '@/hooks/useExperts';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface ExpertCardProps {
   expert: Expert;
 }
 
 export default function ExpertCard({ expert }: ExpertCardProps) {
+  const queryClient = useQueryClient();
+
+  const handleMouseEnter = () => {
+    prefetchExpert(queryClient, expert.id);
+  };
+
   return (
     <Link href={`/explore-experts/${expert.id}`}>
-      <div className="h-full bg-gradient-to-br from-purple-600/10 to-pink-600/10 backdrop-blur-sm border border-purple-500/20 rounded-2xl overflow-hidden hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-300 transform hover:-translate-y-1 cursor-pointer group">
+      <div
+        onMouseEnter={handleMouseEnter}
+        className="h-full bg-gradient-to-br from-purple-600/10 to-pink-600/10 backdrop-blur-sm border border-purple-500/20 rounded-2xl overflow-hidden hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-300 transform hover:-translate-y-1 cursor-pointer group"
+      >
         {/* Card Header with Avatar */}
         <div className="relative h-40 bg-gradient-to-r from-purple-600/20 to-pink-600/20 border-b border-purple-500/20 flex items-center justify-center">
           <img

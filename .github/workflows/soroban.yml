@@ -30,8 +30,8 @@ jobs:
             contracts/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('contracts/Cargo.lock') }}
 
-      - name: Install soroban-cli
-        run: cargo install --locked soroban-cli --version 21.0.0
+      - name: Install stellar-cli
+        uses: stellar/stellar-cli@v27.0.0
 
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
@@ -40,7 +40,7 @@ jobs:
         run: cargo test
 
       - name: Build contract
-        run: soroban contract build
+        run: stellar contract build
 
   sdk:
     runs-on: ubuntu-latest
@@ -67,15 +67,15 @@ jobs:
             contracts/target
           key: ${{ runner.os }}-cargo-sdk-${{ hashFiles('contracts/Cargo.lock') }}
 
-      - name: Install soroban-cli
-        run: cargo install --locked soroban-cli --version 21.0.0
+      - name: Install stellar-cli
+        uses: stellar/stellar-cli@v27.0.0
 
       - name: Build WASM
         run: cargo build --target wasm32-unknown-unknown --release
 
       - name: Generate TypeScript SDK
         run: |
-          soroban contract bindings typescript \
+          stellar contract bindings typescript \
             --wasm target/wasm32-unknown-unknown/release/skillsphere_contract.wasm \
             --output-dir ../sdk/typescript \
             --contract-name skillsphere
