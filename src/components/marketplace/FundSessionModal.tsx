@@ -24,7 +24,7 @@ export default function FundSessionModal({
   onClose,
   onSuccess,
 }: FundSessionModalProps) {
-  const { balance } = useWallet();
+  const { balance, address, isLoading, error } = useWallet();
   const [currentStep, setCurrentStep] = useState<Step>('duration');
   const [duration, setDuration] = useState<number>(60); // minutes
   const [isProcessing, setIsProcessing] = useState(false);
@@ -34,14 +34,23 @@ export default function FundSessionModal({
   const sessionId = `SESSION_${Date.now()}`;
 
   const walletBalance = balance !== null ? parseFloat(balance) : null;
+  const isBalanceUnavailable =
+    isLoading ||
+    error !== null ||
+    !address ||
+    walletBalance === null ||
+    Number.isNaN(walletBalance);
   const hasInsufficientBalance =
-    walletBalance !== null && walletBalance < amount + MIN_XLM_FOR_FEES;
+    !isBalanceUnavailable && walletBalance < amount + MIN_XLM_FOR_FEES;
+  const cannotProceed = isBalanceUnavailable || hasInsufficientBalance;
 
   const handleDurationChange = (value: number) => {
     setDuration(value);
   };
 
   const handleConfirm = async () => {
+    if (cannotProceed) return;
+
     setIsProcessing(true);
     // Simulate wallet transaction
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -147,7 +156,7 @@ export default function FundSessionModal({
               {/* Next Button */}
               <button
                 onClick={() => setCurrentStep('confirm')}
-                disabled={hasInsufficientBalance}
+                disabled={cannotProceed}
                 className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-purple-600/50 disabled:to-pink-600/50 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
               >
                 Continue
@@ -187,7 +196,7 @@ export default function FundSessionModal({
               <div className="space-y-3">
                 <button
                   onClick={handleConfirm}
-                  disabled={isProcessing || hasInsufficientBalance}
+                  disabled={isProcessing || cannotProceed}
                   className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-purple-600/50 disabled:to-pink-600/50 rounded-lg font-semibold transition-all disabled:cursor-not-allowed"
                 >
                   {isProcessing ? 'Processing...' : 'Confirm & Pay'}
