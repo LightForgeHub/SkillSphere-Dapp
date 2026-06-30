@@ -14,6 +14,7 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { WalletProvider } from "@/providers/WalletProvider";
 import { ModalProvider } from "@/providers/ModalProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { DevToolsSwitcher } from "@/components/ui/DevToolsSwitcher";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -86,6 +87,7 @@ export default function RootLayout({
                 >
                   {children}
                 </AppLayout>
+                <DevToolsSwitcher />
               </ModalProvider>
             </WalletProvider>
           </QueryProvider>

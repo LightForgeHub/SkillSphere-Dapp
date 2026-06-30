@@ -13,6 +13,7 @@ import {
   getNetwork,
   setAllowed,
 } from "@stellar/freighter-api";
+import type { MockProfile } from "@/components/ui/DevToolsSwitcher";
 
 // Mock wallet configuration for CI/testing environments
 const MOCK_ENABLED = process.env.NEXT_PUBLIC_MOCK_WALLET === "true";
@@ -38,9 +39,21 @@ interface WalletContextValue extends WalletState {
   disconnect: () => void;
 }
 
-// ─── Context ─────────────────────────────────────────────────────────────────
+/**
+ * Extended context value that exposes sandbox-specific controls.
+ * Only consumed by DevToolsSwitcher; regular app code should use `useWallet`.
+ */
+interface SandboxWalletContextValue extends WalletContextValue {
+  /** The currently active mock profile (null when using real wallet) */
+  activeMockProfile: MockProfile | null;
+  /** Switch the connected wallet context to a different mock profile */
+  setMockProfile: (profile: MockProfile) => void;
+}
+
+// ─── Contexts ─────────────────────────────────────────────────────────────────
 
 const WalletContext = createContext<WalletContextValue | null>(null);
+const SandboxWalletContext = createContext<SandboxWalletContextValue | null>(null);
 
 // ─── Horizon balance helper ───────────────────────────────────────────────────
 
@@ -59,9 +72,9 @@ async function fetchXlmBalance(
     const res = await fetch(`${baseUrl}/accounts/${address}`);
     if (!res.ok) return null;
     const data = await res.json();
-    const native = (data.balances as Array<{ asset_type: string; balance: string }>).find(
-      (b) => b.asset_type === "native"
-    );
+    const native = (
+      data.balances as Array<{ asset_type: string; balance: string }>
+    ).find((b) => b.asset_type === "native");
     return native ? parseFloat(native.balance).toFixed(2) : null;
   } catch {
     return null;
@@ -78,6 +91,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     isLoading: false,
     error: null,
   });
+
+  // Tracks which mock profile is currently active (null = real wallet / CI mock)
+  const [activeMockProfile, setActiveMockProfile] =
+    useState<MockProfile | null>(null);
 
   // Re-hydrate state (address + network + balance) from Freighter or mock
   const refresh = useCallback(async () => {
@@ -119,9 +136,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   // Poll for network / account changes every 3 s while connected.
-  // Skip polling if using mock wallet.
+  // Skip polling if using mock wallet or an active mock profile override.
   useEffect(() => {
-    if (!state.address || MOCK_ENABLED) return;
+    if (!state.address || MOCK_ENABLED || activeMockProfile) return;
 
     const id = setInterval(async () => {
       try {
@@ -163,7 +180,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }, 3000);
 
     return () => clearInterval(id);
-  }, [state.address, state.network]);
+  }, [state.address, state.network, activeMockProfile]);
 
   // ── connect ────────────────────────────────────────────────────────────────
 
@@ -208,6 +225,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   // ── disconnect ─────────────────────────────────────────────────────────────
 
   const disconnect = useCallback(() => {
+    setActiveMockProfile(null);
     setState({
       address: null,
       network: null,
@@ -217,19 +235,65 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // ── setMockProfile (sandbox only) ─────────────────────────────────────────
+
+  /**
+   * Instantly overrides the wallet context to simulate a different user persona.
+   * This is only intended to be called from DevToolsSwitcher.
+   */
+  const setMockProfile = useCallback((profile: MockProfile) => {
+    setActiveMockProfile(profile);
+    setState({
+      address: profile.address,
+      network: profile.network,
+      balance: profile.balance,
+      isLoading: false,
+      error: null,
+    });
+  }, []);
+
+  // ── context value ──────────────────────────────────────────────────────────
+
+  const contextValue: WalletContextValue = {
+    ...state,
+    connect,
+    disconnect,
+  };
+
+  const sandboxContextValue: SandboxWalletContextValue = {
+    ...contextValue,
+    activeMockProfile,
+    setMockProfile,
+  };
+
   return (
-    <WalletContext.Provider value={{ ...state, connect, disconnect }}>
-      {children}
+    <WalletContext.Provider value={contextValue}>
+      <SandboxWalletContext.Provider value={sandboxContextValue}>
+        {children}
+      </SandboxWalletContext.Provider>
     </WalletContext.Provider>
   );
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// ─── Hooks ────────────────────────────────────────────────────────────────────
 
+/** Standard hook for all app components. */
 export function useWallet(): WalletContextValue {
   const ctx = useContext(WalletContext);
   if (!ctx) {
     throw new Error("useWallet must be used inside <WalletProvider>");
+  }
+  return ctx;
+}
+
+/**
+ * Hook exclusively for the DevToolsSwitcher.
+ * Exposes `activeMockProfile` and `setMockProfile`.
+ */
+export function useSandboxWallet(): SandboxWalletContextValue {
+  const ctx = useContext(SandboxWalletContext);
+  if (!ctx) {
+    throw new Error("useSandboxWallet must be used inside <WalletProvider>");
   }
   return ctx;
 }
