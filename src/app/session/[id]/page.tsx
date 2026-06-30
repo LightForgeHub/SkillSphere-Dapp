@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { useWallet } from "@/providers/WalletProvider";
 import { CodeWorkspace } from "@/components/session/CodeWorkspace";
+import { SessionChat } from "@/components/session/SessionChat";
 import {
   User,
   Wallet,
@@ -23,6 +24,7 @@ import {
   AlertTriangle,
   Code2,
   Gavel,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/components/ui/utils";
 import type { Dispute } from "../../../../utils/types/types";
@@ -78,10 +80,13 @@ export default function SessionPage() {
   }));
   const [totalStreamed, setTotalStreamed] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-  const [remainingSeconds, setRemainingSeconds] = useState(SESSION_TIMEOUT_SECONDS);
+  const [remainingSeconds, setRemainingSeconds] = useState(
+    SESSION_TIMEOUT_SECONDS,
+  );
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [showAppealModal, setShowAppealModal] = useState(false);
 
   /**
@@ -95,7 +100,10 @@ export default function SessionPage() {
     const start = Date.now();
     const interval = setInterval(() => {
       setElapsed((Date.now() - start) / 1000);
-      const remaining = Math.max(0, SESSION_TIMEOUT_SECONDS - (Date.now() - start) / 1000);
+      const remaining = Math.max(
+        0,
+        SESSION_TIMEOUT_SECONDS - (Date.now() - start) / 1000,
+      );
       setRemainingSeconds(remaining);
     }, 1000);
     return () => clearInterval(interval);
@@ -109,13 +117,16 @@ export default function SessionPage() {
     }, 2000);
   }, [router, sessionId]);
 
-  const saveNotesToServer = useCallback(async (content: string) => {
-    await fetch(`/api/session/${sessionId}/notes`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    });
-  }, [sessionId]);
+  const saveNotesToServer = useCallback(
+    async (content: string) => {
+      await fetch(`/api/session/${sessionId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+    },
+    [sessionId],
+  );
 
   const formatTime = (seconds: number): string => {
     const m = Math.floor(seconds / 60);
@@ -125,6 +136,16 @@ export default function SessionPage() {
 
   const remainingBalance = Math.max(0, session.escrowBalance - totalStreamed);
   const hourlyRate = session.ratePerSecond * 3600;
+
+  const gridClassName = showCodeEditor
+    ? showChat
+      ? "grid-cols-1 xl:grid-cols-3"
+      : "grid-cols-1 xl:grid-cols-2"
+    : showChat
+      ? "grid-cols-1 lg:grid-cols-4 max-w-6xl mx-auto"
+      : "grid-cols-1 lg:grid-cols-3 max-w-5xl mx-auto";
+
+  const mainColumnClass = showCodeEditor ? "" : "lg:col-span-2";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -137,21 +158,39 @@ export default function SessionPage() {
             <ArrowLeft className="size-4" />
             Back
           </button>
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setShowCodeEditor(!showCodeEditor)}
-            className={cn("gap-2", showCodeEditor && "bg-white/10 text-foreground")}
-          >
-            <Code2 className="size-4" />
-            {showCodeEditor ? "Hide Editor" : "Open Code Editor"}
-          </Button>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowChat(!showChat)}
+              className={cn("gap-2", showChat && "bg-white/10 text-white")}
+            >
+              <MessageCircle className="size-4" />
+              {showChat ? "Hide Chat" : "Chat"}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCodeEditor(!showCodeEditor)}
+              className={cn(
+                "gap-2",
+                showCodeEditor && "bg-white/10 text-white",
+              )}
+            >
+              <Code2 className="size-4" />
+              {showCodeEditor ? "Hide Editor" : "Open Code Editor"}
+            </Button>
+          </div>
         </div>
 
-        <div className={cn("grid gap-6", showCodeEditor ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 lg:grid-cols-3 max-w-5xl mx-auto")}>
-          <div className={cn("space-y-6 flex flex-col", showCodeEditor ? "" : "lg:col-span-2")}>
-            <Card variant="glow" className="relative overflow-hidden flex-1 min-h-[300px]">
+        <div className={cn("grid gap-6", gridClassName)}>
+          <div className={cn("space-y-6 flex flex-col", mainColumnClass)}>
+            <Card
+              variant="glow"
+              className="relative overflow-hidden flex-1 min-h-[300px]"
+            >
               <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
               <CardContent className="flex flex-col items-center justify-center h-full py-16">
                 <LiveCounter
@@ -201,13 +240,13 @@ export default function SessionPage() {
                 <Card key={stat.label} variant="glass" className="text-center">
                   <CardContent className="py-4">
                     <stat.icon className="size-4 mx-auto mb-2 text-foreground/40" />
-                    <p className="text-xs text-foreground/50 mb-1">{stat.label}</p>
+                    <p className="text-xs text-foreground/50 mb-1">
+                      {stat.label}
+                    </p>
                     <p
                       className={cn(
                         "text-lg font-bold font-mono tabular-nums",
-                      stat.highlight
-                        ? "text-amber-400"
-                        : "text-foreground"
+                        stat.highlight ? "text-amber-400" : "text-foreground",
                       )}
                     >
                       {stat.value}
@@ -263,7 +302,8 @@ export default function SessionPage() {
                         </Badge>
                       </div>
                       <p className="font-mono text-xs text-foreground/70 truncate">
-                        {wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}
+                        {wallet.address.slice(0, 8)}...
+                        {wallet.address.slice(-6)}
                       </p>
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-foreground/50">Balance</span>
@@ -326,6 +366,12 @@ export default function SessionPage() {
               </Button>
             </div>
           )}
+
+          {showChat && (
+            <div className="h-[600px] xl:h-auto">
+              <SessionChat />
+            </div>
+          )}
         </div>
       </div>
 
@@ -337,21 +383,17 @@ export default function SessionPage() {
           <h2 className="text-xl font-bold text-foreground">End Session?</h2>
           <p className="text-sm text-foreground/60">
             The session will be settled immediately.{" "}
-            <strong className="text-foreground">{totalStreamed.toFixed(7)} XLM</strong>{" "}
+            <strong className="text-foreground">
+              {totalStreamed.toFixed(7)} XLM
+            </strong>{" "}
             will be transferred to {session.expertName}, and the remaining{" "}
             {remainingBalance.toFixed(7)} XLM will be refunded to your wallet.
           </p>
           <div className="flex gap-3 justify-center pt-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowEndConfirm(false)}
-            >
+            <Button variant="outline" onClick={() => setShowEndConfirm(false)}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleEndSession}
-            >
+            <Button variant="destructive" onClick={handleEndSession}>
               Confirm & Settle
             </Button>
           </div>
