@@ -7,6 +7,13 @@
 :root {
   --background: #ffffff;
   --foreground: #0B0113;
+  --card: #ffffff;
+  --card-foreground: #0B0113;
+  --border: #e2e8f0;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0B0113;
   --bg-full-pattern: none;
   --bg-gradient-pattern: none;
 }
@@ -14,6 +21,13 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --font-sans: var(--font-geist-sans);
   --font-geist: var(--font-geist-sans);
   --font-work: var(--font-work-sans);
@@ -27,6 +41,13 @@
 .dark {
   --background: #0B0113;
   --foreground: #ffffff;
+  --card: #110719;
+  --card-foreground: #ffffff;
+  --border: #1e293b;
+  --muted: #1a1a2e;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #ffffff;
   --bg-full-pattern: url(/effect.png), linear-gradient(213.91deg, rgba(23, 22, 22, 0) 61.67%, rgba(44, 9, 74, 0.71) 116.1%), linear-gradient(144.95deg, rgba(19, 19, 19, 0) 50.66%, rgba(142, 56, 217, 0.15) 84.18%);
   --bg-gradient-pattern: linear-gradient(213.91deg, rgba(23, 22, 22, 0) 61.67%, rgba(44, 9, 74, 0.71) 116.1%), linear-gradient(144.95deg, rgba(19, 19, 19, 0) 50.66%, rgba(142, 56, 217, 0.15) 84.18%);
 }
@@ -39,4 +60,14 @@ body {
 
 button {
   cursor: pointer;
+}
+
+*, *::before, *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none;
+  }
 }

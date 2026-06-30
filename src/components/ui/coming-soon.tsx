@@ -52,7 +52,7 @@ export default function ComingSoon({ title, iconName, description }: ComingSoonP
 
         {/* Description */}
         {description && (
-          <p className="text-gray-400 text-lg mb-8 max-w-md mx-auto font-inter">
+          <p className="text-muted-foreground text-lg mb-8 max-w-md mx-auto font-inter">
             {description}
           </p>
         )}

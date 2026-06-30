@@ -36,7 +36,7 @@ export default function ExpertDashboard() {
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">Expert Dashboard</h1>
         <p className="text-slate-400">
-          Welcome back, {currentExpert.name}! Here's your session and earnings overview.
+           Welcome back, {currentExpert.name}! Here&apos;s your session and earnings overview.
         </p>
       </div>
 

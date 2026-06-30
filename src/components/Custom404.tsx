@@ -2,11 +2,11 @@
 
 import React from "react";
 import Link from "next/link";
-import { Home, Search, ArrowLeft } from "lucide-react";
+import { Home, Search } from "lucide-react";
 
 export default function Custom404() {
   return (
-    <div className="min-h-screen bg-[#0B0113] flex items-center justify-center px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4 relative overflow-hidden">
       {/* Background effects matching SkillSphere theme */}
       <div 
         className="absolute inset-0 opacity-20"
@@ -16,7 +16,7 @@ export default function Custom404() {
       />
       
       {/* Animated background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#0B0113] via-purple-900/20 to-[#0B0113] animate-pulse" />
+      <div className="absolute inset-0 bg-gradient-to-br from-background via-purple-900/20 to-background animate-pulse" />
       
       {/* Main content */}
       <div className="relative z-10 text-center max-w-2xl mx-auto">
@@ -35,19 +35,19 @@ export default function Custom404() {
           </div>
 
           {/* Error message */}
-          <h2 className="text-2xl md:text-3xl font-semibold text-white mb-4">
-            Oops! The page you're looking for doesn't exist.
+          <h2 className="text-2xl md:text-3xl font-semibold text-foreground mb-4">
+            Oops! The page you&apos;re looking for doesn&apos;t exist.
           </h2>
           
-          <p className="text-gray-400 text-lg mb-8 max-w-md mx-auto">
-            It seems this skill has vanished into the digital void. Let's get you back to learning.
+          <p className="text-muted-foreground text-lg mb-8 max-w-md mx-auto">
+            It seems this skill has vanished into the digital void. Let&apos;s get you back to learning.
           </p>
 
           {/* Animated icon */}
           <div className="mb-8 flex justify-center">
             <div className="relative">
               <div className="w-20 h-20 bg-gradient-to-r from-purple-500 to-cyan-500 rounded-full flex items-center justify-center animate-bounce">
-                <Search className="w-10 h-10 text-white" />
+                <Search className="w-10 h-10 text-foreground" />
               </div>
               
               {/* Orbiting dots */}
@@ -64,7 +64,7 @@ export default function Custom404() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link
               href="/dashboard"
-              className="px-8 py-3 bg-gradient-to-r from-purple-500 to-cyan-500 text-white font-semibold rounded-lg hover:from-purple-600 hover:to-cyan-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-purple-500/25 flex items-center gap-2"
+              className="px-8 py-3 bg-gradient-to-r from-purple-500 to-cyan-500 text-foreground font-semibold rounded-lg hover:from-purple-600 hover:to-cyan-600 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-purple-500/25 flex items-center gap-2"
             >
               <Home className="w-5 h-5" />
               Go Back Home
@@ -72,7 +72,7 @@ export default function Custom404() {
             
             <Link
               href="/explore-experts"
-              className="px-8 py-3 bg-transparent border border-gray-600 text-gray-300 font-semibold rounded-lg hover:bg-gray-800/50 hover:border-gray-500 hover:text-white transition-all duration-300 flex items-center gap-2"
+              className="px-8 py-3 bg-transparent border border-border text-muted-foreground font-semibold rounded-lg hover:bg-accent hover:border-border hover:text-foreground transition-all duration-300 flex items-center gap-2"
             >
               <Search className="w-5 h-5" />
               Explore Experts
@@ -80,7 +80,7 @@ export default function Custom404() {
           </div>
 
           {/* Help text */}
-          <div className="mt-8 text-gray-500 text-sm">
+          <div className="mt-8 text-muted-foreground text-sm">
             <p>If you believe this is an error, please contact our support team.</p>
           </div>
         </div>

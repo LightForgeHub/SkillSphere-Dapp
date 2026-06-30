@@ -143,7 +143,7 @@ export default function HottestCollections() {
                             <CollectionRow key={collection.id} collection={collection} />
                         ))
                     ) : (
-                        <div className="text-center py-12 text-gray-400">
+                        <div className="text-center py-12 text-muted-foreground">
                             No collections found with the current filters.
                         </div>
                     )}

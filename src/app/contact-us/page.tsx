@@ -19,7 +19,7 @@ export default function ContactUsPage() {
           <h1 className="text-5xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent font-jersey-10 tracking-[2px]">
             Contact Us
           </h1>
-          <p className="text-gray-400 font-inter text-base max-w-md mx-auto">
+          <p className="text-muted-foreground font-inter text-base max-w-md mx-auto">
             We&apos;d love to hear from you. Send us a message and we&apos;ll respond as soon as possible.
           </p>
         </div>

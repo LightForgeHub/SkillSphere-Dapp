@@ -21,7 +21,7 @@ export default function CourseVideoPlayer({
   const [isPlayHovered, setIsPlayHovered] = useState(false);
 
   return (
-    <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-[#0B0113]">
+    <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-background">
       {/* Thumbnail */}
       <img
         src={thumbnailSrc}
@@ -35,7 +35,7 @@ export default function CourseVideoPlayer({
       {/* Side nav: Previous */}
       <button
         onClick={onPrevious}
-        className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-black/50 border border-white/10 text-white hover:bg-black/70 hover:border-white/30 transition-all duration-200 backdrop-blur-sm"
+        className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-black/50 border border-border text-foreground hover:bg-black/70 hover:border-white/30 transition-all duration-200 backdrop-blur-sm"
         aria-label="Previous lesson"
       >
         <SkipBack size={18} />
@@ -58,7 +58,7 @@ export default function CourseVideoPlayer({
         >
           <Play
             size={28}
-            className="text-white fill-white translate-x-0.5"
+            className="text-foreground fill-white translate-x-0.5"
           />
         </span>
       </button>
@@ -66,7 +66,7 @@ export default function CourseVideoPlayer({
       {/* Side nav: Next */}
       <button
         onClick={onNext}
-        className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-black/50 border border-white/10 text-white hover:bg-black/70 hover:border-white/30 transition-all duration-200 backdrop-blur-sm"
+        className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-black/50 border border-border text-foreground hover:bg-black/70 hover:border-white/30 transition-all duration-200 backdrop-blur-sm"
         aria-label="Next lesson"
       >
         <SkipForward size={18} />

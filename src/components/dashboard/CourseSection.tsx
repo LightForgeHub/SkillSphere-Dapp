@@ -8,11 +8,11 @@ import { FileUpload } from "@/components/ui/FileUpload";
 
 const lbl = "block text-[#FCFCFC] text-sm font-normal leading-6 mb-2";
 const inputCls =
-  "bg-[#110D18] border border-white/[0.06] text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
+  "bg-card border border-white/[0.06] text-foreground placeholder:text-foreground/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
 const errorCls =
   "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20";
 const textareaCls =
-  "w-full bg-[#110D18] border border-white/[0.06] rounded-xl p-4 text-white placeholder:text-white/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all resize-none";
+  "w-full bg-card border border-white/[0.06] rounded-xl p-4 text-foreground placeholder:text-foreground/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all resize-none";
 
 interface CourseSectionProps {
   index: number;
@@ -40,10 +40,10 @@ export default function CourseSection({ index, onRemove, canRemove }: CourseSect
     setTouched((prev) => ({ ...prev, [field]: true }));
 
   return (
-    <div className="bg-[#0C0A12] rounded-2xl border border-white/[0.04] overflow-hidden">
+    <div className="bg-background rounded-2xl border border-white/[0.04] overflow-hidden">
       {/* Section Header */}
       <div className="flex items-center justify-between px-6 md:px-8 py-4 border-b border-white/[0.04]">
-        <span className="text-white/40 text-xs font-semibold tracking-widest uppercase">
+        <span className="text-foreground/40 text-xs font-semibold tracking-widest uppercase">
           Section {index + 1}
         </span>
         <div className="flex items-center gap-2">
@@ -51,7 +51,7 @@ export default function CourseSection({ index, onRemove, canRemove }: CourseSect
             <button
               type="button"
               onClick={onRemove}
-              className="p-1.5 rounded-lg text-white/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+              className="p-1.5 rounded-lg text-foreground/20 hover:text-red-400 hover:bg-red-400/10 transition-colors"
               title="Remove section"
             >
               <Trash2 className="w-4 h-4" />
@@ -60,7 +60,7 @@ export default function CourseSection({ index, onRemove, canRemove }: CourseSect
           <button
             type="button"
             onClick={() => setCollapsed((c) => !c)}
-            className="p-1.5 rounded-lg text-white/20 hover:text-white/60 hover:bg-white/5 transition-colors"
+            className="p-1.5 rounded-lg text-foreground/20 hover:text-foreground/60 hover:bg-accent transition-colors"
             title={collapsed ? "Expand section" : "Collapse section"}
           >
             {collapsed ? (
@@ -81,7 +81,7 @@ export default function CourseSection({ index, onRemove, canRemove }: CourseSect
               variant="video"
               label="Add Video"
               onFileSelect={() => {}}
-              className="shrink-0 w-full md:w-[200px] h-[150px] !bg-[#0F1A15] !border-[#1a3a28]/60"
+              className="shrink-0 w-full md:w-[200px] h-[150px] !bg-card !border-[#1a3a28]/60"
             />
             <div className="flex-1 space-y-6">
               <div>

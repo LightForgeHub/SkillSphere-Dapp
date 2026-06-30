@@ -58,23 +58,23 @@ export default function LearnersTable({
         {learners.map((learner, index) => (
           <div
             key={`${learner.email}-${index}`}
-            className="bg-[#110719] rounded-lg border border-white/10 p-4 space-y-3"
+            className="bg-card rounded-lg border border-border p-4 space-y-3"
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-300 uppercase">Name</span>
-              <span className="text-sm text-white">{learner.name}</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Name</span>
+              <span className="text-sm text-foreground">{learner.name}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-300 uppercase">Course</span>
-              <span className="text-sm text-gray-400">{learner.course}</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Course</span>
+              <span className="text-sm text-muted-foreground">{learner.course}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-300 uppercase">Email</span>
-              <span className="text-sm text-gray-400">{learner.email}</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Email</span>
+              <span className="text-sm text-muted-foreground">{learner.email}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-300 uppercase">Progress</span>
-              <span className="text-sm text-white font-semibold">{learner.progress}</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Progress</span>
+              <span className="text-sm text-foreground font-semibold">{learner.progress}</span>
             </div>
           </div>
         ))}
@@ -83,52 +83,52 @@ export default function LearnersTable({
       {/* Desktop: Table Layout */}
       <div className="hidden md:block overflow-x-auto w-full">
         <div className="inline-block min-w-full align-middle">
-          <div className="overflow-hidden rounded-lg border border-white/10">
+          <div className="overflow-hidden rounded-lg border border-border">
             <table className="min-w-full divide-y divide-white/10">
               <thead className="bg-white/5">
                 <tr>
                   <th
                     scope="col"
-                    className="py-3 px-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                    className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
                   >
                     Name
                   </th>
                   <th
                     scope="col"
-                    className="py-3 px-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                    className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
                   >
                     Courses
                   </th>
                   <th
                     scope="col"
-                    className="py-3 px-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                    className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
                   >
                     Email Address
                   </th>
                   <th
                     scope="col"
-                    className="py-3 px-4 text-right text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                    className="py-3 px-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
                   >
                     Progress
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-[#110719] divide-y divide-white/5">
+              <tbody className="bg-card divide-y divide-white/5">
                 {learners.map((learner, index) => (
                   <tr
                     key={`${learner.email}-${index}`}
-                    className="transition-colors hover:bg-white/5"
+                    className="transition-colors hover:bg-accent"
                   >
-                    <td className="py-4 px-4 whitespace-nowrap text-sm text-white">
+                    <td className="py-4 px-4 whitespace-nowrap text-sm text-foreground">
                       {learner.name}
                     </td>
-                    <td className="py-4 px-4 whitespace-nowrap text-sm text-gray-400">
+                    <td className="py-4 px-4 whitespace-nowrap text-sm text-muted-foreground">
                       {learner.course}
                     </td>
-                    <td className="py-4 px-4 whitespace-nowrap text-sm text-gray-400">
+                    <td className="py-4 px-4 whitespace-nowrap text-sm text-muted-foreground">
                       {learner.email}
                     </td>
-                    <td className="py-4 px-4 whitespace-nowrap text-sm text-white font-semibold text-right">
+                    <td className="py-4 px-4 whitespace-nowrap text-sm text-foreground font-semibold text-right">
                       {learner.progress}
                     </td>
                   </tr>

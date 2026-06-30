@@ -84,7 +84,7 @@ export function HeroSection() {
                                     Access Knowledge<br className="hidden sm:block" />
                                     Instantly.
                                 </h1>
-                                <p className="text-gray-300 font-work font-normal mb-6 sm:mb-8 text-sm sm:text-base lg:text-lg">
+                                <p className="text-muted-foreground font-work font-normal mb-6 sm:mb-8 text-sm sm:text-base lg:text-lg">
                                     SkillSphere connects professionals and learners for<br className="hidden sm:block" />
                                     short, trust-less consultations powered by Stellar.
                                 </p>
@@ -119,8 +119,8 @@ export function HeroSection() {
                                         className="w-8 h-6 sm:w-[39px] sm:h-[30px]"
                                     />
                                     <div>
-                                        <div className="text-lg sm:text-xl text-gray-400/80 font-bold">12k</div>
-                                        <div className="text-xs text-gray-400/80">Members</div>
+                                        <div className="text-lg sm:text-xl text-muted-foreground/80 font-bold">12k</div>
+                                        <div className="text-xs text-muted-foreground/80">Members</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 sm:gap-3 font-inter">
@@ -133,7 +133,7 @@ export function HeroSection() {
                                     />
                                     <div>
                                         <div className="text-lg sm:text-xl font-bold">11k</div>
-                                        <div className="text-xs text-gray-400">Courses</div>
+                                        <div className="text-xs text-muted-foreground">Courses</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 sm:gap-3">
@@ -146,7 +146,7 @@ export function HeroSection() {
                                     />
                                     <div>
                                         <div className="text-lg sm:text-xl font-bold">5k+</div>
-                                        <div className="text-xs text-gray-400">Weekly Transactions</div>
+                                        <div className="text-xs text-muted-foreground">Weekly Transactions</div>
                                     </div>
                                 </div>
                             </div>
@@ -193,7 +193,7 @@ export function HeroSection() {
                         {experts.map((expert, index) => (
                             <div
                                 key={index}
-                                className="flex items-center gap-3 p-3 sm:p-4 rounded-xl transition-all cursor-pointer hover:bg-white/5"
+                                className="flex items-center gap-3 p-3 sm:p-4 rounded-xl transition-all cursor-pointer hover:bg-accent"
                             >
                                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center">
                                     <Image
@@ -206,7 +206,7 @@ export function HeroSection() {
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     <div className="font-semibold text-sm sm:text-base truncate">{expert.name}</div>
-                                    <div className="text-xs sm:text-sm text-gray-400 truncate">{expert.role}</div>
+                                    <div className="text-xs sm:text-sm text-muted-foreground truncate">{expert.role}</div>
                                 </div>
                             </div>
                         ))}
