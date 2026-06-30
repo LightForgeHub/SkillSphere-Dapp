@@ -6,6 +6,7 @@ import { Wallet, LogOut, Copy, Check, Menu, X, Zap } from "lucide-react";
 import { useWallet } from "@/providers/WalletProvider";
 import { useModal } from "@/providers/ModalProvider";
 import { useCurrency, type DisplayCurrency } from "@/hooks/useCurrency";
+import NotificationHub from "./NotificationHub";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -233,6 +234,9 @@ export default function Navbar() {
               </option>
             ))}
           </select>
+
+          {/* Notification Hub */}
+          {address && <NotificationHub />}
 
           <WalletButton convert={convert} selectedCurrency={selectedCurrency} />
 
