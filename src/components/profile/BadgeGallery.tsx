@@ -69,7 +69,7 @@ export function BadgeGallery({ badges, className, title = "Skill Badges" }: Badg
 
 function BadgeCard({ badge }: { badge: SBTBadge }) {
   return (
-    <div className="group relative">
+    <div className="group relative" tabIndex={0}>
       <div className="bg-black/30 border border-purple-500/10 rounded-xl p-3 flex flex-col items-center text-center gap-2 transition-all duration-200 hover:border-purple-500/30 hover:bg-purple-500/5 cursor-default">
         <div className="relative">
           <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600/30 to-pink-600/30 flex items-center justify-center overflow-hidden ring-2 ring-purple-500/20 group-hover:ring-purple-500/40 transition-all">
@@ -98,7 +98,7 @@ function BadgeCard({ badge }: { badge: SBTBadge }) {
         )}
       </div>
 
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 px-3 py-2.5 bg-gray-900 text-gray-200 text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 px-3 py-2.5 bg-gray-900 text-gray-200 text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto z-50">
         <div className="flex items-start gap-2 mb-1.5">
           <Award className="w-3.5 h-3.5 text-purple-400 mt-0.5 shrink-0" />
           <p className="font-semibold text-white">{badge.title}</p>
