@@ -28,12 +28,37 @@ export default function FundSessionModal({
   const [currentStep, setCurrentStep] = useState<Step>('duration');
   const [duration, setDuration] = useState<number>(60); // minutes
   const [isProcessing, setIsProcessing] = useState(false);
+  const [rentFee, setRentFee] = useState<number | null>(null);
+  const [isEstimatingRent, setIsEstimatingRent] = useState(false);
 
   const hourlyRate = parseInt(expertHourlyRate?.replace(/\D/g, '') || '50');
   const amount = (hourlyRate * duration) / 60;
   const sessionId = `SESSION_${Date.now()}`;
 
+  // Simulate RPC call for state rent
+  const fetchRentEstimate = async () => {
+    setIsEstimatingRent(true);
+    try {
+      // Dummy RPC dry-run simulation
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      setRentFee(0.015); // Mock rent fee in XLM
+    } catch (e) {
+      console.error("Failed to estimate rent fee", e);
+      setRentFee(0.01); // Fallback mock fee
+    } finally {
+      setIsEstimatingRent(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isOpen) {
+      fetchRentEstimate();
+    }
+  }, [isOpen, duration]);
+
   const walletBalance = balance !== null ? parseFloat(balance) : null;
+  const totalRequired = amount + (rentFee || 0) + MIN_XLM_FOR_FEES;
+  
   const isBalanceUnavailable =
     isLoading ||
     error !== null ||
@@ -41,8 +66,8 @@ export default function FundSessionModal({
     walletBalance === null ||
     Number.isNaN(walletBalance);
   const hasInsufficientBalance =
-    !isBalanceUnavailable && walletBalance < amount + MIN_XLM_FOR_FEES;
-  const cannotProceed = isBalanceUnavailable || hasInsufficientBalance;
+    !isBalanceUnavailable && walletBalance < totalRequired;
+  const cannotProceed = isBalanceUnavailable || hasInsufficientBalance || isEstimatingRent;
 
   const handleDurationChange = (value: number) => {
     setDuration(value);
@@ -145,9 +170,13 @@ export default function FundSessionModal({
                   <span className="text-gray-400">Duration</span>
                   <span>{duration} minutes</span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Estimated State Rent Fee</span>
+                  <span>{isEstimatingRent ? '...' : rentFee ? `${rentFee.toFixed(3)} XLM` : '0 XLM'}</span>
+                </div>
                 <div className="border-t border-purple-500/20 pt-3 flex justify-between font-bold">
                   <span>Total Amount</span>
-                  <span className="text-purple-400">${amount.toFixed(2)} XLM</span>
+                  <span className="text-purple-400">${(amount + (rentFee || 0)).toFixed(3)} XLM</span>
                 </div>
               </div>
 
@@ -159,7 +188,7 @@ export default function FundSessionModal({
                 disabled={cannotProceed}
                 className="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-purple-600/50 disabled:to-pink-600/50 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
               >
-                Continue
+                {isEstimatingRent ? 'Estimating Rent...' : 'Continue'}
                 <ChevronRight size={20} />
               </button>
             </div>
@@ -177,9 +206,13 @@ export default function FundSessionModal({
                   <span className="text-gray-400">Duration</span>
                   <span className="font-semibold">{duration} minutes</span>
                 </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Estimated State Rent Fee</span>
+                  <span className="font-semibold">{rentFee ? `${rentFee.toFixed(3)} XLM` : '0 XLM'}</span>
+                </div>
                 <div className="flex justify-between items-center pb-4 border-b border-purple-500/20">
                   <span className="text-gray-400">Total Amount</span>
-                  <span className="font-semibold text-lg text-purple-400">${amount.toFixed(2)} XLM</span>
+                  <span className="font-semibold text-lg text-purple-400">${(amount + (rentFee || 0)).toFixed(3)} XLM</span>
                 </div>
               </div>
 
