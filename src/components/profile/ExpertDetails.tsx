@@ -3,6 +3,7 @@
 import React from 'react';
 import { Star, MapPin, Clock, CheckCircle } from 'lucide-react';
 import { Expert, Review } from '@/utils/types/types';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface ExpertDetailsProps {
   expert: Expert;
@@ -10,6 +11,12 @@ interface ExpertDetailsProps {
 }
 
 export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProps) {
+  const { rates } = useCurrency();
+    
+  // Calculate USD rates
+  const hourlyRateUSD = rates ? expert.hourlyRate * rates.usd : null;
+  const minuteRateUSD = hourlyRateUSD ? hourlyRateUSD / 60 : null;
+
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-8">
       {/* Hero Section */}
@@ -73,8 +80,10 @@ export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProp
                 <div className="text-sm text-gray-400">Total Sessions</div>
               </div>
               <div className="bg-black/30 rounded-lg p-4">
-                <div className="text-2xl font-bold text-purple-400">{expert.hourlyRate}</div>
-                <div className="text-sm text-gray-400">Hourly Rate</div>
+                <div className="text-2xl font-bold text-purple-400">{expert.hourlyRate} XLM/hr</div>
+                <div className="text-sm text-gray-400">
+                  {hourlyRateUSD ? `($${hourlyRateUSD.toFixed(2)} / hr)` : 'Hourly Rate'}
+                </div>
               </div>
               <div className="bg-black/30 rounded-lg p-4">
                 <div className="text-2xl font-bold text-purple-400">{expert.reviews}</div>
