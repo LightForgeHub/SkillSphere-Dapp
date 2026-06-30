@@ -11,6 +11,7 @@ import NavBar from "@/components/home/layout/navbar";
 import Footer from "@/components/home/layout/footer";
 import AppLayout from "@/components/layout/AppLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { AuthProvider } from "@/providers/AuthProvider";
 import { WalletProvider } from "@/providers/WalletProvider";
 import { ModalProvider } from "@/providers/ModalProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
@@ -77,18 +78,20 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <QueryProvider>
-            <WalletProvider>
-              <ModalProvider>
-                <AppLayout
-                  headerSlot={<NavBar />}
-                  footerSlot={<Footer />}
-                >
-                  {children}
-                </AppLayout>
-              </ModalProvider>
-            </WalletProvider>
-          </QueryProvider>
+          <AuthProvider>
+            <QueryProvider>
+              <WalletProvider>
+                <ModalProvider>
+                  <AppLayout
+                    headerSlot={<NavBar />}
+                    footerSlot={<Footer />}
+                  >
+                    {children}
+                  </AppLayout>
+                </ModalProvider>
+              </WalletProvider>
+            </QueryProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
