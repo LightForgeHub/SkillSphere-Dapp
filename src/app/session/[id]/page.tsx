@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { useWallet } from "@/providers/WalletProvider";
 import { CodeWorkspace } from "@/components/session/CodeWorkspace";
+import { SessionChat } from "@/components/session/SessionChat";
 import {
   User,
   Wallet,
@@ -23,6 +24,7 @@ import {
   AlertTriangle,
   Code2,
   Gavel,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/components/ui/utils";
 import type { Dispute } from "../../../../utils/types/types";
@@ -82,6 +84,7 @@ export default function SessionPage() {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [showAppealModal, setShowAppealModal] = useState(false);
 
   /**
@@ -126,6 +129,16 @@ export default function SessionPage() {
   const remainingBalance = Math.max(0, session.escrowBalance - totalStreamed);
   const hourlyRate = session.ratePerSecond * 3600;
 
+  const gridClassName = showCodeEditor
+    ? showChat
+      ? "grid-cols-1 xl:grid-cols-3"
+      : "grid-cols-1 xl:grid-cols-2"
+    : showChat
+      ? "grid-cols-1 lg:grid-cols-4 max-w-6xl mx-auto"
+      : "grid-cols-1 lg:grid-cols-3 max-w-5xl mx-auto";
+
+  const mainColumnClass = showCodeEditor ? "" : "lg:col-span-2";
+
   return (
     <div className="min-h-screen bg-[#0B0113] flex flex-col">
       <div className="flex-1 w-full px-4 py-6 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
@@ -138,19 +151,31 @@ export default function SessionPage() {
             Back
           </button>
           
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setShowCodeEditor(!showCodeEditor)}
-            className={cn("gap-2", showCodeEditor && "bg-white/10 text-white")}
-          >
-            <Code2 className="size-4" />
-            {showCodeEditor ? "Hide Editor" : "Open Code Editor"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowChat(!showChat)}
+              className={cn("gap-2", showChat && "bg-white/10 text-white")}
+            >
+              <MessageCircle className="size-4" />
+              {showChat ? "Hide Chat" : "Chat"}
+            </Button>
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowCodeEditor(!showCodeEditor)}
+              className={cn("gap-2", showCodeEditor && "bg-white/10 text-white")}
+            >
+              <Code2 className="size-4" />
+              {showCodeEditor ? "Hide Editor" : "Open Code Editor"}
+            </Button>
+          </div>
         </div>
 
-        <div className={cn("grid gap-6", showCodeEditor ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1 lg:grid-cols-3 max-w-5xl mx-auto")}>
-          <div className={cn("space-y-6 flex flex-col", showCodeEditor ? "" : "lg:col-span-2")}>
+        <div className={cn("grid gap-6", gridClassName)}>
+          <div className={cn("space-y-6 flex flex-col", mainColumnClass)}>
             <Card variant="glow" className="relative overflow-hidden flex-1 min-h-[300px]">
               <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
               <CardContent className="flex flex-col items-center justify-center h-full py-16">
@@ -324,6 +349,12 @@ export default function SessionPage() {
                 <CircleStop className="size-5" />
                 {isEnding ? "Settling..." : "End Session"}
               </Button>
+            </div>
+          )}
+
+          {showChat && (
+            <div className="h-[600px] xl:h-auto">
+              <SessionChat />
             </div>
           )}
         </div>
