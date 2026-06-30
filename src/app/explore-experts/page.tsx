@@ -51,7 +51,7 @@ export default function ExploreExpertsPage() {
         {/* Header */}
         <div className="mb-12">
           <h1 className="text-5xl md:text-6xl font-bold mb-4">Explore Experts</h1>
-          <p className="text-gray-400 text-lg max-w-2xl">
+          <p className="text-muted-foreground text-lg max-w-2xl">
             Connect with talented professionals across various fields. Browse our expert community, view their profiles, and book sessions.
           </p>
         </div>
@@ -60,7 +60,7 @@ export default function ExploreExpertsPage() {
         <div className="mb-12 space-y-6">
           {/* Search Bar */}
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" size={20} />
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={20} />
             <input
               type="text"
               placeholder="Search by name, category, or skill..."
@@ -76,7 +76,7 @@ export default function ExploreExpertsPage() {
               onClick={() => setSelectedCategory(null)}
               className={`px-6 py-2 rounded-lg font-medium transition-all ${
                 selectedCategory === null
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-foreground'
                   : 'bg-gradient-to-r from-purple-600/10 to-pink-600/10 border border-purple-500/30 hover:border-purple-500/60'
               }`}
             >
@@ -88,7 +88,7 @@ export default function ExploreExpertsPage() {
                 onClick={() => setSelectedCategory(category)}
                 className={`px-6 py-2 rounded-lg font-medium transition-all ${
                   selectedCategory === category
-                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-foreground'
                     : 'bg-gradient-to-r from-purple-600/10 to-pink-600/10 border border-purple-500/30 hover:border-purple-500/60'
                 }`}
               >
@@ -101,7 +101,7 @@ export default function ExploreExpertsPage() {
           <div className="flex flex-wrap gap-4">
             {/* Rate Filter */}
             <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-400 whitespace-nowrap">Hourly Rate:</label>
+              <label className="text-sm text-muted-foreground whitespace-nowrap">Hourly Rate:</label>
               <select
                 value={rateFilter}
                 onChange={(e) => setRateFilter(e.target.value)}
@@ -116,7 +116,7 @@ export default function ExploreExpertsPage() {
 
             {/* Rating Filter */}
             <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-400 whitespace-nowrap">Rating:</label>
+              <label className="text-sm text-muted-foreground whitespace-nowrap">Rating:</label>
               <select
                 value={ratingFilter}
                 onChange={(e) => setRatingFilter(e.target.value)}
@@ -132,7 +132,7 @@ export default function ExploreExpertsPage() {
         </div>
 
         {/* Results Count */}
-        <div className="mb-8 text-gray-400">
+        <div className="mb-8 text-muted-foreground">
           {isLoading && "Loading experts..."}
           {error && "Error loading experts"}
           {!isLoading && !error && `Showing ${filteredExperts.length} expert${filteredExperts.length !== 1 ? 's' : ''}`}
@@ -147,7 +147,7 @@ export default function ExploreExpertsPage() {
           </div>
         ) : (
           <div className="text-center py-16">
-            <p className="text-gray-400 text-lg mb-4">No experts found matching your criteria.</p>
+            <p className="text-muted-foreground text-lg mb-4">No experts found matching your criteria.</p>
             <button
               onClick={() => {
                 setSearchTerm('');

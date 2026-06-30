@@ -25,13 +25,13 @@ export default function SummaryTabContent({
   ],
 }: SummaryTabContentProps) {
   return (
-    <div className="flex flex-col self-stretch w-full bg-[#1A1520] border border-[#1D1D1C] rounded-[12px] p-6 gap-8 text-white">
+    <div className="flex flex-col self-stretch w-full bg-card border border-border rounded-[12px] p-6 gap-8 text-foreground">
       <div className="space-y-4">
         <h3 className="text-base font-semibold">Summary</h3>
-        <p className="text-sm leading-relaxed text-white/80">{courseSummary}</p>
+        <p className="text-sm leading-relaxed text-foreground/80">{courseSummary}</p>
       </div>
 
-      <Separator className="bg-[#1D1D1C]" />
+      <Separator className="bg-card" />
 
       <div className="space-y-4">
         <h3 className="text-base font-semibold">Key Takeaways</h3>
@@ -39,13 +39,13 @@ export default function SummaryTabContent({
           {keyTakeaways.map((takeaway, index) => (
             <li key={index} className="flex gap-3">
               <span className="mt-1 size-2 rounded-full bg-white/40 shrink-0" />
-              <span className="text-white/80">{takeaway}</span>
+              <span className="text-foreground/80">{takeaway}</span>
             </li>
           ))}
         </ul>
       </div>
 
-      <Separator className="bg-[#1D1D1C]" />
+      <Separator className="bg-card" />
 
       <div className="space-y-4">
         <h3 className="text-base font-semibold">Learning Outcomes</h3>
@@ -53,7 +53,7 @@ export default function SummaryTabContent({
           {courseOutcomes.map((outcome, index) => (
             <li key={index} className="flex gap-3">
               <span className="mt-1 size-2 rounded-full bg-white/40 shrink-0" />
-              <span className="text-white/80">{outcome}</span>
+              <span className="text-foreground/80">{outcome}</span>
             </li>
           ))}
         </ul>

@@ -21,7 +21,7 @@ export default function FundSessionDemoPage() {
         {/* Header */}
         <div className="mb-12">
           <h1 className="text-5xl md:text-6xl font-bold mb-4">Session Funding Demo</h1>
-          <p className="text-gray-400 text-lg max-w-2xl">
+          <p className="text-muted-foreground text-lg max-w-2xl">
             Interactive demo of the 3-step funding wizard. Select duration, confirm amount, and complete transaction via Freighter wallet.
           </p>
         </div>
@@ -32,7 +32,7 @@ export default function FundSessionDemoPage() {
             {/* Description */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold mb-4">Features Demonstrated</h2>
-              <ul className="space-y-3 text-gray-300">
+              <ul className="space-y-3 text-muted-foreground">
                 <li className="flex gap-3">
                   <span className="text-purple-400">✓</span>
                   <span><strong>Duration Selection:</strong> Choose from presets (30/60/90 min) or enter custom duration</span>
@@ -68,8 +68,8 @@ export default function FundSessionDemoPage() {
 
         {/* Code Example */}
         <div className="mt-12 bg-black/30 border border-purple-500/20 rounded-xl p-6 overflow-x-auto">
-          <p className="text-sm text-gray-400 mb-4 font-semibold">Usage Example:</p>
-          <pre className="text-xs text-gray-300 font-mono">
+          <p className="text-sm text-muted-foreground mb-4 font-semibold">Usage Example:</p>
+          <pre className="text-xs text-muted-foreground font-mono">
 {`import FundSessionModal from '@/components/marketplace/FundSessionModal';
 
 <FundSessionModal

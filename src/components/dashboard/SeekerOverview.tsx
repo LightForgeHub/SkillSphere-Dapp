@@ -49,7 +49,7 @@ export default function SeekerOverview() {
     <Card className="p-4 hover:border-white/20 transition-colors">
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
-          <h4 className="font-semibold text-white mb-1">{session.title}</h4>
+          <h4 className="font-semibold text-foreground mb-1">{session.title}</h4>
           <p className="text-sm text-slate-400">{session.expertName}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -106,7 +106,7 @@ export default function SeekerOverview() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-400 mb-1">Active Sessions</p>
-              <p className="text-3xl font-bold text-white">{activeSessions.length}</p>
+              <p className="text-3xl font-bold text-foreground">{activeSessions.length}</p>
             </div>
             <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center">
               <div className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
@@ -118,7 +118,7 @@ export default function SeekerOverview() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-400 mb-1">Upcoming Sessions</p>
-              <p className="text-3xl font-bold text-white">{upcomingSessions.length}</p>
+              <p className="text-3xl font-bold text-foreground">{upcomingSessions.length}</p>
             </div>
             <Clock className="w-12 h-12 text-blue-400 opacity-30" />
           </div>
@@ -128,7 +128,7 @@ export default function SeekerOverview() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-400 mb-1">Completed Sessions</p>
-              <p className="text-3xl font-bold text-white">{completedSessions.length}</p>
+              <p className="text-3xl font-bold text-foreground">{completedSessions.length}</p>
             </div>
             <CheckCircle2 className="w-12 h-12 text-emerald-400 opacity-30" />
           </div>
@@ -137,7 +137,7 @@ export default function SeekerOverview() {
 
       {/* Quick Actions */}
       <div>
-        <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
+        <h3 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h3>
         <div className="flex flex-wrap gap-3">
           <Button
             className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30"
@@ -159,7 +159,7 @@ export default function SeekerOverview() {
       {/* Active Sessions */}
       {activeSessions.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
             Active Sessions
           </h3>
@@ -174,7 +174,7 @@ export default function SeekerOverview() {
       {/* Upcoming Sessions */}
       {upcomingSessions.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <Clock className="w-5 h-5 text-blue-400" />
             Upcoming Sessions
           </h3>
@@ -189,7 +189,7 @@ export default function SeekerOverview() {
       {/* Past Sessions */}
       {completedSessions.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-4">Past Sessions</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-4">Past Sessions</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {completedSessions.map(session => (
               <SessionCard key={session.id} session={session} />

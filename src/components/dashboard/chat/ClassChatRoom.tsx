@@ -65,11 +65,11 @@ export default function ClassChatRoom() {
   }
 
   return (
-    <div className="flex flex-col w-full h-[600px] max-h-full bg-[#101110] border border-[#252625] rounded-xl overflow-hidden">
+    <div className="flex flex-col w-full h-[600px] max-h-full bg-background border border-[#252625] rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-[#252625] bg-[#1A1B1A]">
-        <h3 className="text-sm font-medium text-white">Class Chat</h3>
-        <p className="text-xs text-[#7A7A7A]">Ask questions and discuss with peers</p>
+      <div className="px-4 py-3 border-b border-[#252625] bg-card">
+        <h3 className="text-sm font-medium text-foreground">Class Chat</h3>
+        <p className="text-xs text-muted-foreground">Ask questions and discuss with peers</p>
       </div>
 
       {/* Messages */}
@@ -88,8 +88,8 @@ export default function ClassChatRoom() {
               <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} max-w-[80%] md:max-w-[70%]`}>
                 {/* Name & Time */}
                 <div className={`flex items-center gap-2 mb-1 ${isUser ? "flex-row-reverse" : ""}`}>
-                  <span className="text-xs font-medium text-white">{msg.name}</span>
-                  <span className="text-[10px] text-[#7A7A7A]">{msg.time}</span>
+                  <span className="text-xs font-medium text-foreground">{msg.name}</span>
+                  <span className="text-[10px] text-muted-foreground">{msg.time}</span>
                 </div>
 
                 {/* Bubble */}
@@ -97,7 +97,7 @@ export default function ClassChatRoom() {
                   className={`p-3 rounded-xl text-sm leading-[1.6] text-[#D4D4D4] ${
                     isUser
                       ? "bg-[#2D3B2D] rounded-tr-sm"
-                      : "bg-[#1A1B1A] rounded-tl-sm"
+                      : "bg-card rounded-tl-sm"
                   }`}
                 >
                   {msg.text}

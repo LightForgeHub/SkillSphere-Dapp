@@ -97,7 +97,7 @@ export function EditProfileModal({
         <div className="flex justify-center md:justify-start pt-4">
           <Button
             onClick={handleSave}
-            className="w-full md:w-28 h-11 rounded-xl bg-[#1F1F1F] hover:bg-[#2F2F2F] text-white border-none shadow-lg text-sm font-bold tracking-wide"
+            className="w-full md:w-28 h-11 rounded-xl bg-card hover:bg-accent text-white border-none shadow-lg text-sm font-bold tracking-wide"
           >
             SAVE
           </Button>

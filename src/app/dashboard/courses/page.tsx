@@ -84,7 +84,7 @@ export default function CoursesPage() {
     <div className="space-y-12 pb-12">
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h3 className="text-xl font-bold text-white">My Courses</h3>
+          <h3 className="text-xl font-bold text-foreground">My Courses</h3>
         </div>
 
         <div className="space-y-4">
@@ -97,14 +97,14 @@ export default function CoursesPage() {
           {hasMore ? (
             <button 
               onClick={handleLoadMore}
-              className="text-sm font-medium text-[#94a3b8] hover:text-white transition-colors"
+              className="text-sm font-medium text-[#94a3b8] hover:text-foreground transition-colors"
             >
               View More
             </button>
           ) : showViewLess ? (
             <button 
               onClick={handleViewLess}
-              className="text-sm font-medium text-[#94a3b8] hover:text-white transition-colors"
+              className="text-sm font-medium text-[#94a3b8] hover:text-foreground transition-colors"
             >
               View Less
             </button>

@@ -37,10 +37,10 @@ export default function LearnerReviews({
   return (
     <div className={cn("flex flex-col items-start gap-3 w-full", className)}>
       {/* Title */}
-      <h2 className="text-lg font-semibold text-white">Learners Reviews</h2>
+      <h2 className="text-lg font-semibold text-foreground">Learners Reviews</h2>
 
       {/* Reviews List */}
-      <div className="w-full bg-[#110719] rounded-lg border border-white/10 p-4 md:p-6">
+      <div className="w-full bg-card rounded-lg border border-border p-4 md:p-6">
         {reviews.map((review, index) => (
           <ReviewItem
             key={`${review.name}-${index}`}

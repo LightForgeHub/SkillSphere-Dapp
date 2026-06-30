@@ -1,8 +1,1 @@
-"use client";
-
-import Custom404 from "@/components/Custom404";
-import React from "react";
-
-export default function NotFound() {
-  return <Custom404 />;
-}
+"use client"; import NotFound from "@/app/not-found"; export default NotFound;

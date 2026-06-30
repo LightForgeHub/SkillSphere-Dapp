@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from 'react';
-import { ExternalLink, Copy, Check } from 'lucide-react';
+import { ExternalLink, Copy, Check, Download, FileText } from 'lucide-react';
 import { mockSessions, mockTransactions } from '@/utils/data/mock-data';
 import { formatExplorerUrl, shortenHash, copyHashToClipboard } from '@/utils/explorer';
+import { exportToCSV, exportToPDF } from '@/utils/export';
 
 export default function SessionHistory() {
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
@@ -14,6 +15,14 @@ export default function SessionHistory() {
     setTimeout(() => setCopiedHash(null), 2000);
   };
 
+  const handleExportCSV = () => {
+    exportToCSV(mockSessions);
+  };
+
+  const handleExportPDF = () => {
+    exportToPDF(mockSessions);
+  };
+
   const getTransactionForSession = (sessionId: string) => {
     return mockTransactions.find((t) => t.sessionId === sessionId);
   };
@@ -21,9 +30,30 @@ export default function SessionHistory() {
   return (
     <div className="w-full space-y-6">
       {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold mb-2">Session History</h2>
+          <p className="text-gray-400">View your past sessions and transaction details on Stellar Explorer.</p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600/30 to-pink-600/30 hover:from-purple-600/50 hover:to-pink-600/50 border border-purple-500/50 hover:border-purple-500/80 rounded-lg text-sm font-medium transition-all"
+          >
+            <Download size={16} />
+            Export CSV
+          </button>
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600/30 to-purple-600/30 hover:from-blue-600/50 hover:to-purple-600/50 border border-blue-500/50 hover:border-blue-500/80 rounded-lg text-sm font-medium transition-all"
+          >
+            <FileText size={16} />
+            Download PDF Receipt
+          </button>
+        </div>
       <div>
         <h2 className="text-2xl font-bold mb-2">Session History</h2>
-        <p className="text-gray-400">View your past sessions and transaction details on Stellar Explorer.</p>
+        <p className="text-muted-foreground">View your past sessions and transaction details on Stellar Explorer.</p>
       </div>
 
       {/* Sessions Table */}
@@ -33,12 +63,12 @@ export default function SessionHistory() {
             {/* Table Header */}
             <thead>
               <tr className="border-b border-purple-500/20 bg-purple-600/10">
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Session</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Expert</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Date</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Amount</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Transaction</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-muted-foreground">Session</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-muted-foreground">Expert</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-muted-foreground">Date</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-muted-foreground">Amount</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-muted-foreground">Status</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-muted-foreground">Transaction</th>
               </tr>
             </thead>
 
@@ -58,7 +88,7 @@ export default function SessionHistory() {
                     <td className="px-6 py-4">
                       <div>
                         <p className="font-semibold">{session.title}</p>
-                        <p className="text-xs text-gray-500">{session.category}</p>
+                        <p className="text-xs text-muted-foreground">{session.category}</p>
                       </div>
                     </td>
 
@@ -137,7 +167,7 @@ export default function SessionHistory() {
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-500 text-sm">—</span>
+                        <span className="text-muted-foreground text-sm">—</span>
                       )}
                     </td>
                   </tr>
@@ -150,7 +180,7 @@ export default function SessionHistory() {
 
       {/* Transaction Legend */}
       <div className="bg-gradient-to-br from-blue-600/10 to-purple-600/10 border border-blue-500/20 rounded-xl p-4">
-        <p className="text-sm text-gray-300 mb-3 font-semibold">💡 Tip: Network Badges</p>
+        <p className="text-sm text-muted-foreground mb-3 font-semibold">💡 Tip: Network Badges</p>
         <div className="flex flex-wrap gap-4 text-xs">
           <div className="flex items-center gap-2">
             <span className="inline-block w-3 h-3 rounded bg-blue-400"></span>
