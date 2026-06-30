@@ -8,7 +8,7 @@ interface AnnouncementNotificationListProps {
 export default function AnnouncementNotificationList({ announcements }: AnnouncementNotificationListProps) {
   if (announcements.length === 0) {
     return (
-      <div className="py-8 text-center text-gray-400">
+      <div className="py-8 text-center text-muted-foreground">
         No announcements to display.
       </div>
     )

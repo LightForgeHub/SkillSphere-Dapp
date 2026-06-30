@@ -44,11 +44,11 @@ export default function NavBar() {
             {/* Desktop Search Bar */}
             <div className="hidden md:flex flex-1 max-w-md mx-8">
               <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Want to learn?"
-                  className="w-full bg-[#11042475] border rounded-lg border-gray-700/50 pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-purple-500 transition-colors"
+                  className="w-full bg-card/30 border rounded-lg border-border/50 pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-purple-500 transition-colors"
                 />
               </div>
             </div>
@@ -63,7 +63,7 @@ export default function NavBar() {
               {isLandingPage && (
                 <Link href="/contact-us" className="text-sm hover:text-purple-400 transition-colors">Contact us</Link>
               )}
-              <Link href="/faqs" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/faqs' ? 'text-purple-400 font-semibold' : ''}`}>FAQ's</Link>
+              <Link href="/faqs" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/faqs' ? 'text-purple-400 font-semibold' : ''}`}>FAQ&apos;s</Link>
             </div>
 
             {/* Desktop Auth/Signed-in Buttons */}
@@ -72,7 +72,7 @@ export default function NavBar() {
               {isLandingPage ? (
                 <>
                   <Link href="/login">
-                    <button className="px-4 h-8 text-sm border border-gray-700 rounded-lg hover:border-purple-500 transition-colors cursor-pointer">
+                    <button className="px-4 h-8 text-sm border border-border rounded-lg hover:border-purple-500 transition-colors cursor-pointer">
                       Sign in
                     </button>
                   </Link>
@@ -85,12 +85,12 @@ export default function NavBar() {
               ) : (
                 <>
                   <button onClick={() => setWalletOpen(true)} className="flex items-center space-x-2 px-4 h-10 text-sm font-medium bg-[#FA7F2B] rounded-lg hover:bg-[#e67425] transition-colors cursor-pointer whitespace-nowrap">
-      <Wallet className="w-5 h-5 text-white" />
+      <Wallet className="w-5 h-5 text-foreground" />
                     <span>Connect Wallet</span>
                   </button>
                   
-                  <button className="p-2 bg-[#1A0B2E] border border-gray-800 rounded-lg hover:bg-[#251241] transition-colors">
-                    <Bell className="w-5 h-5 text-white" />
+                  <button className="p-2 bg-card border border-border rounded-lg hover:bg-[#251241] transition-colors">
+                    <Bell className="w-5 h-5 text-foreground" />
                   </button>
 
                   <div className="h-8 w-[1px] bg-gray-700" />
@@ -109,7 +109,7 @@ export default function NavBar() {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg hover:bg-gray-800 transition-colors"
+              className="md:hidden p-2 rounded-lg hover:bg-accent transition-colors"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -117,17 +117,17 @@ export default function NavBar() {
 
           {/* Mobile Menu */}
           {mobileMenuOpen && (
-            <div className="md:hidden py-4 space-y-4 border-t border-gray-800 bg-background">
+            <div className="md:hidden py-4 space-y-4 border-t border-border bg-background">
               <div className="flex items-center justify-between px-2">
-                 <span className="text-sm font-medium text-gray-400">Theme</span>
+                 <span className="text-sm font-medium text-muted-foreground">Theme</span>
                  <ThemeToggle />
               </div>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
                   type="text"
                   placeholder="Want to learn?"
-                  className="w-full bg-gray-800/50 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-purple-500"
+                  className="w-full bg-background/50 border border-border rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-purple-500"
                 />
               </div>
               <div className="flex flex-col space-y-3">
@@ -136,12 +136,12 @@ export default function NavBar() {
                 )}
                 <Link href="/explore-experts" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/explore-experts' ? 'text-purple-400 font-semibold' : ''}`}>Explore Experts</Link>
                 <Link href="/community" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/community' ? 'text-purple-400 font-semibold' : ''}`}>Community</Link>
-                <Link href="/faqs" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/faqs' ? 'text-purple-400 font-semibold' : ''}`}>FAQ's</Link>
+                <Link href="/faqs" className={`text-sm hover:text-purple-400 transition-colors ${pathname === '/faqs' ? 'text-purple-400 font-semibold' : ''}`}>FAQ&apos;s</Link>
                 
                 {isLandingPage ? (
                   <>
                     <Link href="/login" className="w-full">
-                      <button className="w-full px-4 py-2 text-sm border border-gray-700 rounded-lg hover:border-purple-500 transition-colors cursor-pointer">
+                      <button className="w-full px-4 py-2 text-sm border border-border rounded-lg hover:border-purple-500 transition-colors cursor-pointer">
                         Sign in
                       </button>
                     </Link>
@@ -152,7 +152,7 @@ export default function NavBar() {
                     </Link>
                   </>
                 ) : (
-                  <div className="pt-4 border-t border-gray-800 space-y-4">
+                  <div className="pt-4 border-t border-border space-y-4">
                     <button onClick={() => setWalletOpen(true)} className="w-full flex items-center justify-center space-x-2 px-4 py-2 text-sm bg-[#FA7F2B] rounded-lg">
                       <img src="/wallet-icon.png" alt="wallet" className="w-5 h-5 invert" />
                       <span>Connect Wallet</span>
@@ -162,7 +162,7 @@ export default function NavBar() {
                         <img src="/avatar.png" alt="Profile" className="w-10 h-10 rounded-full border-2 border-[#FA7F2B]" />
                         <span className="text-sm font-medium">Profile</span>
                       </div>
-                      <Bell className="w-5 h-5 text-white" />
+                      <Bell className="w-5 h-5 text-foreground" />
                     </div>
                   </div>
                 )}

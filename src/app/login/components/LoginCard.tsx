@@ -67,7 +67,7 @@ const LoginCard = ({ onSignIn, socialLoginSlot }: LoginCardProps) => {
 
         <form onSubmit={handleSubmit} className="w-full max-w-[399px] space-y-4">
           <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
               <Mail size={20} />
             </div>
             <input
@@ -76,13 +76,13 @@ const LoginCard = ({ onSignIn, socialLoginSlot }: LoginCardProps) => {
               placeholder="Email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full bg-[#10041A] border border-white rounded-xl py-4 pl-12 pr-4 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
+              className="w-full bg-card border border-white rounded-xl py-4 pl-12 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
               required
             />
           </div>
 
           <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
               <Lock size={20} />
             </div>
             <input
@@ -91,7 +91,7 @@ const LoginCard = ({ onSignIn, socialLoginSlot }: LoginCardProps) => {
               placeholder="Password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full bg-[#10041A] border border-white rounded-xl py-4 pl-12 pr-12 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
+              className="w-full bg-card border border-white rounded-xl py-4 pl-12 pr-12 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
               required
             />
             <button

@@ -54,17 +54,17 @@ export default function Sidebar() {
       <div className="md:hidden mb-4">
         <button
           onClick={() => setOpen(!open)}
-          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-[#110719] text-white"
+          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-card text-foreground"
         >
           {activeItem}
           <ChevronDown size={18} />
         </button>
 
         {open && (
-          <div className="mt-2 bg-[#110719] rounded-xl p-2">
+          <div className="mt-2 bg-card rounded-xl p-2">
             {/* Profile selector in mobile dropdown */}
             <div className="mb-3">
-              <div className="text-xs text-gray-300 mb-2">Profile</div>
+              <div className="text-xs text-muted-foreground mb-2">Profile</div>
               <div className="space-y-1">
                 {profiles.map((p) => (
                   <button
@@ -75,7 +75,7 @@ export default function Sidebar() {
                     }}
                     className={classNames(
                       "w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
-                      p.id === profile.id ? "bg-purple-600/20 text-white" : "text-gray-300 hover:bg-white/5"
+                      p.id === profile.id ? "bg-purple-600/20 text-foreground" : "text-muted-foreground hover:bg-accent"
                     )}
                   >
                     <img src={`/assets/${encodeURIComponent("Avatar Placeholder.png")}`} alt="avatar" className="w-7 h-7 rounded-full object-cover" />
@@ -94,7 +94,7 @@ export default function Sidebar() {
                     href={item.href}
                     className={classNames(
                       "flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
-                      active ? "bg-purple-600/20 text-white" : "text-gray-300 hover:bg-white/5"
+                      active ? "bg-purple-600/20 text-foreground" : "text-muted-foreground hover:bg-accent"
                     )}
                     onClick={() => setOpen(false)}
                   >
@@ -107,13 +107,13 @@ export default function Sidebar() {
               })}
             </div>
 
-            <div className="mt-3 pt-3 border-t border-white/10 space-y-1">
+            <div className="mt-3 pt-3 border-t border-border space-y-1">
               {bottomItems.map((b) => (
                 <Link
                   key={b.href}
                   href={b.href}
                   onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-300 hover:bg-white/5"
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:bg-accent"
                 >
                   <span className="w-[18px] h-[18px]">
                     <img src={`/icons/${encodeURIComponent(b.iconName)}.svg`} alt={b.label} className="w-[18px] h-[18px]" />
@@ -127,25 +127,25 @@ export default function Sidebar() {
       </div>
 
       {/* DESKTOP SIDEBAR */}
-      <aside className="hidden md:flex flex-col w-[260px] h-[90vh] md:h-[80vh] bg-[#110719] border-r border-white/5 p-4">
+      <aside className="hidden md:flex flex-col w-[260px] h-[90vh] md:h-[80vh] bg-card border-r border-border p-4">
         
         {/* Profile */}
         <div className="mb-6 relative">
           <button
             onClick={() => setDesktopProfileOpen((v) => !v)}
-            className="w-full flex items-center justify-between bg-[#110719] rounded-xl px-3 py-2"
+            className="w-full flex items-center justify-between bg-card rounded-xl px-3 py-2"
             aria-expanded={desktopProfileOpen}
           >
               <div className="flex items-center gap-2">
               <img src={`/assets/${encodeURIComponent("Avatar Placeholder.png")}`} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
-              <span className="text-sm text-white">{profile.name}</span>
+              <span className="text-sm text-foreground">{profile.name}</span>
             </div>
 
-            <ChevronDown size={16} className="text-gray-400" />
+            <ChevronDown size={16} className="text-muted-foreground" />
           </button>
 
           {desktopProfileOpen && (
-            <div className="absolute left-0 top-full mt-2 w-56 bg-[#110719] rounded-xl p-2 border border-white/5 shadow-lg z-50">
+            <div className="absolute left-0 top-full mt-2 w-56 bg-card rounded-xl p-2 border border-border shadow-lg z-50">
               {profiles.map((p) => (
                 <button
                   key={p.id}
@@ -155,7 +155,7 @@ export default function Sidebar() {
                   }}
                   className={classNames(
                     "w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
-                    p.id === profile.id ? "bg-purple-600/20 text-white" : "text-gray-300 hover:bg-white/5"
+                    p.id === profile.id ? "bg-purple-600/20 text-foreground" : "text-muted-foreground hover:bg-accent"
                   )}
                 >
                   <img src={`/assets/${encodeURIComponent("Avatar Placeholder.png")}`} alt="avatar" className="w-6 h-6 rounded-full object-cover" />
@@ -178,8 +178,8 @@ export default function Sidebar() {
                   className={classNames(
                     "flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition",
                     active
-                      ? "bg-[#613485] text-white"
-                      : "text-gray-400 hover:bg-white/5"
+                      ? "bg-[#613485] text-foreground"
+                      : "text-muted-foreground hover:bg-accent"
                   )}
                 >
                   <span className="w-[18px] h-[18px]">
@@ -198,7 +198,7 @@ export default function Sidebar() {
             <Link
               key={b.href}
               href={b.href}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/5"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-accent"
             >
               <span className="w-[18px] h-[18px]">
                 <img src={`/icons/${encodeURIComponent(b.iconName)}.svg`} alt={b.label} className="w-[18px] h-[18px]" />
@@ -222,12 +222,6 @@ export function MobileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: ()
     if (v) setProfile(JSON.parse(v))
   }, [])
 
-  const handleSelectProfile = (p: { id: string; name: string }) => {
-    safeLocalStorage.set("dashboard_profile", JSON.stringify(p))
-    setProfile(p)
-    onClose()
-  }
-
   return (
     <>
       <div
@@ -237,7 +231,7 @@ export function MobileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       />
 
       <aside
-        className={`fixed left-0 top-0 bottom-0 w-64 bg-[#110719] z-50 transform transition-transform ${
+        className={`fixed left-0 top-0 bottom-0 w-64 bg-card z-50 transform transition-transform ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -246,8 +240,8 @@ export function MobileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: ()
             <div className="flex items-center gap-3">
               <img src={`/assets/${encodeURIComponent("Avatar Placeholder.png")}`} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
               <div>
-                <div className="text-sm font-semibold text-white">{profile.name}</div>
-                <div className="text-xs text-gray-300">Active profile</div>
+                <div className="text-sm font-semibold text-foreground">{profile.name}</div>
+                <div className="text-xs text-muted-foreground">Active profile</div>
               </div>
             </div>
 
@@ -259,7 +253,7 @@ export function MobileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: ()
           </div>
 
           <div className="mt-3">
-            <div className="text-xs text-gray-300 mb-2">Profiles</div>
+            <div className="text-xs text-muted-foreground mb-2">Profiles</div>
           
           </div>
         </div>
@@ -275,7 +269,7 @@ export function MobileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                     onClick={onClose}
                     className={classNames(
                       "flex items-center gap-3 px-3 py-2 rounded-md",
-                      active ? "bg-purple-600/20 text-white" : "text-gray-300 hover:bg-white/5"
+                      active ? "bg-purple-600/20 text-foreground" : "text-muted-foreground hover:bg-accent"
                     )}
                   >
                     <span className="w-[18px] h-[18px]">
@@ -288,13 +282,13 @@ export function MobileDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: ()
             })}
           </ul>
 
-          <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
+          <div className="mt-4 pt-4 border-t border-border space-y-2">
             {bottomItems.map((b) => (
               <Link
                 key={b.href}
                 href={b.href}
                 onClick={onClose}
-                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-300 hover:bg-white/5"
+                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent"
               >
                 <span className="w-[18px] h-[18px]">
                   <img src={`/icons/${encodeURIComponent(b.iconName)}.svg`} alt={b.label} className="w-[18px] h-[18px]" />

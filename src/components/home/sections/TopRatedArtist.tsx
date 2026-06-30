@@ -92,7 +92,7 @@ export function TopRatedArtist() {
             </p>
           </div>
           <div className="p-[2px] rounded-lg bg-[linear-gradient(135deg,#A259FF,#C397FD,#C194FA,#613599,#B184EA,#9854F0)]">
-            <div className="rounded-lg bg-black">
+            <div className="rounded-lg bg-background">
               <button className="flex items-center gap-3 group h-[60px] px-[50px] self-start md:self-auto hover:cursor-pointer  hover:bg-[#a259ff] transition-colors">
                 <Rocket className="text-[#9B59FF] h-5 w-5 group-hover:text-white" />
                 <span className="font-work font-semibold text-base leading-[1.4] text-white">

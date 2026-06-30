@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { Search, Bell, ChevronDown, MoreVertical, Menu } from "lucide-react"
+import { Search, Bell, MoreVertical, Menu } from "lucide-react"
 import Logo from "@/components/ui/Logo"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -15,7 +15,7 @@ export default function DashboardTopBar({ onToggleMenu }: { onToggleMenu?: () =>
   const isProfilePage = pathname === "/dashboard/profile"
 
   return (
-    <header className="w-full bg-[#05010d] border-b border-white/5 px-4 md:px-8 py-3 flex items-center justify-between sticky top-0 z-50">
+    <header className="w-full bg-background border-b border-white/5 px-4 md:px-8 py-3 flex items-center justify-between sticky top-0 z-50">
       {/* Left: Hamburger, Logo and Breadcrumbs */}
       <div className="flex justify-between items-center md:min-w-[380px] gap-4 md:gap-12">
         <button

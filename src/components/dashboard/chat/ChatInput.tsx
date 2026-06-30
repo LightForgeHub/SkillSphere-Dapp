@@ -29,13 +29,13 @@ export default function ChatInput({ onSend }: ChatInputProps) {
       {/* Left icons */}
       <div className="flex items-center gap-2">
         <button
-          className="p-1.5 text-[#7A7A7A] hover:text-white transition-colors"
+          className="p-1.5 text-muted-foreground hover:text-white transition-colors"
           aria-label="Voice input"
         >
           <Mic className="w-5 h-5" />
         </button>
         <button
-          className="p-1.5 text-[#7A7A7A] hover:text-white transition-colors"
+          className="p-1.5 text-muted-foreground hover:text-white transition-colors"
           aria-label="Emoji"
         >
           <Smile className="w-5 h-5" />
@@ -50,7 +50,7 @@ export default function ChatInput({ onSend }: ChatInputProps) {
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Type a message"
-        className="flex-1 bg-transparent text-sm text-white placeholder:text-[#5A5A5A] outline-none"
+        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
       />
 
       {/* Send button */}

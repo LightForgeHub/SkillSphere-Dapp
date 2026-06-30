@@ -39,3 +39,5 @@ export {
 
 export { FileUpload } from "./FileUpload";
 export * from "./Select";
+export { StatusIndicator } from "./StatusIndicator";
+export type { RpcStatus, EndpointHealth } from "./StatusIndicator";

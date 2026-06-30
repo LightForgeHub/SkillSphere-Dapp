@@ -9,7 +9,6 @@ import {
   Info,
   Paperclip,
   SendHorizonal,
-  Trash2,
   UploadCloud,
   X,
 } from "lucide-react";
@@ -80,12 +79,12 @@ function FileChip({ file, onRemove }: FileChipProps) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs">
       <FileText className="size-4 shrink-0 text-violet-400" aria-hidden="true" />
-      <span className="truncate max-w-[160px] text-white/80">{file.name}</span>
-      <span className="shrink-0 text-white/40">{formatBytes(file.size)}</span>
+      <span className="truncate max-w-[160px] text-foreground/80">{file.name}</span>
+      <span className="shrink-0 text-foreground/40">{formatBytes(file.size)}</span>
       <button
         type="button"
         onClick={onRemove}
-        className="ml-1 shrink-0 rounded p-0.5 text-white/40 hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
+        className="ml-1 shrink-0 rounded p-0.5 text-foreground/40 hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50"
         aria-label={`Remove ${file.name}`}
       >
         <X className="size-3.5" />
@@ -207,11 +206,11 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
         <div>
           <h2
             id="appeal-form-heading"
-            className="text-base font-semibold text-white"
+            className="text-base font-semibold text-foreground"
           >
             Submit an Appeal
           </h2>
-          <p className="text-xs text-white/50 mt-0.5">
+          <p className="text-xs text-foreground/50 mt-0.5">
             Contest the dispute verdict for &ldquo;{sessionTitle}&rdquo;
           </p>
         </div>
@@ -242,7 +241,7 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
       {/* ── Info Banner ── */}
       <div className="flex items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/8 px-4 py-3">
         <Info className="size-4 shrink-0 text-blue-400 mt-0.5" aria-hidden="true" />
-        <p className="text-xs text-white/60 leading-relaxed">
+        <p className="text-xs text-foreground/60 leading-relaxed">
           Appeals are reviewed by a community jury. Providing clear grounds and
           supporting evidence improves the chance of a fair reassessment.
         </p>
@@ -255,7 +254,7 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
           <div className="space-y-1.5">
             <label
               htmlFor={groundsId}
-              className="block text-xs font-medium text-white/70"
+              className="block text-xs font-medium text-foreground/70"
             >
               Grounds for appeal{" "}
               <span className="text-red-400" aria-hidden="true">*</span>
@@ -267,7 +266,7 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
               rows={4}
               placeholder="Explain why you believe the verdict was incorrect. Be specific about what was misrepresented or overlooked during the original dispute review."
               className={cn(
-                "w-full resize-none rounded-xl border bg-white/5 px-4 py-3 text-sm text-white/90 placeholder:text-white/30",
+                "w-full resize-none rounded-xl border bg-white/5 px-4 py-3 text-sm text-foreground/90 placeholder:text-foreground/30",
                 "focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all",
                 grounds.trim().length > 0 && grounds.trim().length < groundsMinLength
                   ? "border-amber-500/50"
@@ -282,7 +281,7 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
                 "text-[11px]",
                 grounds.trim().length < groundsMinLength && grounds.trim().length > 0
                   ? "text-amber-400"
-                  : "text-white/30"
+                  : "text-foreground/30"
               )}
             >
               {grounds.trim().length}/{groundsMinLength} characters minimum
@@ -293,10 +292,10 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
           <div className="space-y-1.5">
             <label
               htmlFor={evidenceId}
-              className="block text-xs font-medium text-white/70"
+              className="block text-xs font-medium text-foreground/70"
             >
               New evidence description
-              <span className="ml-1 text-white/30 font-normal">(optional if attaching files)</span>
+              <span className="ml-1 text-foreground/30 font-normal">(optional if attaching files)</span>
             </label>
             <textarea
               id={evidenceId}
@@ -304,19 +303,19 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
               onChange={(e) => setEvidenceDescription(e.target.value)}
               rows={3}
               placeholder="Describe any new evidence that was not presented during the initial dispute — links, timestamps, screenshots, chat logs, etc."
-              className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/30 transition-all"
+              className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-foreground/90 placeholder:text-foreground/30 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/30 transition-all"
               aria-describedby={`${evidenceId}-hint`}
             />
-            <p id={`${evidenceId}-hint`} className="text-[11px] text-white/30">
+            <p id={`${evidenceId}-hint`} className="text-[11px] text-foreground/30">
               At least one of: evidence description or file attachment is required.
             </p>
           </div>
 
           {/* File upload */}
           <div className="space-y-2">
-            <p className="text-xs font-medium text-white/70">
+            <p className="text-xs font-medium text-foreground/70">
               Supporting documents
-              <span className="ml-1 text-white/30 font-normal">
+              <span className="ml-1 text-foreground/30 font-normal">
                 (PDF, PNG, JPG, WEBP, TXT · max {MAX_FILE_SIZE_MB} MB each · up to {MAX_FILES} files)
               </span>
             </p>
@@ -341,12 +340,12 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
               <UploadCloud
                 className={cn(
                   "size-7 transition-colors",
-                  isDragging ? "text-primary" : "text-white/30"
+                  isDragging ? "text-primary" : "text-foreground/30"
                 )}
                 aria-hidden="true"
               />
-              <p className="text-xs text-white/50 text-center">
-                <span className="text-white/70 font-medium">Click to browse</span>{" "}
+              <p className="text-xs text-foreground/50 text-center">
+                <span className="text-foreground/70 font-medium">Click to browse</span>{" "}
                 or drag & drop files here
               </p>
             </div>
@@ -416,30 +415,30 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
         <div className="space-y-5">
           <div className="rounded-xl border border-white/10 bg-white/[0.03] divide-y divide-white/5 overflow-hidden">
             <div className="px-4 py-3 flex justify-between items-start gap-3">
-              <span className="text-xs text-white/50 shrink-0">Session</span>
-              <span className="text-xs font-medium text-white/90 text-right">{sessionTitle}</span>
+              <span className="text-xs text-foreground/50 shrink-0">Session</span>
+              <span className="text-xs font-medium text-foreground/90 text-right">{sessionTitle}</span>
             </div>
             <div className="px-4 py-3 flex justify-between items-start gap-3">
-              <span className="text-xs text-white/50 shrink-0 mt-0.5">Appeal grounds</span>
-              <span className="text-xs text-white/80 text-right max-w-xs leading-relaxed">{grounds}</span>
+              <span className="text-xs text-foreground/50 shrink-0 mt-0.5">Appeal grounds</span>
+              <span className="text-xs text-foreground/80 text-right max-w-xs leading-relaxed">{grounds}</span>
             </div>
             {evidenceDescription && (
               <div className="px-4 py-3 flex justify-between items-start gap-3">
-                <span className="text-xs text-white/50 shrink-0 mt-0.5">New evidence</span>
-                <span className="text-xs text-white/80 text-right max-w-xs leading-relaxed">{evidenceDescription}</span>
+                <span className="text-xs text-foreground/50 shrink-0 mt-0.5">New evidence</span>
+                <span className="text-xs text-foreground/80 text-right max-w-xs leading-relaxed">{evidenceDescription}</span>
               </div>
             )}
             {files.length > 0 && (
               <div className="px-4 py-3 flex justify-between items-start gap-3">
-                <span className="text-xs text-white/50 shrink-0">Attachments</span>
-                <span className="text-xs text-white/80">{files.length} file{files.length !== 1 ? "s" : ""}</span>
+                <span className="text-xs text-foreground/50 shrink-0">Attachments</span>
+                <span className="text-xs text-foreground/80">{files.length} file{files.length !== 1 ? "s" : ""}</span>
               </div>
             )}
           </div>
 
           <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/8 px-4 py-3">
             <AlertTriangle className="size-4 shrink-0 text-amber-400 mt-0.5" aria-hidden="true" />
-            <p className="text-xs text-white/60 leading-relaxed">
+            <p className="text-xs text-foreground/60 leading-relaxed">
               Once submitted, appeals cannot be withdrawn. The community jury will
               review your submission and issue a final binding decision.
             </p>
@@ -496,8 +495,8 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
           </div>
 
           <div className="space-y-1.5">
-            <h3 className="text-base font-bold text-white">Appeal Submitted</h3>
-            <p className="text-xs text-white/55 max-w-xs leading-relaxed">
+            <h3 className="text-base font-bold text-foreground">Appeal Submitted</h3>
+            <p className="text-xs text-foreground/55 max-w-xs leading-relaxed">
               Your appeal has been sent to the community jury for review. You will
               be notified once a decision is reached.
             </p>
@@ -505,8 +504,8 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
 
           {appealId && (
             <div className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 flex items-center justify-between text-xs">
-              <span className="text-white/50">Appeal ID</span>
-              <span className="font-mono font-semibold text-white/80">{appealId}</span>
+              <span className="text-foreground/50">Appeal ID</span>
+              <span className="font-mono font-semibold text-foreground/80">{appealId}</span>
             </div>
           )}
         </div>

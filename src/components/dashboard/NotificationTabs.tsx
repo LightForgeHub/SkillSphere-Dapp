@@ -33,7 +33,7 @@ export default function NotificationTabs({
               "flex-shrink-0 px-4 py-1.5 rounded-full text-sm transition-colors",
               isActive
                 ? "bg-white/10 text-white font-medium"
-                : "bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-white"
             )}
             aria-pressed={isActive}
           >

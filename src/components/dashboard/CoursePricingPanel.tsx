@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, KeyboardEvent } from "react";
-import { X, Plus } from "lucide-react";
+import { X } from "lucide-react";
 import { cn } from "@/components/ui/utils";
 import { Button } from "@/components/ui/Button";
 import {
@@ -47,7 +47,7 @@ function TagInput({
 
   return (
     <div
-      className="flex flex-wrap gap-2 p-3 bg-[#1A1520] border border-white/5 rounded-xl min-h-[48px] items-center cursor-text focus-within:border-[#9B59FF]/50 focus-within:ring-2 focus-within:ring-[#9B59FF]/20 transition-all"
+      className="flex flex-wrap gap-2 p-3 bg-card border border-border rounded-xl min-h-[48px] items-center cursor-text focus-within:border-[#9B59FF]/50 focus-within:ring-2 focus-within:ring-[#9B59FF]/20 transition-all"
       onClick={() => inputRef.current?.focus()}
     >
       {tags.map((tag) => (
@@ -62,7 +62,7 @@ function TagInput({
               e.stopPropagation();
               onChange(tags.filter((t) => t !== tag));
             }}
-            className="hover:text-white transition-colors"
+            className="hover:text-foreground transition-colors"
           >
             <X className="w-3 h-3" />
           </button>
@@ -75,7 +75,7 @@ function TagInput({
         onKeyDown={handleKey}
         onBlur={addTag}
         placeholder={tags.length === 0 ? "Type a skill and press Enter" : ""}
-        className="flex-1 min-w-30 bg-transparent text-sm text-white placeholder:text-white/20 outline-none"
+        className="flex-1 min-w-30 bg-transparent text-sm text-foreground placeholder:text-foreground/20 outline-none"
       />
     </div>
   );
@@ -105,7 +105,7 @@ export default function CoursePricingPanel({
   const accessError = accessTouched && !access ? "Access type is required." : "";
 
   return (
-    <div className="flex flex-col gap-6 bg-[#0C0A12] border border-white/[0.06] rounded-2xl p-6">
+    <div className="flex flex-col gap-6 bg-background border border-white/[0.06] rounded-2xl p-6">
 
       {/* Action Buttons */}
       <div className="flex flex-col gap-3">
@@ -118,7 +118,7 @@ export default function CoursePricingPanel({
         </Button>
         <Button
           variant="secondary"
-          className="w-full bg-[#110719] border border-white/5 hover:bg-white/10 text-white h-12 uppercase font-bold text-xs tracking-wider"
+          className="w-full bg-card border border-border hover:bg-white/10 text-foreground h-12 uppercase font-bold text-xs tracking-wider"
         >
           Add to Draft
         </Button>
@@ -170,7 +170,7 @@ export default function CoursePricingPanel({
       <div>
         <label className={label}>Skills you will gain</label>
         <TagInput tags={skills} onChange={setSkills} />
-        <p className="mt-1.5 text-xs text-white/30">
+        <p className="mt-1.5 text-xs text-foreground/30">
           Press <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono">Enter</kbd> or{" "}
           <kbd className="px-1 py-0.5 rounded bg-white/10 font-mono">,</kbd> to add a skill
         </p>

@@ -27,14 +27,14 @@ export default function QuestionAnswerHeader({
       <div className="flex items-center justify-between px-4 sm:px-6 py-4">
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-1.5 text-sm text-[#C1C1C1] hover:text-white transition-colors"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-white transition-colors"
           aria-label="Go back"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back</span>
         </button>
 
-        <span className="text-xs text-gray-500">{timestamp}</span>
+        <span className="text-xs text-muted-foreground">{timestamp}</span>
       </div>
 
       {/* Question context */}
@@ -63,11 +63,11 @@ export default function QuestionAnswerHeader({
         {/* Name + category + question */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm font-medium text-white">{learnerName}</span>
+            <span className="text-sm font-medium text-foreground">{learnerName}</span>
             <span className="w-[1px] h-3 bg-gray-600/50" />
             <span className="text-xs text-[#3F8CFF] font-medium">{category}</span>
           </div>
-          <p className="text-sm text-gray-300 leading-relaxed">{question}</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{question}</p>
         </div>
       </div>
     </div>
