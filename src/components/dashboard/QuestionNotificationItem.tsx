@@ -65,12 +65,12 @@ export default function QuestionNotificationItem({
 
         {/* Text Details */}
         <div className="flex flex-col gap-1 min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-xs md:text-sm text-gray-400">
+          <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground">
             <span>Asked {timestamp}</span>
             <span className="w-[1px] h-3 md:h-3.5 bg-gray-600/50"></span>
             <span className="text-[#3F8CFF] font-medium">{category}</span>
           </div>
-          <p className="text-sm md:text-[15px] font-medium text-white line-clamp-2 md:line-clamp-1">
+          <p className="text-sm md:text-[15px] font-medium text-foreground line-clamp-2 md:line-clamp-1">
             {question}
           </p>
         </div>
@@ -82,7 +82,7 @@ export default function QuestionNotificationItem({
           variant="outline"
           size="sm"
           onClick={handleAnswer}
-          className="border-white/10 hover:bg-white/5 hover:border-white/20 transition-colors hidden sm:inline-flex"
+          className="border-white/10 hover:bg-accent hover:border-white/20 transition-colors hidden sm:inline-flex"
         >
           Answer Question
         </Button>
@@ -90,7 +90,7 @@ export default function QuestionNotificationItem({
           variant="outline"
           size="default"
           onClick={handleAnswer}
-          className="w-full border-white/10 hover:bg-white/5 hover:border-white/20 transition-colors sm:hidden"
+          className="w-full border-white/10 hover:bg-accent hover:border-white/20 transition-colors sm:hidden"
         >
           Answer Question
         </Button>

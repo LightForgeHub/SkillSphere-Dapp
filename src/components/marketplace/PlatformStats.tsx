@@ -60,7 +60,7 @@ function MetricCard({
         <Icon className={cn("size-6", iconColor)} />
       </div>
       <div>
-        <div className="text-2xl font-bold text-white">{value}</div>
+        <div className="text-2xl font-bold text-foreground">{value}</div>
         <div className="text-sm text-slate-400">{label}</div>
       </div>
     </Card>
@@ -137,7 +137,7 @@ export default function PlatformStats() {
 
         <Card variant="glow" className="w-full">
           <CardHeader>
-            <CardTitle className="text-white text-lg">
+            <CardTitle className="text-foreground text-lg">
               {view === "weekly" ? "Weekly" : "Monthly"} Transaction Volume
             </CardTitle>
           </CardHeader>

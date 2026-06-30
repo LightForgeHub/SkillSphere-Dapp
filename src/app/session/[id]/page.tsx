@@ -127,12 +127,12 @@ export default function SessionPage() {
   const hourlyRate = session.ratePerSecond * 3600;
 
   return (
-    <div className="min-h-screen bg-[#0B0113] flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       <div className="flex-1 w-full px-4 py-6 sm:px-6 lg:px-8 max-w-[1600px] mx-auto">
         <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => router.back()}
-            className="inline-flex items-center gap-2 text-sm text-white/50 hover:text-white/80 transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-foreground/50 hover:text-foreground/80 transition-colors"
           >
             <ArrowLeft className="size-4" />
             Back
@@ -142,7 +142,7 @@ export default function SessionPage() {
             variant="outline" 
             size="sm" 
             onClick={() => setShowCodeEditor(!showCodeEditor)}
-            className={cn("gap-2", showCodeEditor && "bg-white/10 text-white")}
+            className={cn("gap-2", showCodeEditor && "bg-white/10 text-foreground")}
           >
             <Code2 className="size-4" />
             {showCodeEditor ? "Hide Editor" : "Open Code Editor"}
@@ -200,14 +200,14 @@ export default function SessionPage() {
               ].map((stat) => (
                 <Card key={stat.label} variant="glass" className="text-center">
                   <CardContent className="py-4">
-                    <stat.icon className="size-4 mx-auto mb-2 text-white/40" />
-                    <p className="text-xs text-white/50 mb-1">{stat.label}</p>
+                    <stat.icon className="size-4 mx-auto mb-2 text-foreground/40" />
+                    <p className="text-xs text-foreground/50 mb-1">{stat.label}</p>
                     <p
                       className={cn(
                         "text-lg font-bold font-mono tabular-nums",
-                        stat.highlight
-                          ? "text-amber-400"
-                          : "text-white"
+                      stat.highlight
+                        ? "text-amber-400"
+                        : "text-foreground"
                       )}
                     >
                       {stat.value}
@@ -226,20 +226,20 @@ export default function SessionPage() {
             <div className="space-y-4">
               <Card>
                 <CardContent className="py-6 space-y-5">
-                  <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-                    <User className="size-4 text-white/50" />
+                  <h3 className="text-sm font-semibold text-foreground/80 flex items-center gap-2">
+                    <User className="size-4 text-foreground/50" />
                     Expert
                   </h3>
 
                   <div className="flex items-center gap-3">
-                    <div className="size-12 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
+                    <div className="size-12 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-foreground font-bold text-lg shrink-0">
                       {session.expertName.charAt(0)}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">
+                      <p className="text-sm font-semibold text-foreground truncate">
                         {session.expertName}
                       </p>
-                      <p className="text-xs text-white/50 truncate">
+                      <p className="text-xs text-foreground/50 truncate">
                         {session.category}
                       </p>
                     </div>
@@ -249,32 +249,32 @@ export default function SessionPage() {
 
               <Card>
                 <CardContent className="py-6 space-y-4">
-                  <h3 className="text-sm font-semibold text-white/80 flex items-center gap-2">
-                    <Wallet className="size-4 text-white/50" />
+                  <h3 className="text-sm font-semibold text-foreground/80 flex items-center gap-2">
+                    <Wallet className="size-4 text-foreground/50" />
                     Wallet
                   </h3>
 
                   {wallet.address ? (
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-white/50">Connected</span>
+                        <span className="text-foreground/50">Connected</span>
                         <Badge variant="success" className="text-[10px]">
                           {wallet.network ?? "Unknown"}
                         </Badge>
                       </div>
-                      <p className="font-mono text-xs text-white/70 truncate">
+                      <p className="font-mono text-xs text-foreground/70 truncate">
                         {wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}
                       </p>
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-white/50">Balance</span>
-                        <span className="text-white font-mono">
+                        <span className="text-foreground/50">Balance</span>
+                        <span className="text-foreground font-mono">
                           {wallet.balance ?? "—"} XLM
                         </span>
                       </div>
                     </div>
                   ) : (
                     <div className="text-center space-y-3">
-                      <p className="text-xs text-white/50">
+                      <p className="text-xs text-foreground/50">
                         Connect your wallet to stream payments
                       </p>
                       <Button
@@ -334,10 +334,10 @@ export default function SessionPage() {
           <div className="mx-auto size-14 rounded-full bg-red-500/20 flex items-center justify-center">
             <AlertTriangle className="size-7 text-red-400" />
           </div>
-          <h2 className="text-xl font-bold text-white">End Session?</h2>
-          <p className="text-sm text-white/60">
+          <h2 className="text-xl font-bold text-foreground">End Session?</h2>
+          <p className="text-sm text-foreground/60">
             The session will be settled immediately.{" "}
-            <strong className="text-white">{totalStreamed.toFixed(7)} XLM</strong>{" "}
+            <strong className="text-foreground">{totalStreamed.toFixed(7)} XLM</strong>{" "}
             will be transferred to {session.expertName}, and the remaining{" "}
             {remainingBalance.toFixed(7)} XLM will be refunded to your wallet.
           </p>

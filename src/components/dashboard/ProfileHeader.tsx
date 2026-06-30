@@ -65,7 +65,7 @@ function ProfileHeader({
           {/* Name, Role, and Actions */}
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">
                 {name || "Unknown User"}
               </h1>
               {role && (
@@ -84,7 +84,7 @@ function ProfileHeader({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 px-4 rounded-xl border-white/10 hover:bg-white/5 gap-2 text-white/80"
+                  className="h-9 px-4 rounded-xl border-white/10 hover:bg-accent gap-2 text-foreground/80"
                   onClick={onEdit}
                 >
                   <Edit2 className="w-4 h-4" />
@@ -94,13 +94,13 @@ function ProfileHeader({
               
               {walletAddress && (
                 <div className="flex items-center gap-2 bg-white/5 border border-white/5 px-3 py-1.5 rounded-xl">
-                  <span className="text-xs text-white/40 font-mono">
+                  <span className="text-xs text-foreground/40 font-mono">
                     {formattedWallet}
                   </span>
                   <CopyButton
                     text={walletAddress}
                     displayText={formattedWallet}
-                    className="text-white/40 hover:text-white"
+                    className="text-foreground/40 hover:text-foreground"
                     ariaLabel="Copy wallet address"
                   />
                 </div>

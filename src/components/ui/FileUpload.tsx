@@ -83,7 +83,7 @@ export function FileUpload({
           type="button"
           variant="secondary"
           onClick={onButtonClick}
-          className="bg-[#2D2D2D] border-none hover:bg-[#3D3D3D] text-white/70 h-10 px-6 rounded-full w-fit flex items-center gap-2"
+          className="bg-[#2D2D2D] border-none hover:bg-[#3D3D3D] text-foreground/70 h-10 px-6 rounded-full w-fit flex items-center gap-2"
         >
           {fileName ? (
             <span className="max-w-[150px] truncate">{fileName}</span>
@@ -91,7 +91,7 @@ export function FileUpload({
             label
           )}
           {fileName && (
-            <X className="w-4 h-4 hover:text-white" onClick={handleRemove} />
+            <X className="w-4 h-4 hover:text-foreground" onClick={handleRemove} />
           )}
         </Button>
       </div>
@@ -104,7 +104,7 @@ export function FileUpload({
     <div
       className={cn(
         "relative rounded-xl border-2 border-dashed transition-all duration-200 flex flex-col items-center justify-center gap-4 cursor-pointer overflow-hidden group",
-        dragActive ? "border-purple-500 bg-purple-500/5" : "border-white/10 bg-[#1A1520] hover:border-white/20",
+        dragActive ? "border-purple-500 bg-purple-500/5" : "border-white/10 bg-card hover:border-white/20",
         isVideo ? "aspect-square w-48" : "w-full aspect-[2/1] md:aspect-[3/1]",
         className
       )}
@@ -124,8 +124,8 @@ export function FileUpload({
 
       {fileName ? (
         <div className="flex flex-col items-center gap-2 p-4 text-center">
-          {isVideo ? <Video className="w-8 h-8 text-white/40" /> : <ImageIcon className="w-8 h-8 text-white/40" />}
-          <span className="text-sm text-white/60 truncate max-w-full px-4">{fileName}</span>
+          {isVideo ? <Video className="w-8 h-8 text-foreground/40" /> : <ImageIcon className="w-8 h-8 text-foreground/40" />}
+          <span className="text-sm text-foreground/60 truncate max-w-full px-4">{fileName}</span>
           <Button
             type="button"
             variant="ghost"
@@ -139,9 +139,9 @@ export function FileUpload({
       ) : (
         <div className="flex flex-col items-center gap-3">
           <div className="w-12 h-12 rounded-full bg-[#2D2D2D] flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Plus className="w-6 h-6 text-white/70" />
+            <Plus className="w-6 h-6 text-foreground/70" />
           </div>
-          <span className="text-sm font-medium text-white/60">{label}</span>
+          <span className="text-sm font-medium text-foreground/60">{label}</span>
         </div>
       )}
 

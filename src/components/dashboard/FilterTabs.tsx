@@ -28,7 +28,7 @@ export default function FilterTabs({
             "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 focus:ring-offset-gray-900",
             activeTab === tab
               ? "bg-[#1C1C1E] text-white ring-1 ring-[#2C2C2E]"
-              : "text-slate-400 hover:text-white hover:bg-[#1C1C1E]/50"
+              : "text-slate-400 hover:text-foreground hover:bg-[#1C1C1E]/50"
           )}
           aria-pressed={activeTab === tab}
           role="tab"

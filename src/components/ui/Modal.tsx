@@ -84,7 +84,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
     >
       {/* Overlay */}
       <div
-        className="absolute inset-0 bg-[#0A050E]/60 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 bg-background/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -96,19 +96,19 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
         aria-modal="true"
         aria-labelledby={titleId}
         className={cn(
-          "relative w-full max-w-2xl bg-[#1A1520] border border-white/10 rounded-3xl shadow-2xl overflow-hidden transition-all transform animate-in fade-in zoom-in duration-200",
+          "relative w-full max-w-2xl bg-card border border-white/10 rounded-3xl shadow-2xl overflow-hidden transition-all transform animate-in fade-in zoom-in duration-200",
           className
         )}
       >
         {/* Header */}
         {title && (
           <div className="flex items-center justify-between p-6 border-b border-white/5">
-            <h2 id={titleId} className="text-xl font-bold text-white">
+            <h2 id={titleId} className="text-xl font-bold text-foreground">
               {title}
             </h2>
             <button
               onClick={onClose}
-              className="p-2 rounded-full hover:bg-white/5 text-white/60 hover:text-white transition-colors"
+              className="p-2 rounded-full hover:bg-white/5 text-foreground/60 hover:text-foreground transition-colors"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />

@@ -9,7 +9,7 @@ const LeftPanel = () => {
             " linear-gradient(180deg, #674284 0%, #603186 12.68%, #311745 47.53%, #09020F 67.16%)",
         }}
       >
-        <h1 className="text-white text-2xl font-bold mb-5">SkillSphere</h1>
+        <h1 className="text-foreground text-2xl font-bold mb-5">SkillSphere</h1>
 
         <div className="flex items-center justify-center mb-32">
           <div className="relative w-[508px] h-[508px]">
@@ -18,10 +18,10 @@ const LeftPanel = () => {
         </div>
 
         <div className="absolute bottom-10 left-0 right-0">
-          <h2 className="text-white text-3xl font-bold text-center mb-3">
+          <h2 className="text-foreground text-3xl font-bold text-center mb-3">
             Get Started with us
           </h2>
-          <p className="text-white text-center mb-8 opacity-90">
+          <p className="text-foreground text-center mb-8 opacity-90">
             Complete these easy steps to register your account
           </p>
 

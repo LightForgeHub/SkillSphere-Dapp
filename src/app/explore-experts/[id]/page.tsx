@@ -1,18 +1,13 @@
 "use client";
 
 import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import ExpertDetails from '@/components/profile/ExpertDetails';
 import { useExpert } from '@/hooks/useExperts';
 
-interface ExpertProfilePageProps {
-  params: {
-    id: string;
-  };
-}
-
-export default function ExpertProfilePage({ params }: ExpertProfilePageProps) {
+export default function ExpertProfilePage() {
   const router = useRouter();
+  const params = useParams<{ id: string }>();
   const { data: expert, isLoading, error } = useExpert(params.id);
 
   const handleBookClick = () => {
@@ -35,7 +30,7 @@ export default function ExpertProfilePage({ params }: ExpertProfilePageProps) {
           <div className="inline-block">
             <div className="w-12 h-12 border-4 border-purple-600 border-t-pink-600 rounded-full animate-spin"></div>
           </div>
-          <p className="text-gray-400">Loading expert profile...</p>
+          <p className="text-muted-foreground">Loading expert profile...</p>
         </div>
       </div>
     );
@@ -55,7 +50,7 @@ export default function ExpertProfilePage({ params }: ExpertProfilePageProps) {
       >
         <div className="max-w-2xl mx-auto px-4 text-center">
           <h1 className="text-5xl md:text-6xl font-bold mb-4">Expert Not Found</h1>
-          <p className="text-gray-400 text-lg mb-8">{error ? String(error) : 'The expert you are looking for does not exist.'}</p>
+          <p className="text-muted-foreground text-lg mb-8">{error ? String(error) : 'The expert you are looking for does not exist.'}</p>
           <button
             onClick={() => router.push('/explore-experts')}
             className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg font-semibold transition-all duration-300"

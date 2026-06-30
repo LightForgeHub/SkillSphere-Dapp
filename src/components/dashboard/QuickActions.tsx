@@ -12,13 +12,13 @@ export default function QuickActions() {
 
   return (
     <div className="mt-8">
-      <h3 className="text-sm font-medium text-white mb-4">Quick Actions</h3>
+      <h3 className="text-sm font-medium text-foreground mb-4">Quick Actions</h3>
       <div className="flex flex-wrap gap-4">
         {actions.map((action) => (
           <Button
             key={action.label}
             variant="secondary"
-            className="bg-[#110719] border-border/50 hover:bg-white/[0.05]"
+            className="bg-card border-border/50 hover:bg-accent"
             onClick={action.onClick}
           >
             {action.label}

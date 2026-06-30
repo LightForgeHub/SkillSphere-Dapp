@@ -48,8 +48,8 @@ export function useSurgeMultiplier(): UseSurgeMultiplierReturn {
       
       // Ensure multiplier is at least 1
       setMultiplier(Math.max(1, mult));
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch surge multiplier");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to fetch surge multiplier");
       // Fail gracefully: default to no surge (multiplier = 1)
       setMultiplier(1);
     } finally {
