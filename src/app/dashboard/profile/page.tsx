@@ -5,6 +5,7 @@ import CourseCard from "@/components/dashboard/CourseCard"
 import ReviewItem from "@/components/dashboard/ReviewItem"
 import ProfileHeader from "@/components/dashboard/ProfileHeader"
 import { EditProfileModal, type ProfileData } from "@/components/profile/EditProfileModal"
+import { ZKVerification } from "@/components/profile/ZKVerification"
 
 const COURSES = [
   {
@@ -51,6 +52,11 @@ export default function ProfilePage() {
         walletAddress="0x411ad3c6d3c6d3c6d3c6d3c6d3c6d3c6d3c6d3c6"
         onEdit={() => setIsEditModalOpen(true)}
       />
+
+      {/* ZK Identity Verification */}
+      <div className="mb-8">
+        <ZKVerification />
+      </div>
 
       {/* Bio Box */}
       <div className="bg-card/50 border border-white/5 rounded-2xl p-6 md:p-8 backdrop-blur-sm mb-12">
