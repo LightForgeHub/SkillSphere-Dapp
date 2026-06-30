@@ -14,6 +14,8 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 import { WalletProvider } from "@/providers/WalletProvider";
 import { ModalProvider } from "@/providers/ModalProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { OnboardingProvider } from "@/providers/OnboardingProvider";
+import OnboardingTour from "@/components/layout/OnboardingTour";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -80,12 +82,15 @@ export default function RootLayout({
           <QueryProvider>
             <WalletProvider>
               <ModalProvider>
-                <AppLayout
-                  headerSlot={<NavBar />}
-                  footerSlot={<Footer />}
-                >
-                  {children}
-                </AppLayout>
+                <OnboardingProvider>
+                  <OnboardingTour />
+                  <AppLayout
+                    headerSlot={<NavBar />}
+                    footerSlot={<Footer />}
+                  >
+                    {children}
+                  </AppLayout>
+                </OnboardingProvider>
               </ModalProvider>
             </WalletProvider>
           </QueryProvider>
