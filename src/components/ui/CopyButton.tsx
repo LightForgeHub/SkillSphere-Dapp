@@ -52,7 +52,7 @@ export default function CopyButton({
         <button
           onClick={handleCopy}
           className={cn(
-            "text-gray-400 hover:text-white transition-colors",
+            "text-muted-foreground hover:text-foreground transition-colors",
             "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded",
             className
           )}
@@ -69,8 +69,8 @@ export default function CopyButton({
         {/* Tooltip */}
         <div
           className={cn(
-            "absolute left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap transition-opacity duration-200 pointer-events-none",
-            "z-50 border border-gray-700",
+            "absolute left-1/2 -translate-x-1/2 px-2 py-1 bg-card text-foreground text-xs rounded whitespace-nowrap transition-opacity duration-200 pointer-events-none",
+            "z-50 border border-border",
             copied ? "opacity-100" : "opacity-0",
             tooltipPosition === "top" ? "-top-8" : "top-8"
           )}

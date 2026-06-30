@@ -8,7 +8,7 @@ interface QuestionNotificationListProps {
 export default function QuestionNotificationList({ questions }: QuestionNotificationListProps) {
   if (questions.length === 0) {
     return (
-      <div className="py-8 text-center text-gray-400">
+      <div className="py-8 text-center text-muted-foreground">
         No questions to display.
       </div>
     )

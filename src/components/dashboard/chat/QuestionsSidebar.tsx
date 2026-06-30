@@ -35,8 +35,8 @@ export default function QuestionsSidebar({ questions, activeId }: QuestionsSideb
               className={cn(
                 "px-4 py-1.5 text-xs font-medium rounded-t-md transition-colors",
                 activeTab === tab
-                  ? "bg-white/10 text-white"
-                  : "text-gray-500 hover:text-gray-300"
+                  ? "bg-white/10 text-foreground"
+                  : "text-muted-foreground hover:text-muted-foreground"
               )}
             >
               {tab}
@@ -48,7 +48,7 @@ export default function QuestionsSidebar({ questions, activeId }: QuestionsSideb
       {/* List */}
       <div className="flex-1 overflow-y-auto divide-y divide-white/5">
         {filtered.length === 0 ? (
-          <p className="px-4 py-6 text-xs text-gray-500 text-center">No {activeTab.toLowerCase()} questions.</p>
+          <p className="px-4 py-6 text-xs text-muted-foreground text-center">No {activeTab.toLowerCase()} questions.</p>
         ) : (
           filtered.map((q) => {
             const isActive = q.id === activeId
@@ -74,10 +74,10 @@ export default function QuestionsSidebar({ questions, activeId }: QuestionsSideb
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 mb-0.5">
                     <span className="text-xs font-medium text-white truncate">{q.learnerName}</span>
-                    <span className="text-[10px] text-gray-500 shrink-0">{q.timestamp}</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">{q.timestamp}</span>
                   </div>
                   <span className="text-[10px] text-[#3F8CFF] font-medium">{q.category}</span>
-                  <p className="text-xs text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">{q.question}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">{q.question}</p>
                 </div>
 
                 {isActive && <div className="shrink-0 w-1 h-1 rounded-full bg-[#4ADE80] mt-1.5" />}

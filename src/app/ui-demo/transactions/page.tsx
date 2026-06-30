@@ -19,7 +19,7 @@ export default function TransactionsDemoPage() {
         {/* Header */}
         <div className="mb-12">
           <h1 className="text-5xl md:text-6xl font-bold mb-4">Stellar Explorer Integration Demo</h1>
-          <p className="text-gray-400 text-lg max-w-2xl">
+          <p className="text-muted-foreground text-lg max-w-2xl">
             View transaction history with integrated Stellar.Expert links. Supports both Testnet and Mainnet networks.
           </p>
         </div>
@@ -28,7 +28,7 @@ export default function TransactionsDemoPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
           <div className="bg-gradient-to-br from-purple-600/10 to-pink-600/10 border border-purple-500/20 rounded-xl p-6">
             <h3 className="text-lg font-bold mb-4">Explorer Utility Functions</h3>
-            <ul className="space-y-2 text-sm text-gray-300 font-mono">
+            <ul className="space-y-2 text-sm text-muted-foreground font-mono">
               <li className="flex gap-2">
                 <span className="text-purple-400">→</span>
                 <code>formatExplorerUrl(hash, network)</code>
@@ -54,7 +54,7 @@ export default function TransactionsDemoPage() {
 
           <div className="bg-gradient-to-br from-purple-600/10 to-pink-600/10 border border-purple-500/20 rounded-xl p-6">
             <h3 className="text-lg font-bold mb-4">Features Demonstrated</h3>
-            <ul className="space-y-2 text-sm text-gray-300">
+            <ul className="space-y-2 text-sm text-muted-foreground">
               <li className="flex gap-2">
                 <span className="text-purple-400">✓</span>
                 <span>Shortened hash display</span>
@@ -87,8 +87,8 @@ export default function TransactionsDemoPage() {
         {/* Implementation Details */}
         <div className="bg-black/30 border border-purple-500/20 rounded-xl p-6 space-y-6">
           <div>
-            <p className="text-sm text-gray-400 mb-4 font-semibold">Explorer URL Patterns:</p>
-            <div className="space-y-3 text-xs text-gray-300 font-mono bg-black/50 p-4 rounded">
+            <p className="text-sm text-muted-foreground mb-4 font-semibold">Explorer URL Patterns:</p>
+            <div className="space-y-3 text-xs text-muted-foreground font-mono bg-black/50 p-4 rounded">
               <div>
                 <span className="text-blue-400">Testnet:</span> https://testnet.stellar.expert/tx/{'{hash}'}
               </div>
@@ -99,8 +99,8 @@ export default function TransactionsDemoPage() {
           </div>
 
           <div>
-            <p className="text-sm text-gray-400 mb-4 font-semibold">Usage in Components:</p>
-            <pre className="text-xs text-gray-300 font-mono bg-black/50 p-4 rounded overflow-x-auto">
+            <p className="text-sm text-muted-foreground mb-4 font-semibold">Usage in Components:</p>
+            <pre className="text-xs text-muted-foreground font-mono bg-black/50 p-4 rounded overflow-x-auto">
 {`import { formatExplorerUrl, shortenHash } from '@/utils/explorer';
 
 const hash = 'a123456789abcdef1234567890abcdef1234567890abcdef1234567890abcd';

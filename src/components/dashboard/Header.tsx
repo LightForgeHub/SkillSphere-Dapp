@@ -1,5 +1,4 @@
 "use client"
-import Link from "next/link"
 import { useEffect, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { safeLocalStorage } from "@/utils/safeLocalStorage"
@@ -43,7 +42,7 @@ export default function Header({
       if (e.key === "dashboard_profile" && e.newValue) {
         try {
           setProfile(JSON.parse(e.newValue))
-        } catch (e) {}
+        } catch {}
       }
     }
     window.addEventListener("storage", onStorage)
@@ -54,7 +53,7 @@ export default function Header({
         return classes.filter(Boolean).join(" ")
     }
   return (
-    <header className="bg-[#110719] border-b border-white/20">
+    <header className="bg-card border-b border-white/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-4">
@@ -67,7 +66,7 @@ export default function Header({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <h1 className="text-lg font-semibold text-white">{title || "Dashboard"}</h1>
+            <h1 className="text-lg font-semibold text-foreground">{title || "Dashboard"}</h1>
           </div>
 
           <div className="flex items-center gap-4">
@@ -92,8 +91,8 @@ export default function Header({
                 <>
                   <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={() => setMobileProfileModalOpen(false)} />
 
-                  <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] bg-white rounded-xl p-4 border shadow-lg z-50 md:hidden">
-                    <div className="text-sm text-gray-600 mb-3">Select profile</div>
+                  <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] bg-background rounded-xl p-4 border shadow-lg z-50 md:hidden">
+                    <div className="text-sm text-slate-200 mb-3">Select profile</div>
                     <div className="space-y-2">
                       {profiles.map((p) => (
                         <button

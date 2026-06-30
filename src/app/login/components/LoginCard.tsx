@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 interface LoginCardProps {
-  onSignIn: (data: any) => void;
+  onSignIn: (data: { email: string; password: string }) => void;
   onGoogleSignIn: () => void;
 }
 
@@ -45,18 +45,18 @@ const LoginCard = ({ onSignIn, onGoogleSignIn }: LoginCardProps) => {
       />
 
       <div className="relative z-10 flex flex-col items-center">
-        <h2 className="text-white text-2xl font-bold mb-12 tracking-wide">SkillSphere</h2>
+        <h2 className="text-foreground text-2xl font-bold mb-12 tracking-wide">SkillSphere</h2>
 
         <div className="text-center mb-8">
-          <h1 className="text-white text-4xl font-bold mb-2">Sign In With Email</h1>
-          <p className="text-gray-300 text-sm max-w-[250px] mx-auto leading-relaxed">
+          <h1 className="text-foreground text-4xl font-bold mb-2">Sign In With Email</h1>
+          <p className="text-muted-foreground text-sm max-w-[250px] mx-auto leading-relaxed">
             Continue your journey in our NFT marketplace
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="w-full max-w-[399px] space-y-4">
           <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
               <Mail size={20} />
             </div>
             <input
@@ -65,13 +65,13 @@ const LoginCard = ({ onSignIn, onGoogleSignIn }: LoginCardProps) => {
               placeholder="Email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full bg-[#10041A] border border-white rounded-xl py-4 pl-12 pr-4 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
+              className="w-full bg-card border border-white rounded-xl py-4 pl-12 pr-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
               required
             />
           </div>
 
           <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
               <Lock size={20} />
             </div>
             <input
@@ -80,40 +80,40 @@ const LoginCard = ({ onSignIn, onGoogleSignIn }: LoginCardProps) => {
               placeholder="Password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full bg-[#10041A] border border-white rounded-xl py-4 pl-12 pr-12 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
+              className="w-full bg-card border border-white rounded-xl py-4 pl-12 pr-12 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
               required
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
             >
               {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
           </div>
 
           <div className="text-right">
-            <a href="#" className="text-gray-400 text-xs hover:text-white transition-colors">
+            <a href="#" className="text-muted-foreground text-xs hover:text-foreground transition-colors">
               Forgot Password
             </a>
           </div>
       <Link href="/marketplace">          <button
             type="submit"
-            className="w-full cursor-pointer bg-[#613485] hover:bg-[#723e9c] text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-purple-900/20 mt-4 active:scale-[0.98]"
+            className="w-full cursor-pointer bg-[#613485] hover:bg-[#723e9c] text-foreground font-bold py-4 rounded-xl transition-all shadow-lg shadow-purple-900/20 mt-4 active:scale-[0.98]"
           >
             Sign In
           </button> </Link>
  
 
           <div className="text-center pt-6 pb-2">
-            <span className="text-gray-400 text-sm">or Sign in with</span>
+            <span className="text-muted-foreground text-sm">or Sign in with</span>
           </div>
 
           <div className="flex justify-center">
              <Link href="/marketplace">   <button
               type="button"
               onClick={onGoogleSignIn}
-              className="w-12 h-12 flex items-center justify-center bg-[#1a0b2e] rounded-xl border border-white/10 hover:border-white/20 transition-all active:scale-95"
+              className="w-12 h-12 flex items-center justify-center bg-card rounded-xl border border-white/10 hover:border-white/20 transition-all active:scale-95"
             >
               <svg width="20" height="20" viewBox="0 0 24 24">
                 <path

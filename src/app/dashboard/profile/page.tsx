@@ -53,15 +53,15 @@ export default function ProfilePage() {
       />
 
       {/* Bio Box */}
-      <div className="bg-[#1C1129]/50 border border-white/5 rounded-2xl p-6 md:p-8 backdrop-blur-sm mb-12">
-        <p className="text-white/70 text-sm md:text-base leading-relaxed">
+      <div className="bg-card/50 border border-white/5 rounded-2xl p-6 md:p-8 backdrop-blur-sm mb-12">
+        <p className="text-foreground/70 text-sm md:text-base leading-relaxed">
           {profile.about}
         </p>
       </div>
 
       {/* Courses Offered */}
       <section className="mb-16">
-        <h2 className="text-xl font-bold text-white mb-8 flex items-center gap-2">
+        <h2 className="text-xl font-bold text-foreground mb-8 flex items-center gap-2">
           Courses Offered
         </h2>
         <div className="space-y-6">
@@ -73,7 +73,7 @@ export default function ProfilePage() {
 
       {/* Reviews */}
       <section>
-        <h2 className="text-xl font-bold text-white mb-2">Reviews</h2>
+        <h2 className="text-xl font-bold text-foreground mb-2">Reviews</h2>
         <div className="divide-y divide-white/5">
           {REVIEWS.map((review, index) => (
             <ReviewItem key={index} {...review} />

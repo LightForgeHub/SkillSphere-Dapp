@@ -8,7 +8,7 @@ interface NotificationListProps {
 export default function NotificationList({ notifications }: NotificationListProps) {
   if (notifications.length === 0) {
     return (
-      <div className="py-8 text-center text-gray-400">
+      <div className="py-8 text-center text-muted-foreground">
         No new learners to display.
       </div>
     )

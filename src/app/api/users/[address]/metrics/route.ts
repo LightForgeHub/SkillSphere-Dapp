@@ -7,7 +7,7 @@ const authOptions = {};
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { address: string } }
+  { params }: { params: Promise<{ address: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -24,7 +24,8 @@ export async function GET(
     // Ensure users can only query their own stats
     // Assume session.user.name or session.user.email contains the address/ID in this context
     // We will do a basic check here.
-    if ((session.user as any).address !== address && (session.user as any).id !== address && session.user.name !== address) {
+    const user = session.user as { address?: string; id?: string; name?: string };
+    if (user.address !== address && user.id !== address && user.name !== address) {
        return NextResponse.json(
         { error: 'Forbidden: You can only query your own metrics.' },
         { status: 403 }

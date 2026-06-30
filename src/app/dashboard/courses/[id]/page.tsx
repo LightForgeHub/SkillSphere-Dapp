@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useParams } from "next/navigation";
 import OverviewTabContent from "@/components/dashboard/OverviewTabContent";
 import SummaryTabContent from "@/components/dashboard/SummaryTabContent";
 import ResourcesTabContent from "@/components/dashboard/ResourcesTabContent";
@@ -114,15 +115,17 @@ const COURSE_DATA: Record<
   },
 };
 
-export default function CourseDetailsPage({ params }: { params: Params }) {
-  const courseData = COURSE_DATA[params.id];
+export default function CourseDetailsPage() {
+  const params = useParams<Params>();
+  const id = params.id;
+  const courseData = COURSE_DATA[id];
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [currentLesson, setCurrentLesson] = useState(0);
   const [completed, setCompleted] = useState(false);
 
   if (!courseData) {
     return (
-      <div className="text-center text-white py-12">
+      <div className="text-center text-foreground py-12">
         <h1 className="text-2xl font-bold">Course not found</h1>
       </div>
     );
@@ -136,10 +139,10 @@ export default function CourseDetailsPage({ params }: { params: Params }) {
   return (
     <div className="space-y-6 pb-12">
       {/* Breadcrumb */}
-      <div className="bg-[#1A1520] border border-[#1D1D1C] rounded-xl px-5 py-3 flex items-center gap-3 text-sm">
-        <span className="text-white/60 truncate">{courseData.title}</span>
-        <span className="text-white/30 shrink-0">|</span>
-        <span className="text-white font-medium truncate">
+      <div className="bg-card border border-border rounded-xl px-5 py-3 flex items-center gap-3 text-sm">
+        <span className="text-foreground/60 truncate">{courseData.title}</span>
+        <span className="text-foreground/30 shrink-0">|</span>
+        <span className="text-foreground font-medium truncate">
           {LESSONS[currentLesson].title}
         </span>
       </div>
@@ -162,11 +165,11 @@ export default function CourseDetailsPage({ params }: { params: Params }) {
               shape="square"
               className="border-white/30 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
             />
-            <span className="text-sm text-white/80 select-none">Completed</span>
+            <span className="text-sm text-foreground/80 select-none">Completed</span>
           </label>
 
           {/* Tabs */}
-          <div className="flex gap-2 border-b border-[#1D1D1C] overflow-x-auto">
+          <div className="flex gap-2 border-b border-border overflow-x-auto">
             {[
               { id: "overview" as const, label: "Overview" },
               { id: "resources" as const, label: "Resources" },
@@ -178,8 +181,8 @@ export default function CourseDetailsPage({ params }: { params: Params }) {
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.id
-                    ? "border-white text-white"
-                    : "border-transparent text-white/60 hover:text-white/80"
+                    ? "border-white text-foreground"
+                    : "border-transparent text-foreground/60 hover:text-foreground/80"
                 }`}
               >
                 {tab.label}

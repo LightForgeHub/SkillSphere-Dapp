@@ -27,7 +27,7 @@ export default function MetricCard({
         <Icon className={cn("size-6", iconColor)} />
       </div>
       <div>
-        <div className="text-2xl font-bold text-white">{value}</div>
+        <div className="text-2xl font-bold text-foreground">{value}</div>
         <div className="text-sm text-slate-400">{label}</div>
       </div>
     </Card>

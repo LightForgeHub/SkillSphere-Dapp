@@ -28,10 +28,10 @@ export default function AnnouncementNotificationItem({
 
       {/* Text Content */}
       <div className="flex-1 min-w-0 flex flex-col gap-1">
-        <h3 className="text-sm md:text-lg font-semibold text-white truncate">
+        <h3 className="text-sm md:text-lg font-semibold text-foreground truncate">
           {title}
         </h3>
-        <p className="text-xs md:text-base text-gray-400">
+        <p className="text-xs md:text-base text-muted-foreground">
           {description}
         </p>
       </div>

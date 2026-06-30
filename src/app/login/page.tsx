@@ -3,7 +3,7 @@
 import LoginCard from "./components/LoginCard";
 
 const LoginPage = () => {
-  const handleSignIn = (data: any) => {
+  const handleSignIn = (data: { email: string; password: string }) => {
     console.log("Sign in data:", data);
     alert("Sign In - Integration required");
   };

@@ -1,5 +1,4 @@
 import React from "react"
-import { Users, GraduationCap } from "lucide-react"
 import { cn } from "@/components/ui/utils"
 import Image from "next/image"
 
@@ -28,18 +27,18 @@ export default function NotificationItem({
 
       {/* Text Container */}
       <div className="flex-1 min-w-0 pt-0.5 md:pt-1">
-        <h3 className="text-sm md:text-[15px] font-medium text-white truncate">{title}</h3>
-        <p className="text-xs md:text-sm text-gray-400 truncate mt-0.5 md:mt-1">{subtitle}</p>
+        <h3 className="text-sm md:text-[15px] font-medium text-foreground truncate">{title}</h3>
+        <p className="text-xs md:text-sm text-muted-foreground truncate mt-0.5 md:mt-1">{subtitle}</p>
       </div>
 
       {/* Timestamp */}
       <div className="flex-shrink-0 pt-0.5 md:pt-1 hidden sm:block">
-        <span className="text-xs md:text-sm text-gray-500">{timestamp}</span>
+        <span className="text-xs md:text-sm text-muted-foreground">{timestamp}</span>
       </div>
       
       {/* Mobile-only inline timestamp if narrow */}
       <div className="sm:hidden w-full mt-1 pl-13 flex justify-end">
-        <span className="text-xs text-gray-500">{timestamp}</span>
+        <span className="text-xs text-muted-foreground">{timestamp}</span>
       </div>
     </div>
   )

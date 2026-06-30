@@ -1,6 +1,5 @@
 "use client"
 
-import { Copy, Check } from "lucide-react"
 import { cn } from "@/components/ui/utils"
 import CopyButton from "@/components/ui/CopyButton"
 
@@ -62,23 +61,23 @@ export default function EarningsTable({
   return (
     <div className={cn("flex flex-col items-start gap-3 w-full", className)}>
       {/* Title */}
-      <h2 className="text-lg font-semibold text-white">Payment History</h2>
+      <h2 className="text-lg font-semibold text-foreground">Payment History</h2>
 
       {/* Mobile: Card Layout */}
       <div className="block md:hidden w-full space-y-4">
         {transactions.map((tx) => (
           <div
             key={`${tx.transactionId}-${tx.sn}`}
-            className="bg-[#110719] rounded-lg border border-white/10 p-4 space-y-3"
+            className="bg-card rounded-lg border border-border p-4 space-y-3"
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-300 uppercase">SN</span>
-              <span className="text-sm text-gray-400">{tx.sn}</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase">SN</span>
+              <span className="text-sm text-muted-foreground">{tx.sn}</span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-gray-300 uppercase">Transaction ID</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Transaction ID</span>
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-sm text-gray-400 font-mono truncate">
+                <span className="text-sm text-muted-foreground font-mono truncate">
                   {truncateId(tx.transactionId)}
                 </span>
                 <CopyButton
@@ -89,12 +88,12 @@ export default function EarningsTable({
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-300 uppercase">Amount</span>
-              <span className="text-sm text-gray-400">{tx.amount}</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Amount</span>
+              <span className="text-sm text-muted-foreground">{tx.amount}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-300 uppercase">Date</span>
-              <span className="text-sm text-gray-400">{tx.date}</span>
+              <span className="text-xs font-semibold text-muted-foreground uppercase">Date</span>
+              <span className="text-sm text-muted-foreground">{tx.date}</span>
             </div>
           </div>
         ))}
@@ -103,46 +102,46 @@ export default function EarningsTable({
       {/* Desktop: Table Layout */}
       <div className="hidden md:block overflow-x-auto w-full">
         <div className="inline-block min-w-full align-middle">
-          <div className="overflow-hidden rounded-lg border border-white/10">
+          <div className="overflow-hidden rounded-lg border border-border">
             <table className="min-w-full divide-y divide-white/10">
               <thead className="bg-white/5">
                 <tr>
                   <th
                     scope="col"
-                    className="py-3 px-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                    className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
                   >
                     SN
                   </th>
                   <th
                     scope="col"
-                    className="py-3 px-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                    className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
                   >
                     Transaction ID
                   </th>
                   <th
                     scope="col"
-                    className="py-3 px-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                    className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
                   >
                     Amount
                   </th>
                   <th
                     scope="col"
-                    className="py-3 px-4 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                    className="py-3 px-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap"
                   >
                     Date
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-[#110719] divide-y divide-white/5">
+              <tbody className="bg-card divide-y divide-white/5">
                 {transactions.map((tx) => (
                   <tr
                     key={`${tx.transactionId}-${tx.sn}`}
-                    className="transition-colors hover:bg-white/5"
+                    className="transition-colors hover:bg-accent"
                   >
-                    <td className="py-4 px-4 whitespace-nowrap text-sm text-gray-400">
+                    <td className="py-4 px-4 whitespace-nowrap text-sm text-muted-foreground">
                       {tx.sn}
                     </td>
-                    <td className="py-4 px-4 whitespace-nowrap text-sm text-gray-400">
+                    <td className="py-4 px-4 whitespace-nowrap text-sm text-muted-foreground">
                       <div className="flex items-center gap-2">
                         <span className="font-mono">{truncateId(tx.transactionId)}</span>
                         <CopyButton
@@ -152,10 +151,10 @@ export default function EarningsTable({
                         />
                       </div>
                     </td>
-                    <td className="py-4 px-4 whitespace-nowrap text-sm text-gray-400">
+                    <td className="py-4 px-4 whitespace-nowrap text-sm text-muted-foreground">
                       {tx.amount}
                     </td>
-                    <td className="py-4 px-4 whitespace-nowrap text-sm text-gray-400">
+                    <td className="py-4 px-4 whitespace-nowrap text-sm text-muted-foreground">
                       {tx.date}
                     </td>
                   </tr>

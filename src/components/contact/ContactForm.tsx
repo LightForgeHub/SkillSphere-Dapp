@@ -47,7 +47,7 @@ export default function ContactForm() {
         <h3 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent font-space-grotesk">
           Message Sent!
         </h3>
-        <p className="text-gray-400 font-inter max-w-xs">
+        <p className="text-muted-foreground font-inter max-w-xs">
           Thanks for reaching out. We&apos;ll get back to you as soon as possible.
         </p>
         <Button variant="outline" onClick={() => setSubmitted(false)} className="mt-2">

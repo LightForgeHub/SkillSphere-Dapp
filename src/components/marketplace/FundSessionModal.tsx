@@ -94,7 +94,7 @@ export default function FundSessionModal({
         {/* Header */}
         <div className="p-6 border-b border-purple-500/20">
           <h2 className="text-2xl font-bold">Fund Your Session</h2>
-          <p className="text-sm text-gray-400 mt-2">with {expertName}</p>
+          <p className="text-sm text-muted-foreground mt-2">with {expertName}</p>
         </div>
 
         {/* Content */}
@@ -123,7 +123,7 @@ export default function FundSessionModal({
                 </div>
 
                 {/* Custom Duration */}
-                <label className="text-xs text-gray-400 mb-2 block">Custom Duration (minutes)</label>
+                <label className="text-xs text-muted-foreground mb-2 block">Custom Duration (minutes)</label>
                 <input
                   type="number"
                   min="15"
@@ -138,11 +138,11 @@ export default function FundSessionModal({
               {/* Price Breakdown */}
               <div className="bg-purple-600/10 border border-purple-500/20 rounded-lg p-4 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Hourly Rate</span>
+                  <span className="text-muted-foreground">Hourly Rate</span>
                   <span>${hourlyRate}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Duration</span>
+                  <span className="text-muted-foreground">Duration</span>
                   <span>{duration} minutes</span>
                 </div>
                 <div className="border-t border-purple-500/20 pt-3 flex justify-between font-bold">
@@ -170,15 +170,15 @@ export default function FundSessionModal({
               {/* Summary */}
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Expert</span>
+                  <span className="text-muted-foreground">Expert</span>
                   <span className="font-semibold">{expertName}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Duration</span>
+                  <span className="text-muted-foreground">Duration</span>
                   <span className="font-semibold">{duration} minutes</span>
                 </div>
                 <div className="flex justify-between items-center pb-4 border-b border-purple-500/20">
-                  <span className="text-gray-400">Total Amount</span>
+                  <span className="text-muted-foreground">Total Amount</span>
                   <span className="font-semibold text-lg text-purple-400">${amount.toFixed(2)} XLM</span>
                 </div>
               </div>
@@ -187,7 +187,7 @@ export default function FundSessionModal({
 
               {/* Wallet Info */}
               <div className="bg-blue-600/10 border border-blue-500/20 rounded-lg p-4">
-                <p className="text-sm text-gray-300">
+                <p className="text-sm text-muted-foreground">
                   You will be prompted to confirm this transaction via Freighter Wallet.
                 </p>
               </div>
@@ -227,7 +227,7 @@ export default function FundSessionModal({
               {/* Success Message */}
               <div>
                 <h3 className="text-2xl font-bold mb-2">Session Funded!</h3>
-                <p className="text-gray-400 text-sm mb-4">
+                <p className="text-muted-foreground text-sm mb-4">
                   ${amount.toFixed(2)} XLM has been escrowed for your session with {expertName}
                 </p>
                 <div className="bg-purple-600/10 border border-purple-500/20 rounded-lg p-3 text-xs">
@@ -236,7 +236,7 @@ export default function FundSessionModal({
               </div>
 
               {/* Redirect Notice */}
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-muted-foreground">
                 Redirecting to session room...
               </p>
             </div>

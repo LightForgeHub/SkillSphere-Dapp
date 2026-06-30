@@ -7,7 +7,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const [open, setOpen] = React.useState(false)
 
   return (
-    <div className="min-h-screen bg-[#05010d]">
+    <div className="min-h-screen bg-background">
       <DashboardTopBar onToggleMenu={() => setOpen((v) => !v)} />
 
       <MobileDrawer isOpen={open} onClose={() => setOpen(false)} />
@@ -21,7 +21,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           </aside>
 
           <main className="flex-1 mt-6 md:mt-0">
-            <div className="bg-black rounded-lg shadow-sm p-6 min-h-[400px]">{children}</div>
+            <div className="bg-card rounded-lg shadow-sm p-6 min-h-[400px]">{children}</div>
           </main>
         </div>
       </div>
