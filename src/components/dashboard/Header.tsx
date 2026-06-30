@@ -3,6 +3,8 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { safeLocalStorage } from "@/utils/safeLocalStorage"
+import ExpertStats from "./ExpertStats"
+
 const profiles = [
   { id: "nora", name: "Miss Nora" },
   { id: "sam", name: "Mr Sam" },
@@ -71,6 +73,7 @@ export default function Header({
           </div>
 
           <div className="flex items-center gap-4">
+            <ExpertStats />
         
 
             <div>
