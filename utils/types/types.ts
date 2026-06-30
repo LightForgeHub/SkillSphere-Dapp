@@ -68,6 +68,7 @@ export interface Expert {
     responseTime?: string;
     totalSessions?: number;
     walletAddress?: string;
+    lastHeartbeat?: number | null;
 }
 
 export interface Review {
