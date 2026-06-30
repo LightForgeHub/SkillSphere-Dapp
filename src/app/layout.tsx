@@ -9,7 +9,7 @@ import {
 import Script from "next/script";
 import "./globals.css";
 import NavBar from "@/components/home/layout/navbar";
-import Footer from "@/components/home/layout/footer";
+import Footer from "@/components/layout/Footer";
 import AppLayout from "@/components/layout/AppLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { WalletProvider } from "@/providers/WalletProvider";
