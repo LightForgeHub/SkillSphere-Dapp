@@ -65,7 +65,7 @@ export default function CreateWalletModal({ open, onClose }: Props) {
         </button>
 
         <h3 className="text-lg font-semibold">Connect Your Wallet</h3>
-        <p className="text-sm text-gray-300 mt-1">Choose a wallet to connect to SkillSphere.</p>
+        <p className="text-sm text-muted-foreground mt-1">Choose a wallet to connect to SkillSphere.</p>
 
         <div className="mt-6 space-y-3">
           {/* Default / Options */}
@@ -91,7 +91,7 @@ export default function CreateWalletModal({ open, onClose }: Props) {
               </div>
               <div>
                 <div className="text-sm">Connecting to {method}…</div>
-                <div className="text-xs text-gray-400">Please approve the connection in your wallet.</div>
+                <div className="text-xs text-muted-foreground">Please approve the connection in your wallet.</div>
               </div>
             </div>
           )}
@@ -102,7 +102,7 @@ export default function CreateWalletModal({ open, onClose }: Props) {
               <CheckCircle className="w-8 h-8 text-green-400" />
               <div>
                 <div className="text-sm">Connected</div>
-                <div className="text-xs text-gray-400">{method} is now connected.</div>
+                <div className="text-xs text-muted-foreground">{method} is now connected.</div>
               </div>
             </div>
           )}
@@ -113,7 +113,7 @@ export default function CreateWalletModal({ open, onClose }: Props) {
               <AlertCircle className="w-8 h-8 text-red-400" />
               <div>
                 <div className="text-sm">Connection failed</div>
-                <div className="text-xs text-gray-400">Unable to connect to {method}. Try another wallet.</div>
+                <div className="text-xs text-muted-foreground">Unable to connect to {method}. Try another wallet.</div>
               </div>
             </div>
           )}

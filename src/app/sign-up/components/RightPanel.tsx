@@ -27,12 +27,12 @@ const RightPanel = ({
     <div className="w-full lg:w-1/2 xl:w-[49%] flex items-center justify-center p-6 sm:p-8">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <h1 className="text-[#613485] dark:text-white text-4xl sm:text-5xl font-bold mb-3">
+          <h1 className="text-[#613485] dark:text-foreground text-4xl sm:text-5xl font-bold mb-3">
             Sign Up
           </h1>
-          <p className="text-gray-400 text-sm sm:text-base">
+          <p className="text-muted-foreground text-sm sm:text-base">
             Create an account on{" "}
-            <span className="text-[#613485] dark:text-white font-medium">SkillSphere</span>
+            <span className="text-[#613485] dark:text-foreground font-medium">SkillSphere</span>
           </p>
         </div>
 
@@ -40,7 +40,7 @@ const RightPanel = ({
           <button
             type="button"
             onClick={onGoogleSignUp}
-            className="w-full dark:bg-[#613485] dark:text-white bg-white text-gray-800 font-medium py-4 px-6 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors"
+            className="w-full dark:bg-[#613485] dark:text-foreground bg-background text-muted-foreground font-medium py-4 px-6 rounded-lg flex items-center justify-center gap-3 hover:bg-accent transition-colors"
           >
             <svg width="20" height="20" viewBox="0 0 20 20">
               <path
@@ -65,7 +65,7 @@ const RightPanel = ({
 
           <div className="flex items-center gap-4">
             <div className="flex-1 h-px bg-gray-700"></div>
-            <span className="text-gray-400 text-sm">or</span>
+            <span className="text-muted-foreground text-sm">or</span>
             <div className="flex-1 h-px bg-gray-700"></div>
           </div>
 
@@ -77,8 +77,8 @@ const RightPanel = ({
               onChange={onInputChange}
               placeholder="Moses"
               className={`w-full bg-transparent border ${
-                errors.email ? "border-red-500" : "border-gray-600"
-              } dark:text-white text-dark px-5 py-4 rounded-lg focus:outline-none focus:border-purple-500 transition-colors placeholder-gray-500`}
+                errors.email ? "border-red-500" : "border-border"
+              } dark:text-foreground text-dark px-5 py-4 rounded-lg focus:outline-none focus:border-purple-500 transition-colors placeholder-gray-500`}
             />
             {errors.email && (
               <p className="text-red-500 text-xs mt-1 ml-1">{errors.email}</p>
@@ -93,8 +93,8 @@ const RightPanel = ({
               onChange={onInputChange}
               placeholder="Password"
               className={`w-full bg-transparent border ${
-                errors.password ? "border-red-500" : "border-gray-600"
-              } text-white px-5 py-4 rounded-lg focus:outline-none focus:border-purple-500 transition-colors placeholder-gray-500`}
+                errors.password ? "border-red-500" : "border-border"
+              } text-foreground px-5 py-4 rounded-lg focus:outline-none focus:border-purple-500 transition-colors placeholder-gray-500`}
             />
             {errors.password && (
               <p className="text-red-500 text-xs mt-1 ml-1">
@@ -111,15 +111,15 @@ const RightPanel = ({
               onChange={onInputChange}
               placeholder="Confirm Password"
               className={`w-full bg-transparent border ${
-                errors.confirmPassword ? "border-red-500" : "border-gray-600"
-              } text-white px-5 py-4 rounded-lg focus:outline-none focus:border-purple-500 transition-colors placeholder-gray-500`}
+                errors.confirmPassword ? "border-red-500" : "border-border"
+              } text-foreground px-5 py-4 rounded-lg focus:outline-none focus:border-purple-500 transition-colors placeholder-gray-500`}
             />
             {errors.confirmPassword && (
               <p className="text-red-500 text-xs mt-1 ml-1">
                 {errors.confirmPassword}
               </p>
             )}
-            <p className="text-gray-500 text-xs mt-2 ml-1">
+            <p className="text-muted-foreground text-xs mt-2 ml-1">
               At least 8 characters
             </p>
           </div>
@@ -134,7 +134,7 @@ const RightPanel = ({
             />
             <label
               htmlFor="terms"
-              className="text-gray-400 text-sm cursor-pointer"
+              className="text-muted-foreground text-sm cursor-pointer"
             >
               By registering you agree to our{" "}
               <span className="text-[#613485] hover:underline">
@@ -154,7 +154,7 @@ const RightPanel = ({
             Sign Up
           </button></Link>
 
-          <p className="text-center text-gray-400 text-sm">
+          <p className="text-center text-muted-foreground text-sm">
             Already have and account?{" "}
             <a href="#" className="text-[#613485] hover:underline font-medium">
               Sign In

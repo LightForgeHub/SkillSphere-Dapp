@@ -13,7 +13,7 @@ export default function TrendingExpert() {
         {/* Header */}
         <div className="mb-10">
           <h2 className="text-4xl font-bold mb-2">Trending Expert Collections</h2>
-          <p className="text-gray-400 text-sm">Knowledge bundles created by top SkillSphere experts.</p>
+          <p className="text-muted-foreground text-sm">Knowledge bundles created by top SkillSphere experts.</p>
         </div>
 
         {/* Desktop View: Horizontal Scroll with Fade */}
@@ -53,10 +53,10 @@ export default function TrendingExpert() {
                       alt={collection.creator.name}
                       className="w-8 h-8 rounded-full border border-gray-600"
                     />
-                    <span className="text-sm font-medium text-white">{collection.creator.name}</span>
+                    <span className="text-sm font-medium text-foreground">{collection.creator.name}</span>
                   </div>
 
-                  <p className="text-gray-300 text-sm mb-6 line-clamp-2 max-w-sm">
+                  <p className="text-muted-foreground text-sm mb-6 line-clamp-2 max-w-sm">
                     {collection.description}
                   </p>
 
@@ -67,12 +67,12 @@ export default function TrendingExpert() {
 
                     <div className="flex space-x-6">
                       <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wider">Price</span>
-                        <span className="text-sm text-white font-bold">{collection.price}</span>
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Price</span>
+                        <span className="text-sm text-foreground font-bold">{collection.price}</span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wider">Highest Bid</span>
-                        <span className="text-sm text-white font-bold">{collection.highestBid}</span>
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Highest Bid</span>
+                        <span className="text-sm text-foreground font-bold">{collection.highestBid}</span>
                       </div>
                     </div>
                   </div>
@@ -108,17 +108,17 @@ export default function TrendingExpert() {
                         <img src={collection.creator.avatar} alt={collection.creator.name} className="w-8 h-8 rounded-full border border-gray-600" />
                         <span className="text-sm">{collection.creator.name}</span>
                       </div>
-                      <p className="text-gray-300 text-xs mb-6 line-clamp-3">
+                      <p className="text-muted-foreground text-xs mb-6 line-clamp-3">
                         {collection.description}
                       </p>
                       <div className="flex flex-col gap-4">
                         <div className="flex items-center justify-between">
                           <div className="flex flex-col">
-                            <span className="text-[10px] text-gray-500 uppercase font-mono">Price</span>
+                            <span className="text-[10px] text-muted-foreground uppercase font-mono">Price</span>
                             <span className="text-sm font-bold">{collection.price}</span>
                           </div>
                           <div className="flex flex-col text-right">
-                            <span className="text-[10px] text-gray-500 uppercase font-mono">Highest Bid</span>
+                            <span className="text-[10px] text-muted-foreground uppercase font-mono">Highest Bid</span>
                             <span className="text-sm font-bold">{collection.highestBid}</span>
                           </div>
                         </div>

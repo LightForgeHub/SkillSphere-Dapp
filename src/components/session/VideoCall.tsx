@@ -111,7 +111,7 @@ export default function VideoCall({
             </div>
 
             {/* Expert Name Overlay */}
-            <div className="absolute bottom-2 left-2 text-white text-xs font-semibold flex items-center gap-2">
+            <div className="absolute bottom-2 left-2 text-foreground text-xs font-semibold flex items-center gap-2">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
               {expertName}
             </div>
@@ -182,11 +182,11 @@ export default function VideoCall({
           {/* Status Badge - Expert */}
           <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg">
             <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="font-semibold text-white">Expert</span>
+            <span className="font-semibold text-foreground">Expert</span>
           </div>
 
           {/* Call Duration */}
-          <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg font-mono text-white">
+          <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg font-mono text-foreground">
             {formatTime(callDuration)}
           </div>
 
@@ -219,7 +219,7 @@ export default function VideoCall({
           {/* Status Badge - Seeker */}
           <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg">
             <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="font-semibold text-white">{isScreenSharing ? "Your Screen" : "You"}</span>
+            <span className="font-semibold text-foreground">{isScreenSharing ? "Your Screen" : "You"}</span>
           </div>
 
           {/* Gradient Overlay */}
@@ -230,7 +230,7 @@ export default function VideoCall({
       {/* Toast Notification */}
       {toastMessage && (
         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
-          <div className="bg-purple-900/90 text-white px-4 py-2 rounded-full shadow-lg border border-purple-500/50 text-sm flex items-center gap-2">
+          <div className="bg-purple-900/90 text-foreground px-4 py-2 rounded-full shadow-lg border border-purple-500/50 text-sm flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
             {toastMessage}
           </div>

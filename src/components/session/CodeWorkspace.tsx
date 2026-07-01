@@ -29,7 +29,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#1e1e1e] rounded-lg overflow-hidden border border-white/10">
+    <div className="flex flex-col h-full bg-card rounded-lg overflow-hidden border border-white/10">
       <div className="flex items-center justify-between px-4 py-2 bg-black/40 border-b border-white/10">
         <div className="flex items-center gap-3">
           <Code2 className="size-4 text-white/50" />
@@ -39,7 +39,7 @@ export const CodeWorkspace: React.FC<CodeWorkspaceProps> = ({ onClose }) => {
             className="bg-transparent text-sm text-white/80 focus:outline-none cursor-pointer"
           >
             {LANGUAGES.map((lang) => (
-              <option key={lang.id} value={lang.id} className="bg-[#1e1e1e]">
+              <option key={lang.id} value={lang.id} className="bg-card">
                 {lang.name}
               </option>
             ))}

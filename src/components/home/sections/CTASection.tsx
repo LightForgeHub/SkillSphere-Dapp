@@ -32,7 +32,7 @@ export function CTASection() {
          
             <div className="text-center lg:text-left flex justify-center ">
               <div className="p-6 sm:p-8 lg:p-10">
-                <p className="text-xs sm:text-sm text-gray-400 mb-3 font-work">
+                <p className="text-xs sm:text-sm text-muted-foreground mb-3 font-work">
                   Ready To Tokenize Your Time Or Book The Best?
                 </p>
 
@@ -43,7 +43,7 @@ export function CTASection() {
                 </h2>
 
                 <div className="flex flex-col md:flex-row items-center justify-center lg:justify-start gap-4 md:gap-0   md:max-w-sm ">
-                  <button className="px-8 py-4 bg-white text-black font-bold font-work rounded-3xl md:rounded-r-none hover:bg-gray-300 transition-colors w-full md:w-auto z-10 cursor-pointer">
+                  <button className="px-8 py-4 bg-background text-foreground font-bold font-work rounded-3xl md:rounded-r-none hover:bg-accent transition-colors w-full md:w-auto z-10 cursor-pointer">
                     Join As Expert
                   </button>
 

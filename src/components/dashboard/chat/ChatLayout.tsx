@@ -88,7 +88,7 @@ export default function ChatLayout() {
         w-full max-w-[756px]
         h-[732px]
         mx-auto
-        bg-[#101110]
+        bg-background
         border border-[#252625]
         rounded-xl
         overflow-hidden
