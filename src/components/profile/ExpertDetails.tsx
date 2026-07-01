@@ -1,8 +1,8 @@
 "use client";
 
 import React from 'react';
-import { Star, MapPin, Clock, CheckCircle } from 'lucide-react';
-import { Expert, Review } from '@/utils/types/types';
+import { Star, Clock, CheckCircle } from 'lucide-react';
+import { Expert } from '@/utils/types/types';
 
 // ── Rating Breakdown Panel ──────────────────────────────────────────────────
 
@@ -191,7 +191,7 @@ export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProp
                   ))}
                 </div>
                 <span className="font-semibold">{expert.rating}</span>
-                <span className="text-gray-400">({expert.reviews} reviews)</span>
+                <span className="text-muted-foreground">({expert.reviews} reviews)</span>
               </div>
             </div>
 
@@ -199,15 +199,15 @@ export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProp
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="bg-black/30 rounded-lg p-4">
                 <div className="text-2xl font-bold text-purple-400">{expert.totalSessions}</div>
-                <div className="text-sm text-gray-400">Total Sessions</div>
+                <div className="text-sm text-muted-foreground">Total Sessions</div>
               </div>
               <div className="bg-black/30 rounded-lg p-4">
                 <div className="text-2xl font-bold text-purple-400">{expert.hourlyRate}</div>
-                <div className="text-sm text-gray-400">Hourly Rate</div>
+                <div className="text-sm text-muted-foreground">Hourly Rate</div>
               </div>
               <div className="bg-black/30 rounded-lg p-4">
                 <div className="text-2xl font-bold text-purple-400">{expert.reviews}</div>
-                <div className="text-sm text-gray-400">Positive Reviews</div>
+                <div className="text-sm text-muted-foreground">Positive Reviews</div>
               </div>
             </div>
 
@@ -216,12 +216,12 @@ export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProp
               <button
                 onClick={onBookClick}
                 disabled={expert.is_busy}
-                className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 disabled:hover:scale-100"
+                className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-border disabled:to-border disabled:cursor-not-allowed rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 disabled:hover:scale-100"
               >
                 Book Session
               </button>
               {expert.is_busy && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-gray-200 text-xs rounded-lg shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-card text-muted-foreground text-xs rounded-lg shadow-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                   Expert is currently in another consultation. Please try again later.
                   <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
                 </div>
@@ -235,7 +235,7 @@ export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProp
       {expert.bio && (
         <div className="bg-gradient-to-br from-purple-600/5 to-pink-600/5 border border-purple-500/20 rounded-xl p-6 mb-8">
           <h2 className="text-2xl font-bold mb-4">About</h2>
-          <p className="text-gray-300 leading-relaxed">{expert.bio}</p>
+          <p className="text-muted-foreground leading-relaxed">{expert.bio}</p>
         </div>
       )}
 
@@ -280,18 +280,18 @@ export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProp
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-semibold">{review.reviewer}</h3>
-                      <span className="text-sm text-gray-400">{review.date}</span>
+                      <span className="text-sm text-muted-foreground">{review.date}</span>
                     </div>
                     <div className="flex gap-1 mb-2">
                       {[...Array(5)].map((_, i) => (
                         <Star
                           key={i}
                           size={16}
-                          className={i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-500'}
+                          className={i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}
                         />
                       ))}
                     </div>
-                    <p className="text-gray-300">{review.comment}</p>
+                    <p className="text-muted-foreground">{review.comment}</p>
                   </div>
                 </div>
               </div>

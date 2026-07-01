@@ -22,7 +22,7 @@ export function AboutSection({ value, onChange, className }: AboutSectionProps) 
 
   return (
     <div className={className}>
-      <div className="bg-[#161716] border-none rounded-2xl p-3 md:p-4 min-h-[100px] transition-colors group">
+      <div className="bg-card border-none rounded-2xl p-3 md:p-4 min-h-[100px] transition-colors group">
         <div className="flex items-center justify-between mb-3 text-sm">
           <label className="text-base font-medium text-white tracking-tight font-sans">About</label>
           <div className="flex items-center gap-3 text-white/40">

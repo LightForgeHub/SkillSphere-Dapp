@@ -6,6 +6,7 @@ import { Wallet, LogOut, Copy, Check, Menu, X, Zap } from "lucide-react";
 import { useWallet } from "@/providers/WalletProvider";
 import { useModal } from "@/providers/ModalProvider";
 import { useCurrency, type DisplayCurrency } from "@/hooks/useCurrency";
+import NotificationHub from "./NotificationHub";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
     return (
       <div className="flex flex-col items-end gap-1">
         <button
+          data-tour="wallet-connect"
           onClick={() => openModal("connectWallet")}
           disabled={isLoading}
           className="flex items-center gap-2 rounded-lg border border-violet-500/50 bg-violet-600/20 px-4 py-2 text-sm font-medium text-violet-200 transition-all hover:bg-violet-600/40 hover:border-violet-400 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -211,6 +213,13 @@ export default function Navbar() {
             <Link
               key={href}
               href={href}
+              data-tour={
+                label === "Explore"
+                  ? "expert-search"
+                  : label === "Sessions"
+                  ? "escrow-flow"
+                  : undefined
+              }
               className="text-sm font-medium text-zinc-400 hover:text-zinc-100 transition-colors"
             >
               {label}
@@ -233,6 +242,9 @@ export default function Navbar() {
               </option>
             ))}
           </select>
+
+          {/* Notification Hub */}
+          {address && <NotificationHub />}
 
           <WalletButton convert={convert} selectedCurrency={selectedCurrency} />
 

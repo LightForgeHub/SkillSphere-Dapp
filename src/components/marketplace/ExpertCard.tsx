@@ -44,7 +44,7 @@ export default function ExpertCard({ expert }: ExpertCardProps) {
           <h3 className="text-xl font-bold mb-1 group-hover:text-purple-400 transition-colors">
             {expert.name}
           </h3>
-          <p className="text-sm text-gray-400 mb-4">{expert.category}</p>
+          <p className="text-sm text-muted-foreground mb-4">{expert.category}</p>
 
           {/* Rating */}
           <div className="flex items-center gap-2 mb-4">
@@ -53,12 +53,12 @@ export default function ExpertCard({ expert }: ExpertCardProps) {
                 <Star
                   key={i}
                   size={16}
-                  className={i < Math.floor(expert.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-500'}
+                  className={i < Math.floor(expert.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}
                 />
               ))}
             </div>
             <span className="text-sm font-semibold">{expert.rating}</span>
-            <span className="text-xs text-gray-500">({expert.reviews})</span>
+            <span className="text-xs text-muted-foreground">({expert.reviews})</span>
           </div>
 
           {/* Rate and Availability */}
@@ -95,7 +95,7 @@ export default function ExpertCard({ expert }: ExpertCardProps) {
           </div>
 
           {/* Response Time */}
-          <div className="flex items-center gap-2 text-sm text-gray-400">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock size={16} className="text-blue-400" />
             <span>Responds in {expert.responseTime}</span>
           </div>

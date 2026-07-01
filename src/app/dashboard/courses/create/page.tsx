@@ -9,11 +9,11 @@ import { cn } from "@/components/ui/utils";
 
 const lbl = "block text-[#FCFCFC] text-sm font-normal leading-6 mb-2";
 const baseInput =
-  "bg-[#1A1520] border-white/5 text-white placeholder:text-white/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
+  "bg-card border-white/5 text-foreground placeholder:text-foreground/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
 const errorInput =
   "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20";
 const baseTextarea =
-  "w-full bg-[#1A1520] border border-white/5 rounded-xl p-4 text-white placeholder:text-white/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all resize-none";
+  "w-full bg-card border border-white/5 rounded-xl p-4 text-foreground placeholder:text-foreground/20 outline-none focus:ring-2 focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50 transition-all resize-none";
 const errorTextarea = "border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20";
 
 let nextId = 2;
@@ -55,7 +55,7 @@ export default function CreateCoursePage() {
     setSections((prev) => prev.filter((s) => s.id !== id));
 
   return (
-    <div className="min-h-screen bg-[#05010d] text-white/90 p-4 md:p-5 space-y-8 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-background text-foreground/90 p-4 md:p-5 space-y-8 max-w-7xl mx-auto">
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
         {/* Left Column */}
@@ -123,7 +123,7 @@ export default function CreateCoursePage() {
           <Button
             variant="secondary"
             onClick={addSection}
-            className="bg-transparent border-white/10 hover:bg-white/5 text-white h-12 px-12 uppercase font-bold text-xs tracking-wider"
+            className="bg-transparent border-white/10 hover:bg-white/5 text-foreground h-12 px-12 uppercase font-bold text-xs tracking-wider"
           >
             <Plus className="mr-2 w-4 h-4" />
             Add Section
