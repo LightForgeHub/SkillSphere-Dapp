@@ -23,7 +23,7 @@ export default function AvailabilityToggle({
     <Card className="p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white mb-1">Availability Status</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-1">Availability Status</h3>
           <p className="text-sm text-slate-400">
             {isAvailable
               ? "You are currently available for sessions"

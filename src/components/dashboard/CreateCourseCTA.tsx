@@ -36,7 +36,7 @@ export function CreateCourseCTA() {
               lineHeight: '24px',
               letterSpacing: '0%',
               textAlign: 'center',
-              color: '#94a3b8'
+              color: 'var(--muted-foreground)'
             }}
           >
             Create a new course, publish for new learners, and earn an income.
@@ -56,14 +56,14 @@ export function CreateCourseCTA() {
             }}
             onClick={() => router.push("/dashboard/courses/create")}
           >
-            <Plus className="size-full text-white/70" />
+            <Plus className="size-full text-foreground/70" />
           </div>
 
           
           <Button 
             variant="secondary" 
             size="lg"
-            className="uppercase tracking-wider font-bold text-sm h-14 px-8 bg-[#2D2D2D] hover:bg-[#3D3D3D] text-white border-none"
+            className="uppercase tracking-wider font-bold text-sm h-14 px-8 bg-card hover:bg-card text-foreground border-none"
             onClick={() => router.push("/dashboard/courses/create")}
           >
             <Plus className="mr-2 size-5" />

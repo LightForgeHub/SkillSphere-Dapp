@@ -24,13 +24,13 @@ export default function OverviewTabContent({
   ],
 }: OverviewTabContentProps) {
   return (
-    <div className="flex flex-col self-stretch w-full bg-[#1A1520] border border-[#1D1D1C] rounded-[12px] p-6 gap-8 text-white">
+    <div className="flex flex-col self-stretch w-full bg-card border border-border rounded-[12px] p-6 gap-8 text-foreground">
       <div className="space-y-4">
         <h3 className="text-base font-semibold">Course Overview</h3>
-        <p className="text-sm leading-relaxed text-white/80">{overview}</p>
+        <p className="text-sm leading-relaxed text-foreground/80">{overview}</p>
       </div>
 
-      <Separator className="bg-[#1D1D1C]" />
+      <Separator className="bg-card" />
 
       <div className="space-y-4">
         <h3 className="text-base font-semibold">What You Will Learn</h3>
@@ -38,13 +38,13 @@ export default function OverviewTabContent({
           {learningPoints.map((point, index) => (
             <li key={index} className="flex gap-3">
               <span className="mt-1 size-2 rounded-full bg-white/40 shrink-0" />
-              <span className="text-white/80">{point}</span>
+              <span className="text-foreground/80">{point}</span>
             </li>
           ))}
         </ul>
       </div>
 
-      <Separator className="bg-[#1D1D1C]" />
+      <Separator className="bg-card" />
 
       <div className="space-y-4">
         <h3 className="text-base font-semibold">Who This Course Is For</h3>
@@ -52,7 +52,7 @@ export default function OverviewTabContent({
           {targetAudience.map((audience, index) => (
             <li key={index} className="flex gap-3">
               <span className="mt-1 size-2 rounded-full bg-white/40 shrink-0" />
-              <span className="text-white/80">{audience}</span>
+              <span className="text-foreground/80">{audience}</span>
             </li>
           ))}
         </ul>

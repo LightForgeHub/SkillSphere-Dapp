@@ -5,12 +5,6 @@ import { Percent } from "lucide-react"
 import EarningsTable, { EarningTransaction } from "@/components/dashboard/EarningsTable"
 import FilterTabs, { TimeRange } from "@/components/dashboard/FilterTabs"
 
-const EARNINGS_DATA: Record<TimeRange, string> = {
-  "All-Time": "$1,500",
-  "Weekly": "$450",
-  "Monthly": "$1,200",
-}
-
 const TAB_OPTIONS: TimeRange[] = ["All-Time", "Weekly", "Monthly"]
 
 // All transactions with dates
@@ -107,13 +101,13 @@ export default function EarningsPage() {
       />
 
       {/* Earnings Card */}
-      <div className="w-full max-w-md bg-[#111113] rounded-2xl p-8 border border-[#1C1C1E] flex items-center gap-6 shadow-2xl">
-        <div className="w-16 h-16 rounded-full bg-[#1E2D3D] flex items-center justify-center">
+      <div className="w-full max-w-md bg-background rounded-2xl p-8 border border-border flex items-center gap-6 shadow-2xl">
+        <div className="w-16 h-16 rounded-full bg-card flex items-center justify-center">
           <Percent className="w-8 h-8 text-[#3B82F6]" />
         </div>
 
         <div className="flex flex-col">
-          <span className="text-4xl font-bold text-white tracking-tight">
+          <span className="text-4xl font-bold text-foreground tracking-tight">
             {totalEarnings}
           </span>
           <span className="text-slate-400 text-sm mt-1">Total Earnings</span>

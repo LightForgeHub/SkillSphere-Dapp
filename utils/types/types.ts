@@ -59,7 +59,7 @@ export interface Expert {
     category: string;
     rating: number;
     reviews: number;
-    hourlyRate: string;
+    hourlyRate: number;
     availability: boolean;
     is_busy?: boolean;
     bio?: string;
@@ -68,6 +68,7 @@ export interface Expert {
     responseTime?: string;
     totalSessions?: number;
     walletAddress?: string;
+    lastHeartbeat?: number | null;
 }
 
 export interface Review {

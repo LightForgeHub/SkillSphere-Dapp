@@ -18,7 +18,7 @@ export default function ContactInfo() {
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-2xl font-bold font-space-grotesk mb-2">Get in Touch</h2>
-        <p className="text-gray-400 font-inter text-sm">
+        <p className="text-muted-foreground font-inter text-sm">
           Have a question or need support? Reach out and our team will respond promptly.
         </p>
       </div>
@@ -30,7 +30,7 @@ export default function ContactInfo() {
             <Mail className="w-5 h-5 text-purple-400" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-gray-400 font-inter mb-1">Support Email</p>
+            <p className="text-xs text-muted-foreground font-inter mb-1">Support Email</p>
             <div className="flex items-center gap-2 flex-wrap">
               <a
                 href={`mailto:${SUPPORT_EMAIL}`}
@@ -40,7 +40,7 @@ export default function ContactInfo() {
               </a>
               <button
                 onClick={copyEmail}
-                className="p-1 rounded hover:bg-white/10 transition-colors text-gray-400 hover:text-purple-400 shrink-0"
+                className="p-1 rounded hover:bg-white/10 transition-colors text-muted-foreground hover:text-purple-400 shrink-0"
                 title="Copy email"
               >
                 {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
@@ -55,7 +55,7 @@ export default function ContactInfo() {
             <Phone className="w-5 h-5 text-purple-400" />
           </div>
           <div>
-            <p className="text-xs text-gray-400 font-inter mb-1">Phone</p>
+            <p className="text-xs text-muted-foreground font-inter mb-1">Phone</p>
             <p className="text-sm font-medium">+1 (800) 555-0199</p>
           </div>
         </div>
@@ -66,7 +66,7 @@ export default function ContactInfo() {
             <MapPin className="w-5 h-5 text-purple-400" />
           </div>
           <div>
-            <p className="text-xs text-gray-400 font-inter mb-1">Location</p>
+            <p className="text-xs text-muted-foreground font-inter mb-1">Location</p>
             <p className="text-sm font-medium">Remote — Worldwide</p>
           </div>
         </div>

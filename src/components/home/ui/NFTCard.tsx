@@ -19,7 +19,7 @@ export function NFTCard({
 }: NFTCardProps) {
   return (
     <div
-      className="bg-[#22172b] flex flex-col flex-1 min-w-[260px] rounded-[20px] overflow-hidden hover:scale-105 transition-transform duration-300 cursor-pointer group"
+      className="bg-card flex flex-col flex-1 min-w-[260px] rounded-[20px] overflow-hidden hover:scale-105 transition-transform duration-300 cursor-pointer group"
       role="article"
       aria-label={`NFT: ${title} by ${creatorName}`}
     >
@@ -38,7 +38,7 @@ export function NFTCard({
       <div className="flex flex-col gap-[25px] p-[30px] pb-[25px]">
         {/* Title and Creator */}
         <div className="flex flex-col gap-[5px]">
-          <h3 className="font-work font-semibold text-[22px] leading-[1.4] text-white capitalize">
+          <h3 className="font-work font-semibold text-[22px] leading-[1.4] text-foreground capitalize">
             {title}
           </h3>
           <div className="flex gap-[12px] items-center">
@@ -51,7 +51,7 @@ export function NFTCard({
                 src={creatorAvatar}
               />
             </div>
-            <p className="font-mono text-[16px] leading-[1.4] text-white">
+            <p className="font-mono text-[16px] leading-[1.4] text-foreground">
               {creatorName}
             </p>
           </div>
@@ -63,7 +63,7 @@ export function NFTCard({
             <p className="font-mono text-[12px] leading-[1.1] text-[#858584]">
               Price
             </p>
-            <p className="font-mono text-[16px] leading-[1.4] text-white">
+            <p className="font-mono text-[16px] leading-[1.4] text-foreground">
               {price}
             </p>
           </div>
@@ -71,7 +71,7 @@ export function NFTCard({
             <p className="font-mono text-[12px] leading-[1.1] text-[#858584]">
               Highest Bid
             </p>
-            <p className="font-mono text-[16px] leading-[1.4] text-white">
+            <p className="font-mono text-[16px] leading-[1.4] text-foreground">
               {highestBid}
             </p>
           </div>
@@ -85,24 +85,24 @@ export function NFTCard({
 // Skeleton component for loading states
 export function NFTCardSkeleton() {
   return (
-    <div className="bg-[#22172b] flex flex-col flex-1 min-w-[260px] rounded-[20px] overflow-hidden animate-pulse">
-      <div className="w-full h-[295px] bg-[#2d1f38]" />
+    <div className="bg-card flex flex-col flex-1 min-w-[260px] rounded-[20px] overflow-hidden animate-pulse">
+      <div className="w-full h-[295px] bg-card" />
       <div className="flex flex-col gap-[25px] p-[30px] pb-[25px]">
         <div className="flex flex-col gap-[5px]">
-          <div className="h-[30px] bg-[#2d1f38] rounded w-3/4" />
+          <div className="h-[30px] bg-card rounded w-3/4" />
           <div className="flex gap-[12px] items-center">
-            <div className="w-[24px] h-[24px] rounded-full bg-[#2d1f38]" />
-            <div className="h-[22px] bg-[#2d1f38] rounded w-[100px]" />
+            <div className="w-[24px] h-[24px] rounded-full bg-card" />
+            <div className="h-[22px] bg-card rounded w-[100px]" />
           </div>
         </div>
         <div className="flex justify-between items-start">
           <div className="flex flex-col gap-[8px] flex-1">
-            <div className="h-[14px] bg-[#2d1f38] rounded w-[40px]" />
-            <div className="h-[22px] bg-[#2d1f38] rounded w-[80px]" />
+            <div className="h-[14px] bg-card rounded w-[40px]" />
+            <div className="h-[22px] bg-card rounded w-[80px]" />
           </div>
           <div className="flex flex-col gap-[8px] flex-1">
-            <div className="h-[14px] bg-[#2d1f38] rounded w-[80px] ml-auto" />
-            <div className="h-[22px] bg-[#2d1f38] rounded w-[90px] ml-auto" />
+            <div className="h-[14px] bg-card rounded w-[80px] ml-auto" />
+            <div className="h-[22px] bg-card rounded w-[90px] ml-auto" />
           </div>
         </div>
       </div>

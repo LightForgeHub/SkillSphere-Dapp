@@ -17,14 +17,14 @@ export default function MessageBubble({ text, time, sender, isRead = false }: Me
           max-w-[420px] rounded-xl px-4 py-3
           ${isUser
             ? "bg-[#2D3B2D] rounded-br-sm"
-            : "bg-[#1A1B1A] rounded-bl-sm"
+            : "bg-card rounded-bl-sm"
           }
         `}
       >
         <p className="text-sm leading-[1.6] text-[#D4D4D4]">{text}</p>
 
         <div className={`flex items-center gap-1.5 mt-1.5 ${isUser ? "justify-end" : "justify-start"}`}>
-          <span className="text-[11px] text-[#7A7A7A]">{time}</span>
+          <span className="text-[11px] text-muted-foreground">{time}</span>
 
           {isRead && (
             <svg

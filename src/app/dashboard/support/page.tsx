@@ -25,7 +25,7 @@ const FAQ_ITEMS: FAQItem[] = [
     subtitle: "How earnings are calculated & withdrawal process",
     content: (
       <div className="space-y-4">
-        <p>Your earnings are tracked in real-time. Here's what you need to know:</p>
+        <p>Your earnings are tracked in real-time. Here&apos;s what you need to know:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Earnings distribution based on student enrollments and engagement</li>
           <li>Withdrawal options including directly to your blockchain wallet</li>
@@ -89,7 +89,7 @@ export default function SupportPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Support & FAQ</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Support & FAQ</h1>
         <p className="mt-2 text-slate-400">
           Need help? Browse our frequently asked questions or contact our support team.
         </p>
@@ -100,11 +100,11 @@ export default function SupportPage() {
       </div>
 
       <div className="pt-6 border-t border-[#2D2E2D]">
-        <h3 className="text-lg font-medium text-white">Still need help?</h3>
+        <h3 className="text-lg font-medium text-foreground">Still need help?</h3>
         <p className="mt-2 text-slate-400">
-          If you can't find what you're looking for, our support team is available 24/7.
+          If you can&apos;t find what you&apos;re looking for, our support team is available 24/7.
         </p>
-        <button className="mt-4 px-6 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors">
+        <button className="mt-4 px-6 py-2 bg-primary hover:bg-primary/90 text-foreground rounded-lg transition-colors">
           Contact Support
         </button>
       </div>
