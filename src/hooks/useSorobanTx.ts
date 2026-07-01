@@ -14,7 +14,7 @@ export function useSorobanTx() {
   const [step, setStep] = useState<TxStep>(TxStep.IDLE);
   const [error, setError] = useState<string | null>(null);
 
-  const executeTx = useCallback(async (txFunction: () => Promise<any>) => {
+  const executeTx = useCallback(async (txFunction: () => Promise<unknown>) => {
     try {
       setError(null);
       
@@ -35,8 +35,8 @@ export function useSorobanTx() {
       await txFunction();
       
       setStep(TxStep.SUCCESS);
-    } catch (err: any) {
-      setError(err.message || 'Transaction failed');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Transaction failed');
       setStep(TxStep.ERROR);
     }
   }, []);

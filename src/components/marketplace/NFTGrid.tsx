@@ -75,7 +75,7 @@ export default function NFTGrid() {
                     </div>
                 ) : (
                     <div className="text-center py-20">
-                        <p className="text-gray-400 text-lg">No NFTs found matching your filters.</p>
+                        <p className="text-muted-foreground text-lg">No NFTs found matching your filters.</p>
                         <button
                             onClick={() => {
                                 setCategory('All Categories');

@@ -25,13 +25,13 @@ export default function PaymentNotificationItem({
     >
       <div className="flex items-center gap-4 flex-1 min-w-0">
         {/* Wallet Icon Wrapper */}
-        <div className="shrink-0 w-12 h-12 rounded-full bg-[#1C1628] md:bg-white/5 flex items-center justify-center border border-white/5">
-          <Wallet className="w-5 h-5 text-gray-200" />
+        <div className="shrink-0 w-12 h-12 rounded-full bg-card md:bg-white/5 flex items-center justify-center border border-border">
+          <Wallet className="w-5 h-5 text-muted-foreground" />
         </div>
 
         {/* Text Description */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm md:text-[15px] font-medium text-gray-200 truncate">
+          <p className="text-sm md:text-[15px] font-medium text-muted-foreground truncate">
             {amount} was paid to your account by {source}
           </p>
         </div>
@@ -39,7 +39,7 @@ export default function PaymentNotificationItem({
 
       {/* Timestamp */}
       <div className="shrink-0 ml-2 sm:ml-4">
-        <span className="text-xs md:text-sm text-gray-400 whitespace-nowrap">
+        <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">
           {timestamp}
         </span>
       </div>

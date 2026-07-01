@@ -45,8 +45,8 @@ export const TxProgressStepper: React.FC<TxProgressStepperProps> = ({ step, erro
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96 shadow-xl">
-        <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Transaction Progress</h3>
+      <div className="bg-background dark:bg-card rounded-lg p-6 w-96 shadow-xl">
+        <h3 className="text-xl font-semibold mb-4 text-foreground">Transaction Progress</h3>
         
         {error ? (
           <div className="text-red-500 mb-4">
@@ -67,11 +67,11 @@ export const TxProgressStepper: React.FC<TxProgressStepperProps> = ({ step, erro
               return (
                 <div key={idx} className="flex items-center space-x-3">
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm
-                    ${isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-blue-500 text-white' : 'bg-gray-300 text-gray-600'}`}
+                    ${isCompleted ? 'bg-green-500 text-white' : isCurrent ? 'bg-blue-500 text-white' : 'bg-gray-300 text-muted-foreground'}`}
                   >
                     {isCompleted ? '✓' : (idx + 1)}
                   </div>
-                  <span className={`${isCurrent ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}`}>
+                  <span className={`${isCurrent ? 'font-medium text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}>
                     {s.label}
                   </span>
                 </div>

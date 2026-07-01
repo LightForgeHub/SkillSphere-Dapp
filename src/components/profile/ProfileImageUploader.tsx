@@ -47,7 +47,7 @@ export function ProfileImageUploader({
             src={preview} 
             className="object-cover"
           />
-          <AvatarFallback className="bg-[#2D2D2D] text-white/40">
+          <AvatarFallback className="bg-card text-white/40">
             {preview ? "..." : <Camera className="w-6 h-6" />}
           </AvatarFallback>
         </Avatar>

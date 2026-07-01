@@ -1,8 +1,6 @@
 "use client"
 import React from "react"
 import { cn } from "@/components/ui/utils"
-import { motion, AnimatePresence } from "framer-motion"
-import { ChevronDown } from "lucide-react"
 
 // Note: Framer motion is not in package.json, so I'll use CSS transitions instead
 // to stick to the existing tech stack as much as possible, or I can try to use 
@@ -25,11 +23,11 @@ export const SupportAccordionItem: React.FC<SupportAccordionItemProps> = ({
     onToggle,
 }) => {
     return (
-        <div className="border-b border-[#2D2E2D]">
+        <div className="border-b border-border">
             <div
                 className={cn(
-                    "flex items-center justify-between py-[12px] px-[24px] cursor-pointer transition-colors duration-200 group hover:bg-[#1A1A1A]",
-                    isOpen && "bg-[#1A1A1A]/50"
+                    "flex items-center justify-between py-[12px] px-[24px] cursor-pointer transition-colors duration-200 group hover:bg-card",
+                    isOpen && "bg-card/50"
                 )}
                 onClick={onToggle}
             >
@@ -44,14 +42,14 @@ export const SupportAccordionItem: React.FC<SupportAccordionItemProps> = ({
 
                 <button
                     className={cn(
-                        "flex items-center justify-center px-[12px] py-[6px] rounded-[48px] border border-[#2D2E2D] min-w-[64px] h-[26px] transition-all duration-200 hover:border-[#444444]",
+                        "flex items-center justify-center px-[12px] py-[6px] rounded-[48px] border border-border min-w-[64px] h-[26px] transition-all duration-200 hover:border-[#444444]",
                         isOpen && "bg-white border-white"
                     )}
                 >
                     <span
                         className={cn(
                             "text-[12px] font-normal leading-[14px]",
-                            isOpen ? "text-black" : "text-white"
+                            isOpen ? "text-black" : "text-foreground"
                         )}
                     >
                         {isOpen ? "Close" : "Expand"}
