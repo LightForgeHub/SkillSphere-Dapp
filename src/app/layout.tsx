@@ -12,6 +12,7 @@ import NavBar from "@/components/home/layout/navbar";
 import Footer from "@/components/layout/Footer";
 import AppLayout from "@/components/layout/AppLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { AuthProvider } from "@/providers/AuthProvider";
 import { WalletProvider } from "@/providers/WalletProvider";
 import { ModalProvider } from "@/providers/ModalProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
@@ -134,21 +135,20 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <QueryProvider>
-            <WalletProvider>
-              <ModalProvider>
-                <OnboardingProvider>
-                  <OnboardingTour />
+          <AuthProvider>
+            <QueryProvider>
+              <WalletProvider>
+                <ModalProvider>
                   <AppLayout
                     headerSlot={<NavBar />}
                     footerSlot={<Footer />}
                   >
                     {children}
                   </AppLayout>
-                </OnboardingProvider>
-              </ModalProvider>
-            </WalletProvider>
-          </QueryProvider>
+                </ModalProvider>
+              </WalletProvider>
+            </QueryProvider>
+          </AuthProvider>
         </ThemeProvider>
         {/* Register service worker after page is interactive */}
         <Script src="/sw-register.js" strategy="afterInteractive" />
