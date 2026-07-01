@@ -16,6 +16,7 @@ import { AuthProvider } from "@/providers/AuthProvider";
 import { WalletProvider } from "@/providers/WalletProvider";
 import { ModalProvider } from "@/providers/ModalProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { DevToolsSwitcher } from "@/components/ui/DevToolsSwitcher";
 import { OnboardingProvider } from "@/providers/OnboardingProvider";
 import OnboardingTour from "@/components/layout/OnboardingTour";
 
@@ -45,7 +46,6 @@ const SpaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   weight: "400"
 })
-
 
 const workSans = Work_Sans({
   variable: "--font-work-sans",
@@ -139,12 +139,16 @@ export default function RootLayout({
             <QueryProvider>
               <WalletProvider>
                 <ModalProvider>
-                  <AppLayout
-                    headerSlot={<NavBar />}
-                    footerSlot={<Footer />}
-                  >
-                    {children}
-                  </AppLayout>
+                  <OnboardingProvider>
+                    <AppLayout
+                      headerSlot={<NavBar />}
+                      footerSlot={<Footer />}
+                    >
+                      {children}
+                      <OnboardingTour />
+                    </AppLayout>
+                    <DevToolsSwitcher />
+                  </OnboardingProvider>
                 </ModalProvider>
               </WalletProvider>
             </QueryProvider>

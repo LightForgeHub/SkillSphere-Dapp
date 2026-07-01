@@ -39,5 +39,7 @@ export {
 
 export { FileUpload } from "./FileUpload";
 export * from "./Select";
+export { DevToolsSwitcher } from "./DevToolsSwitcher";
+export type { MockProfile } from "./DevToolsSwitcher";
 export { StatusIndicator } from "./StatusIndicator";
 export type { RpcStatus, EndpointHealth } from "./StatusIndicator";
