@@ -6,6 +6,8 @@ import { useWallet } from '@/providers/WalletProvider';
 
 /** Minimum native XLM kept aside for Stellar transaction fees. */
 const MIN_XLM_FOR_FEES = 1;
+/** Platform service fee as a percentage of the session amount. */
+const PLATFORM_FEE_PERCENT = 0.02;
 
 interface FundSessionModalProps {
   expertName: string;
@@ -32,7 +34,10 @@ export default function FundSessionModal({
   const [isEstimatingRent, setIsEstimatingRent] = useState(false);
 
   const hourlyRate = parseInt(expertHourlyRate?.replace(/\D/g, '') || '50');
-  const amount = (hourlyRate * duration) / 60;
+  const depositAmount = (hourlyRate * duration) / 60;
+  const platformFee = depositAmount * PLATFORM_FEE_PERCENT;
+  const gasFee = rentFee ?? 0;
+  const totalAmount = depositAmount + gasFee + platformFee;
   const sessionId = `SESSION_${Date.now()}`;
 
   // Simulate RPC call for state rent
@@ -57,7 +62,7 @@ export default function FundSessionModal({
   }, [isOpen, duration]);
 
   const walletBalance = balance !== null ? parseFloat(balance) : null;
-  const totalRequired = amount + (rentFee || 0) + MIN_XLM_FOR_FEES;
+  const totalRequired = totalAmount + MIN_XLM_FOR_FEES;
   
   const isBalanceUnavailable =
     isLoading ||
@@ -160,24 +165,44 @@ export default function FundSessionModal({
                 />
               </div>
 
-              {/* Price Breakdown */}
-              <div className="bg-purple-600/10 border border-purple-500/20 rounded-lg p-4 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Hourly Rate</span>
-                  <span>${hourlyRate}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Duration</span>
-                  <span>{duration} minutes</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Estimated State Rent Fee</span>
-                  <span>{isEstimatingRent ? '...' : rentFee ? `${rentFee.toFixed(3)} XLM` : '0 XLM'}</span>
-                </div>
-                <div className="border-t border-purple-500/20 pt-3 flex justify-between font-bold">
-                  <span>Total Amount</span>
-                  <span className="text-purple-400">${(amount + (rentFee || 0)).toFixed(3)} XLM</span>
-                </div>
+              {/* Detailed Fee Breakdown */}
+              <div className="bg-purple-600/10 border border-purple-500/20 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-white mb-3">Fee Breakdown</h4>
+                <table className="w-full text-sm">
+                  <tbody className="space-y-2">
+                    <tr className="flex justify-between py-1.5">
+                      <td className="text-muted-foreground">Initial Deposit</td>
+                      <td className="font-medium text-white">
+                        {depositAmount.toFixed(2)} XLM
+                      </td>
+                    </tr>
+                    <tr className="flex justify-between py-1.5">
+                      <td className="text-muted-foreground">Estimated Soroban Gas</td>
+                      <td className="font-medium text-amber-400">
+                        {isEstimatingRent
+                          ? 'Estimating...'
+                          : gasFee > 0
+                            ? `${gasFee.toFixed(3)} XLM`
+                            : '0 XLM'}
+                      </td>
+                    </tr>
+                    <tr className="flex justify-between py-1.5">
+                      <td className="text-muted-foreground">
+                        Platform Service Fee
+                        <span className="text-xs ml-1 text-purple-400">(2%)</span>
+                      </td>
+                      <td className="font-medium text-purple-400">
+                        {platformFee.toFixed(3)} XLM
+                      </td>
+                    </tr>
+                    <tr className="flex justify-between pt-3 mt-2 border-t border-purple-500/20 font-bold">
+                      <td className="text-white">Total Amount to Lock</td>
+                      <td className="text-purple-400">
+                        {totalAmount.toFixed(3)} XLM
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               {insufficientBalanceBanner}
@@ -207,12 +232,16 @@ export default function FundSessionModal({
                   <span className="font-semibold">{duration} minutes</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-400">Estimated State Rent Fee</span>
-                  <span className="font-semibold">{rentFee ? `${rentFee.toFixed(3)} XLM` : '0 XLM'}</span>
+                  <span className="text-gray-400">Estimated Soroban Gas</span>
+                  <span className="font-semibold">{gasFee > 0 ? `${gasFee.toFixed(3)} XLM` : '0 XLM'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400">Platform Service Fee (2%)</span>
+                  <span className="font-semibold text-purple-400">{platformFee.toFixed(3)} XLM</span>
                 </div>
                 <div className="flex justify-between items-center pb-4 border-b border-purple-500/20">
                   <span className="text-gray-400">Total Amount</span>
-                  <span className="font-semibold text-lg text-purple-400">${(amount + (rentFee || 0)).toFixed(3)} XLM</span>
+                  <span className="font-semibold text-lg text-purple-400">{totalAmount.toFixed(3)} XLM</span>
                 </div>
               </div>
 
@@ -261,7 +290,7 @@ export default function FundSessionModal({
               <div>
                 <h3 className="text-2xl font-bold mb-2">Session Funded!</h3>
                 <p className="text-muted-foreground text-sm mb-4">
-                  ${amount.toFixed(2)} XLM has been escrowed for your session with {expertName}
+                  ${depositAmount.toFixed(2)} XLM has been escrowed for your session with {expertName}
                 </p>
                 <div className="bg-purple-600/10 border border-purple-500/20 rounded-lg p-3 text-xs">
                   <p>Session ID: <span className="font-mono font-semibold">{sessionId}</span></p>
