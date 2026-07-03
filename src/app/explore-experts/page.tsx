@@ -20,7 +20,9 @@ export default function ExploreExpertsPage() {
                          expert.category.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = !selectedCategory || expert.category === selectedCategory;
 
-    const numericRate = parseFloat(expert.hourlyRate.replace(/[^0-9.]/g, ""));
+    const numericRate = typeof expert.hourlyRate === 'number' 
+      ? expert.hourlyRate 
+      : parseFloat(String(expert.hourlyRate || 0).replace(/[^0-9.]/g, ""));
     const matchesRate =
       rateFilter === "all" ||
       (rateFilter === "under50" && numericRate < 50) ||
