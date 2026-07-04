@@ -1,6 +1,7 @@
 
-
----
+<p align="center">
+  <img src="public/logo.png" alt="SkillSphere Logo" width="100%" max-width="800px" />
+</p>
 
 # SkillSphere
 
