@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { External, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { ExternalLink, CheckCircle, XCircle, Loader2 } from "lucide-react";
 
 interface DisputeSession {
   id: string;
@@ -197,7 +197,7 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
                           className="inline-flex items-center gap-1 text-xs font-medium text-violet-400 hover:text-violet-300 transition-colors"
                         >
                           View on IPFS
-                          <External className="h-3 w-3" />
+                          <ExternalLink className="h-3 w-3" />
                         </a>
                       </div>
                     )}
@@ -216,7 +216,7 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
                                 className="inline-flex items-center gap-1 text-xs font-medium text-violet-400 hover:text-violet-300 transition-colors px-3 py-1 rounded-lg bg-violet-500/10 border border-violet-500/30"
                               >
                                 Screenshot {idx + 1}
-                                <External className="h-3 w-3" />
+                                <ExternalLink className="h-3 w-3" />
                               </a>
                             ))}
                           </div>

@@ -113,4 +113,3 @@ const tdStyle: React.CSSProperties = {
   wordBreak: 'break-all',
 };
 
-export default SlashingPage;

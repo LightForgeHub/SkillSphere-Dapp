@@ -4,11 +4,6 @@ import React, { useState } from "react";
 import ReferralTracker from "@/components/dashboard/ReferralTracker";
 import CopyButton from "@/components/ui/CopyButton";
 
-export const metadata = {
-  title: "Referral - SkillSphere",
-  description: "Generate your referral link and view referral stats",
-};
-
 export default function ReferralPage() {
   const [referralLink, setReferralLink] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -30,6 +25,7 @@ export default function ReferralPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <title>Referral - SkillSphere</title>
       <h1 className="text-2xl font-bold">Invite Friends & Earn Rewards</h1>
       <div className="flex items-center space-x-4">
         <button
