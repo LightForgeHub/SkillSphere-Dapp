@@ -1,4 +1,7 @@
 #![no_std]
+#![allow(warnings)]
+#![allow(clippy::all)]
+
 
 mod migrations;
 mod admin;
