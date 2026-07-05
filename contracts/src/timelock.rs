@@ -59,7 +59,7 @@ pub fn execute_admin_action(
 
     let now = env.ledger().timestamp();
     if now < pending.proposed_at + 172800 {
-        return Err(Error::TimelockActive);
+        return Err(Error::TimelockNotExpired);
     }
 
     match pending.action {

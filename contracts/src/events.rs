@@ -13,6 +13,13 @@
 
 use soroban_sdk::{contracttype, symbol_short, Env, IntoVal, Symbol, Val, Vec};
 
+#[contracttype]
+#[derive(Clone)]
+pub enum EventKey {
+    EventLog(u32),
+}
+
+
 /// Maximum number of entries kept in the on-chain ring buffer.
 pub const EVENT_LOG_CAPACITY: u32 = 1000;
 
@@ -55,7 +62,7 @@ fn append_to_ring(env: &Env, event_type: Symbol, session_id: u64) {
         timestamp: env.ledger().timestamp(),
     };
 
-    let key = crate::DataKey::EventLog(slot);
+    let key = EventKey::EventLog(slot);
     env.storage().temporary().set(&key, &entry);
 
     env.storage()
@@ -83,7 +90,7 @@ pub fn get_event_log(env: &Env, from_index: u32, limit: u32) -> Vec<EventLogEntr
         if let Some(entry) = env
             .storage()
             .temporary()
-            .get::<crate::DataKey, EventLogEntry>(&crate::DataKey::EventLog(slot))
+            .get::<EventKey, EventLogEntry>(&EventKey::EventLog(slot))
         {
             // Confirm the slot hasn't been overwritten by a newer entry.
             if entry.index == idx {

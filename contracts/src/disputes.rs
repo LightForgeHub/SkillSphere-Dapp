@@ -2,6 +2,13 @@
 //! Expert-initiated session cancellation with partial refund (#238).
 
 use soroban_sdk::{contracttype, symbol_short, token, Address, Env, String, Vec};
+use crate::DataKeyExt;
+
+#[contracttype]
+#[derive(Clone)]
+pub enum DisputeKey {
+    AppealBondAmount,
+}
 
 use crate::{
     events, DataKey, Error, SessionStatus, SkillSphereContract, MIN_SESSION_ESCROW,
@@ -178,21 +185,21 @@ pub struct JuryVoteRecord {
 ///
 /// Candidates are filtered by minimum reputation, then `jury_size` jurors
 /// are chosen via on-chain PRNG.  Pass `jury_size = 0` to use the
-/// admin-configured default (see `DataKey::JurySize`).
+/// admin-configured default (see `DataKeyExt::JurySize`).
 pub fn select_jury(
     env: &Env,
     dispute_id: u64,
     candidates: Vec<Address>,
     jury_size: u32,
 ) -> Result<(), Error> {
-    if env.storage().persistent().has(&DataKey::JurySession(dispute_id)) {
+    if env.storage().persistent().has(&DataKeyExt::JurySession(dispute_id)) {
         return Err(Error::JuryAlreadyVoted);
     }
 
     let size = if jury_size == 0 {
         env.storage()
             .instance()
-            .get(&DataKey::JurySize)
+            .get(&DataKeyExt::JurySize)
             .unwrap_or(DEFAULT_JURY_SIZE)
     } else {
         jury_size
@@ -230,7 +237,7 @@ pub fn select_jury(
 
     env.storage()
         .persistent()
-        .set(&DataKey::JurySession(dispute_id), &record);
+        .set(&DataKeyExt::JurySession(dispute_id), &record);
 
     events::publish_event(
         env,
@@ -257,7 +264,7 @@ pub fn cast_jury_vote(
     let mut record: JuryVoteRecord = env
         .storage()
         .persistent()
-        .get(&DataKey::JurySession(dispute_id))
+        .get(&DataKeyExt::JurySession(dispute_id))
         .ok_or(Error::JuryNotSelected)?;
 
     if record.finalized {
@@ -294,7 +301,7 @@ pub fn cast_jury_vote(
 
     env.storage()
         .persistent()
-        .set(&DataKey::JurySession(dispute_id), &record);
+        .set(&DataKeyExt::JurySession(dispute_id), &record);
 
     events::publish_event(
         env,
@@ -315,7 +322,7 @@ pub fn finalize_jury_verdict(env: &Env, dispute_id: u64) -> Result<(u32, u32), E
     let mut record: JuryVoteRecord = env
         .storage()
         .persistent()
-        .get(&DataKey::JurySession(dispute_id))
+        .get(&DataKeyExt::JurySession(dispute_id))
         .ok_or(Error::JuryNotSelected)?;
 
     if record.finalized {
@@ -343,7 +350,7 @@ pub fn finalize_jury_verdict(env: &Env, dispute_id: u64) -> Result<(u32, u32), E
     record.finalized = true;
     env.storage()
         .persistent()
-        .set(&DataKey::JurySession(dispute_id), &record);
+        .set(&DataKeyExt::JurySession(dispute_id), &record);
 
     events::publish_event(
         env,
@@ -380,7 +387,7 @@ pub struct AppealRecord {
 pub fn appeal_bond_amount(env: &Env) -> i128 {
     env.storage()
         .instance()
-        .get(&DataKey::AppealBondAmount)
+        .get(&DisputeKey::AppealBondAmount)
         .unwrap_or(DEFAULT_APPEAL_BOND_AMOUNT)
 }
 
@@ -388,7 +395,7 @@ pub fn appeal_bond_amount(env: &Env) -> i128 {
 pub fn set_appeal_bond_amount(env: &Env, amount: i128) {
     env.storage()
         .instance()
-        .set(&DataKey::AppealBondAmount, &amount);
+        .set(&DisputeKey::AppealBondAmount, &amount);
 }
 
 /// File an appeal against the ruling for `dispute_id`.
@@ -407,7 +414,7 @@ pub fn appeal_dispute(
     if env
         .storage()
         .persistent()
-        .has(&DataKey::Appeal(dispute_id))
+        .has(&DataKeyExt::Appeal(dispute_id))
     {
         return Err(Error::AppealAlreadyFiled);
     }
@@ -434,7 +441,7 @@ pub fn appeal_dispute(
 
     env.storage()
         .persistent()
-        .set(&DataKey::Appeal(dispute_id), &record);
+        .set(&DataKeyExt::Appeal(dispute_id), &record);
 
     events::publish_event(
         env,
@@ -463,7 +470,7 @@ pub fn resolve_appeal(
     let mut record: AppealRecord = env
         .storage()
         .persistent()
-        .get(&DataKey::Appeal(dispute_id))
+        .get(&DataKeyExt::Appeal(dispute_id))
         .ok_or(Error::AppealNotFound)?;
 
     if record.resolved {
@@ -475,7 +482,7 @@ pub fn resolve_appeal(
     record.ruling_bps_expert = expert_award_bps;
     env.storage()
         .persistent()
-        .set(&DataKey::Appeal(dispute_id), &record);
+        .set(&DataKeyExt::Appeal(dispute_id), &record);
 
     // Apply the new ruling to the underlying dispute.
     SkillSphereContract::resolve_dispute_internal(env, dispute_id, seeker_award_bps)?;

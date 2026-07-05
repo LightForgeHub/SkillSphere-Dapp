@@ -21,13 +21,13 @@
 
 use soroban_sdk::{Address, Env};
 
-use crate::DataKey;
+use crate::{DataKey, DataKeyExt};
 
 /// Returns the accumulated tokens spent by `user` as a seeker.
 pub fn total_spent(env: &Env, user: &Address) -> i128 {
     env.storage()
         .persistent()
-        .get(&DataKey::UserTotalSpent(user.clone()))
+        .get(&DataKeyExt::UserTotalSpent(user.clone()))
         .unwrap_or(0i128)
 }
 
@@ -35,7 +35,7 @@ pub fn total_spent(env: &Env, user: &Address) -> i128 {
 pub fn total_earned(env: &Env, user: &Address) -> i128 {
     env.storage()
         .persistent()
-        .get(&DataKey::UserTotalEarned(user.clone()))
+        .get(&DataKeyExt::UserTotalEarned(user.clone()))
         .unwrap_or(0i128)
 }
 
@@ -45,7 +45,7 @@ pub fn accrue_spent(env: &Env, seeker: &Address, amount: i128) {
     let prev = total_spent(env, seeker);
     env.storage()
         .persistent()
-        .set(&DataKey::UserTotalSpent(seeker.clone()), &prev.saturating_add(amount));
+        .set(&DataKeyExt::UserTotalSpent(seeker.clone()), &prev.saturating_add(amount));
 }
 
 /// Increments the expert's `UserTotalEarned` counter by `amount`.
@@ -54,7 +54,7 @@ pub fn accrue_earned(env: &Env, expert: &Address, amount: i128) {
     let prev = total_earned(env, expert);
     env.storage()
         .persistent()
-        .set(&DataKey::UserTotalEarned(expert.clone()), &prev.saturating_add(amount));
+        .set(&DataKeyExt::UserTotalEarned(expert.clone()), &prev.saturating_add(amount));
 }
 
 /// Returns how many referred sessions have been counted for an expert.

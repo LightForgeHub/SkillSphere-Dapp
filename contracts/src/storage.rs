@@ -80,7 +80,7 @@ pub fn extend_instance_ttl<K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(
 ) {
     let min = min_ttl_ledgers(env);
     let max = max_ttl_ledgers(env);
-    env.storage().instance().extend_ttl(key, min, max);
+    env.storage().instance().extend_ttl(min, max);
 }
 
 // ---------------------------------------------------------------------------

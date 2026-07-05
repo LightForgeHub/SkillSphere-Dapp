@@ -12,9 +12,15 @@
 //! - `set_spam_deposit_amount(env, amount)` — FeeManager / admin only
 //! - `get_spam_deposit_amount(env)` — returns the current deposit requirement
 
-use soroban_sdk::{symbol_short, token, Address, Env, Vec};
+use soroban_sdk::{contracttype, symbol_short, token, Address, Env, Vec};
 
-use crate::{dex, events, DataKey, Error};
+use crate::{dex, events, DataKey, DataKeyExt, Error};
+
+#[contracttype]
+#[derive(Clone)]
+pub enum TreasuryKey {
+    SpamDepositAmount,
+}
 
 /// Default spam deposit: 0 (disabled until explicitly configured by admin).
 pub const DEFAULT_SPAM_DEPOSIT_AMOUNT: i128 = 0;
@@ -23,7 +29,7 @@ pub const DEFAULT_SPAM_DEPOSIT_AMOUNT: i128 = 0;
 pub fn spam_deposit_amount(env: &Env) -> i128 {
     env.storage()
         .instance()
-        .get(&DataKey::SpamDepositAmount)
+        .get(&TreasuryKey::SpamDepositAmount)
         .unwrap_or(DEFAULT_SPAM_DEPOSIT_AMOUNT)
 }
 
@@ -31,14 +37,14 @@ pub fn spam_deposit_amount(env: &Env) -> i128 {
 pub fn set_spam_deposit_amount(env: &Env, amount: i128) {
     env.storage()
         .instance()
-        .set(&DataKey::SpamDepositAmount, &amount);
+        .set(&TreasuryKey::SpamDepositAmount, &amount);
 }
 
 /// Collects the anti-spam deposit from `seeker` and credits it to the
 /// insurance vault balance.
 ///
 /// If `spam_deposit_amount` is 0 this is a no-op. Returns
-/// `Error::InsufficientAntiSpamDeposit` when the seeker's token balance
+/// `Error::AmountBelowMinimum` when the seeker's token balance
 /// cannot cover the deposit. The deposit is separate from the session
 /// escrow and does not count toward `session.balance`.
 pub fn collect_spam_deposit(
@@ -53,7 +59,7 @@ pub fn collect_spam_deposit(
 
     let token_client = token::Client::new(env, token);
     if token_client.balance(seeker) < deposit {
-        return Err(Error::InsufficientAntiSpamDeposit);
+        return Err(Error::AmountBelowMinimum);
     }
 
     // Transfer deposit into the contract.
@@ -96,17 +102,17 @@ pub fn convert_fees_to_skill(
     let enabled: bool = env
         .storage()
         .instance()
-        .get(&DataKey::FeeBuybackEnabled)
+        .get(&DataKeyExt::FeeBuybackEnabled)
         .unwrap_or(false);
     if !enabled {
-        return Err(Error::BuybackDisabled);
+        return Err(Error::ProtocolPaused);
     }
 
     let skill_token: Address = env
         .storage()
         .instance()
-        .get(&DataKey::SkillTokenAddress)
-        .ok_or(Error::SkillTokenNotSet)?;
+        .get(&DataKeyExt::SkillTokenAddress)
+        .ok_or(Error::ContractUnset)?;
 
     let dex_contract: Address = env
         .storage()
@@ -117,7 +123,7 @@ pub fn convert_fees_to_skill(
     let slippage_bps: u32 = env
         .storage()
         .instance()
-        .get(&DataKey::FeeBuybackSlippageBps)
+        .get(&DataKeyExt::FeeBuybackSlippageBps)
         .unwrap_or(100u32);
 
     let path: Vec<Address> = Vec::new(env);

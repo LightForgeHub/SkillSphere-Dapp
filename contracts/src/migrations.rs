@@ -5,7 +5,7 @@
 
 use soroban_sdk::{contracttype, Address, Env, String};
 
-use crate::{DataKey, Session, SessionStatus};
+use crate::{DataKey, Session, SessionStatus, RecordingConsent};
 
 // ---------------------------------------------------------------------------
 // V1 schema – the original Session layout (no `encrypted_notes_cid` / `paused_at`)
@@ -84,6 +84,8 @@ fn migrate_v1_to_v2(env: &Env) {
                     agency_share_bps: 0,
                     rate_currency: crate::RateCurrency::XLM,
                     locked_xlm_rate: None,
+                    expires_at: None,
+                    recording_consent: RecordingConsent::None,
                 };
                 env.storage().persistent().set(&key, &v2);
             }

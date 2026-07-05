@@ -6,7 +6,7 @@
 //! against oracle manipulation attacks where an inflated/deflated price is
 //! injected to drain session escrows.
 //!
-//! ## Storage keys (defined in `lib.rs` DataKey)
+//! ## Storage keys
 //! - `LastOraclePrice`       — most recently accepted oracle price (Instance storage)
 //! - `CircuitBreakerActive`  — boolean flag; `true` means new sessions are blocked
 //! - `MaxPriceDeviationBps`  — admin-configurable deviation threshold (default 2 000 bps = 20%)
@@ -17,9 +17,17 @@
 //! - `is_circuit_breaker_active(env)`        — check whether the breaker is tripped
 //! - `reset_circuit_breaker(env)`            — admin only; resumes session creation
 
-use soroban_sdk::Env;
+use soroban_sdk::{contracttype, Env};
 
-use crate::{DataKey, Error};
+use crate::Error;
+
+#[contracttype]
+#[derive(Clone)]
+pub enum OracleKey {
+    LastOraclePrice,
+    CircuitBreakerActive,
+    MaxPriceDeviationBps,
+}
 
 /// Default maximum allowable price deviation: 20% (2 000 bps).
 pub const DEFAULT_MAX_PRICE_DEVIATION_BPS: u32 = 2_000;
@@ -28,7 +36,7 @@ pub const DEFAULT_MAX_PRICE_DEVIATION_BPS: u32 = 2_000;
 pub fn is_circuit_breaker_active(env: &Env) -> bool {
     env.storage()
         .instance()
-        .get(&DataKey::CircuitBreakerActive)
+        .get(&OracleKey::CircuitBreakerActive)
         .unwrap_or(false)
 }
 
@@ -36,14 +44,14 @@ pub fn is_circuit_breaker_active(env: &Env) -> bool {
 pub fn reset_circuit_breaker(env: &Env) {
     env.storage()
         .instance()
-        .set(&DataKey::CircuitBreakerActive, &false);
+        .set(&OracleKey::CircuitBreakerActive, &false);
 }
 
 /// Returns the configured maximum price-deviation threshold in basis points.
 pub fn max_price_deviation_bps(env: &Env) -> u32 {
     env.storage()
         .instance()
-        .get(&DataKey::MaxPriceDeviationBps)
+        .get(&OracleKey::MaxPriceDeviationBps)
         .unwrap_or(DEFAULT_MAX_PRICE_DEVIATION_BPS)
 }
 
@@ -51,7 +59,7 @@ pub fn max_price_deviation_bps(env: &Env) -> u32 {
 pub fn set_max_price_deviation_bps(env: &Env, bps: u32) {
     env.storage()
         .instance()
-        .set(&DataKey::MaxPriceDeviationBps, &bps);
+        .set(&OracleKey::MaxPriceDeviationBps, &bps);
 }
 
 /// Checks `new_price` against the last stored oracle price and activates the
@@ -74,7 +82,7 @@ pub fn check_and_update_price(env: &Env, new_price: i128) -> Result<(), Error> {
     if let Some(last_price) = env
         .storage()
         .instance()
-        .get::<DataKey, i128>(&DataKey::LastOraclePrice)
+        .get::<OracleKey, i128>(&OracleKey::LastOraclePrice)
     {
         if last_price > 0 {
             let diff = if new_price > last_price {
@@ -90,7 +98,7 @@ pub fn check_and_update_price(env: &Env, new_price: i128) -> Result<(), Error> {
                 // Trip the circuit breaker.
                 env.storage()
                     .instance()
-                    .set(&DataKey::CircuitBreakerActive, &true);
+                    .set(&OracleKey::CircuitBreakerActive, &true);
                 return Err(Error::CircuitBreakerActive);
             }
         }
@@ -99,7 +107,7 @@ pub fn check_and_update_price(env: &Env, new_price: i128) -> Result<(), Error> {
     // Price is within bounds — update the stored reference.
     env.storage()
         .instance()
-        .set(&DataKey::LastOraclePrice, &new_price);
+        .set(&OracleKey::LastOraclePrice, &new_price);
 
     Ok(())
 }

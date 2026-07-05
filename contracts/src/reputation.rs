@@ -6,7 +6,7 @@
 //! session time inside SkillSphere.
 //!
 //! Expert tier (Bronze / Silver / Gold) is recalculated on every session
-//! completion and stored under `DataKey::ExpertTier(expert)`. Gold experts pay
+//! completion and stored under `ReputationKey::ExpertTier(expert)`. Gold experts pay
 //! zero platform fee; Silver experts pay a 50%-discounted fee; Bronze experts
 //! pay the full configured fee.
 //!
@@ -27,9 +27,19 @@
 
 #![allow(unused_imports)]
 
-use soroban_sdk::{contracttype, symbol_short, Address, Env, IntoVal, Symbol, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Env, IntoVal, Symbol, Vec, String};
 
 use crate::{DataKey, events};
+
+#[contracttype]
+#[derive(Clone)]
+pub enum ReputationKey {
+    SurgeConfig,
+    SurgePricingEnabled,
+    ExpertCategory(Address),
+    CategoryActiveSessions(String),
+    ExpertTier(Address),
+}
 
 // ---------------------------------------------------------------------------
 // Issue #277 — Reputation Decay for Inactive Experts
@@ -151,7 +161,7 @@ pub fn compute_tier(completed_sessions: u32, avg_rating: u32) -> ExpertTier {
 pub fn get_tier(env: &Env, expert: &Address) -> ExpertTier {
     env.storage()
         .persistent()
-        .get(&DataKey::ExpertTier(expert.clone()))
+        .get(&ReputationKey::ExpertTier(expert.clone()))
         .unwrap_or(ExpertTier::Bronze)
 }
 
@@ -183,7 +193,7 @@ pub fn update_expert_tier_on_completion(env: &Env, expert: &Address) {
 
     env.storage()
         .persistent()
-        .set(&DataKey::ExpertTier(expert.clone()), &new_tier);
+        .set(&ReputationKey::ExpertTier(expert.clone()), &new_tier);
 
     if new_tier != old_tier {
         // Emit TierUpgraded { expert, old_tier, new_tier }
@@ -227,7 +237,7 @@ pub struct SurgeConfig {
 pub fn get_surge_config(env: &Env) -> SurgeConfig {
     env.storage()
         .instance()
-        .get(&DataKey::SurgeConfig)
+        .get(&ReputationKey::SurgeConfig)
         .unwrap_or(SurgeConfig {
             threshold_sessions: DEFAULT_SURGE_THRESHOLD,
             max_multiplier_bps: DEFAULT_SURGE_MAX_BPS,
@@ -240,14 +250,14 @@ pub fn get_surge_config(env: &Env) -> SurgeConfig {
 pub fn set_surge_config(env: &Env, config: SurgeConfig) {
     env.storage()
         .instance()
-        .set(&DataKey::SurgeConfig, &config);
+        .set(&ReputationKey::SurgeConfig, &config);
 }
 
 /// Returns whether surge pricing is currently active.
 pub fn is_surge_enabled(env: &Env) -> bool {
     env.storage()
         .instance()
-        .get(&DataKey::SurgePricingEnabled)
+        .get(&ReputationKey::SurgePricingEnabled)
         .unwrap_or(false)
 }
 
@@ -255,28 +265,28 @@ pub fn is_surge_enabled(env: &Env) -> bool {
 pub fn set_surge_enabled(env: &Env, enabled: bool) {
     env.storage()
         .instance()
-        .set(&DataKey::SurgePricingEnabled, &enabled);
+        .set(&ReputationKey::SurgePricingEnabled, &enabled);
 }
 
 /// Assign an expert to a named skill category.
 pub fn set_expert_category(env: &Env, expert: &Address, category: soroban_sdk::String) {
     env.storage()
         .persistent()
-        .set(&DataKey::ExpertCategory(expert.clone()), &category);
+        .set(&ReputationKey::ExpertCategory(expert.clone()), &category);
 }
 
 /// Return the expert's assigned category, or `None` if unset.
 pub fn get_expert_category(env: &Env, expert: &Address) -> Option<soroban_sdk::String> {
     env.storage()
         .persistent()
-        .get(&DataKey::ExpertCategory(expert.clone()))
+        .get(&ReputationKey::ExpertCategory(expert.clone()))
 }
 
 /// Increment the active-session counter for the expert's category.
 /// No-op if the expert has no assigned category.
 pub fn increment_category_sessions(env: &Env, expert: &Address) {
     if let Some(category) = get_expert_category(env, expert) {
-        let key = DataKey::CategoryActiveSessions(category);
+        let key = ReputationKey::CategoryActiveSessions(category);
         let count: u32 = env
             .storage()
             .instance()
@@ -292,7 +302,7 @@ pub fn increment_category_sessions(env: &Env, expert: &Address) {
 /// No-op if the expert has no assigned category or count is already zero.
 pub fn decrement_category_sessions(env: &Env, expert: &Address) {
     if let Some(category) = get_expert_category(env, expert) {
-        let key = DataKey::CategoryActiveSessions(category);
+        let key = ReputationKey::CategoryActiveSessions(category);
         let count: u32 = env
             .storage()
             .instance()
@@ -323,7 +333,7 @@ pub fn get_surge_multiplier_bps(env: &Env, expert: &Address) -> u32 {
     let active: u32 = env
         .storage()
         .instance()
-        .get(&DataKey::CategoryActiveSessions(category))
+        .get(&ReputationKey::CategoryActiveSessions(category))
         .unwrap_or(0u32);
 
     let config = get_surge_config(env);

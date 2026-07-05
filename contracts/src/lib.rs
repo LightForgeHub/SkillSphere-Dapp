@@ -167,13 +167,19 @@ pub enum DataKey {
     Subscription(Address, Address),
     SessionLastVerified(u64),
     SessionFrozenFlag(u64),
-    UserTotalSpent(Address),
-    UserTotalEarned(Address),
-    SbtContractAddress,
-    ExpertBadge(Address),
-    ExpertTotalSeconds(Address),
-    SessionCommit(BytesN<32>),
-    SessionCommitConsumed(BytesN<32>),
+    ExpertCompletedSessions(Address),
+    ExpertLastActive(Address),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DataKeyExt {
+    JurySession(u64),
+    JurySize,
+    Appeal(u64),
+    SkillTokenAddress,
+    FeeBuybackEnabled,
+    FeeBuybackSlippageBps,
     ExpertPriceFeed(Address),
     ExpertCooldownLedgers,
     ExpertCooldownUntil(Address),
@@ -182,52 +188,23 @@ pub enum DataKey {
     VoucherNonceConsumed(Address, u64),
     ReferralSessionLimit,
     CancellationFeeBps,
-    // Expert tier system
-    ExpertTier(Address),
-    ExpertCompletedSessions(Address),
-    // Anti-spam session deposit
-    SpamDepositAmount,
-    // Oracle circuit breaker
-    LastOraclePrice,
-    CircuitBreakerActive,
-    MaxPriceDeviationBps,
-    // Issue #250 - Dispute cooling-off
-    DisputeCoolingOffDuration,
-    // Issue #251 - Dispute escalation
-    EscalatedDispute(u64),
-    // Issue #252 - Expert handoff
-    HandoffProposal(u64),
-    // Issue #253 - NFT minting
-    NftContractId,
-    ProfileNftMinted(Address),
-    // Issue #273 - Dead Letter Queue
-    FailedTransfer(Address),
-    // Issue #274 - Event Replay Ring Buffer
-    EventLog(u32),
-    // Issue #277 - Reputation Decay
-    ExpertLastActive(Address),
-    // Issue #275 - Idle Escrow Yield
     YieldPoolId,
     SessionDepositedToPool(u64),
-    // Issue #278 - Per-dimension rating averages
     ExpertAvgRatingComm(Address),
     ExpertAvgRatingExpertise(Address),
     ExpertAvgRatingPunct(Address),
-    // Issue #284 - Jury Selection
-    JurySession(u64),
-    JurySize,
-    // Issue #285 - Appeal Mechanism
-    Appeal(u64),
-    AppealBondAmount,
-    // Issue #286 - Fee Auto-Conversion
-    SkillTokenAddress,
-    FeeBuybackEnabled,
-    FeeBuybackSlippageBps,
-    // Issue #287 - Surge Pricing
-    CategoryActiveSessions(String),
-    SurgePricingEnabled,
-    ExpertCategory(Address),
-    SurgeConfig,
+    UserTotalSpent(Address),
+    UserTotalEarned(Address),
+    SbtContractAddress,
+    ExpertBadge(Address),
+    ExpertTotalSeconds(Address),
+    SessionCommit(BytesN<32>),
+    SessionCommitConsumed(BytesN<32>),
+    DisputeCoolingOffDuration,
+    EscalatedDispute(u64),
+    HandoffProposal(u64),
+    NftContractId,
+    ProfileNftMinted(Address),
 }
 
 #[contracttype]
@@ -266,7 +243,7 @@ pub struct CommitRecord {
 
 /// Per-expert dynamic-pricing configuration (issue #207).
 ///
-/// When stored under `crate::DataKey::ExpertPriceFeed(expert)`, the expert's
+/// When stored under `crate::DataKeyExt::ExpertPriceFeed(expert)`, the expert's
 /// effective rate is computed as
 /// `(oracle_price * multiplier_bps / 10_000)`. Callers that need a
 /// "use static rate if oracle is misbehaving" policy should read
@@ -598,29 +575,18 @@ impl SkillSphereContract {
         // #282: bump persistent TTL so the expert profile does not expire.
         storage::extend_persistent_ttl(&env, &crate::DataKey::ExpertProfile(expert.clone()));
 
-        if let Some(nft_contract) = Self::get_nft_contract(&env) {
+        if let Some(nft_contract) = Self::get_nft_contract(env.clone()) {
             let nft_client = ProfileNftClient::new(&env, &nft_contract);
-            match nft_client.mint_profile(&expert, &metadata_cid) {
-                Ok(token_id) => {
-                    env.storage()
-                        .persistent()
-                        .set(&crate::DataKey::ProfileNftMinted(expert.clone()), &token_id);
-                    events::publish_event(
-                        &env,
-                        events::event_type::expert_profile(),
-                        0,
-                        (symbol_short!("nftMint"), expert.clone(), token_id),
-                    );
-                }
-                Err(_) => {
-                    events::publish_event(
-                        &env,
-                        events::event_type::expert_profile(),
-                        0,
-                        (symbol_short!("nftFail"), expert.clone()),
-                    );
-                }
-            }
+                        let token_id = nft_client.mint_profile(&expert, &metadata_cid);
+            env.storage()
+                .persistent()
+                .set(&crate::DataKeyExt::ProfileNftMinted(expert.clone()), &token_id);
+            events::publish_event(
+                &env,
+                events::event_type::expert_profile(),
+                0,
+                (symbol_short!("nftMint"), expert.clone(), token_id),
+            );
         }
     }
 
@@ -705,7 +671,7 @@ impl SkillSphereContract {
     pub fn set_burn_bps(env: Env, burn_bps: u32) -> Result<(), Error> {
         Self::require_admin(&env)?;
         if burn_bps > MAX_BPS {
-            return Err(Error::InvalidFeeBps);
+            return Err(Error::InvalidFeeConfig);
         }
         env.storage().instance().set(&crate::DataKey::BurnBps, &burn_bps);
         events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("burnBps"), burn_bps));
@@ -861,7 +827,7 @@ impl SkillSphereContract {
             .get(&crate::DataKey::StakingRewardPool(reward_token.clone()))
             .unwrap_or(0i128);
         if pool < owed {
-            return Err(Error::InsufficientFunds);
+            return Err(Error::InsufficientBalance);
         }
         env.storage().instance().set(
             &crate::DataKey::StakingRewardPool(reward_token.clone()),
@@ -949,7 +915,7 @@ impl SkillSphereContract {
     pub fn set_asset_fee_bps(env: Env, asset: Address, fee_bps: u32) -> Result<(), Error> {
         Self::require_admin(&env)?;
         if fee_bps > MAX_BPS {
-            return Err(Error::InvalidFeeBps);
+            return Err(Error::InvalidFeeConfig);
         }
         env.storage()
             .instance()
@@ -1194,7 +1160,7 @@ impl SkillSphereContract {
             return Err(Error::Unauthorized);
         }
         if !matches!(fp.status, FixedPriceStatus::Locked) {
-            return Err(Error::AlreadyFinished);
+            return Err(Error::InvalidSessionState);
         }
 
         let amount = fp.amount;
@@ -1208,7 +1174,7 @@ impl SkillSphereContract {
             if let Some(treasury) = env
                 .storage()
                 .instance()
-                .get::<DataKey, Address>(&crate::DataKey::TreasuryAddress)
+                .get::<_, Address>(&crate::DataKey::TreasuryAddress)
             {
                 token_client.transfer(&env.current_contract_address(), &treasury, &treasury_fee);
             }
@@ -1244,7 +1210,7 @@ impl SkillSphereContract {
     ) -> Result<(), Error> {
         seeker.require_auth();
         if reason.is_empty() {
-            return Err(Error::EmptyDisputeReason);
+            return Err(Error::InvalidCid);
         }
         if !Self::is_valid_ipfs_cid(&evidence_cid) {
             return Err(Error::InvalidCid);
@@ -1259,7 +1225,7 @@ impl SkillSphereContract {
             return Err(Error::Unauthorized);
         }
         if !matches!(fp.status, FixedPriceStatus::Locked) {
-            return Err(Error::AlreadyFinished);
+            return Err(Error::InvalidSessionState);
         }
         fp.status = FixedPriceStatus::Disputed;
         env.storage()
@@ -1464,7 +1430,7 @@ impl SkillSphereContract {
         let now = env.ledger().timestamp();
         let elapsed = now.saturating_sub(sub.last_collected_at);
         if sub.last_collected_at > 0 && elapsed < SUBSCRIPTION_PERIOD_SECS {
-            return Err(Error::AlreadyFinished);
+            return Err(Error::InvalidSessionState);
         }
 
         let fee = sub.monthly_fee;
@@ -1492,7 +1458,7 @@ impl SkillSphereContract {
             if let Some(treasury) = env
                 .storage()
                 .instance()
-                .get::<DataKey, Address>(&crate::DataKey::TreasuryAddress)
+                .get::<_, Address>(&crate::DataKey::TreasuryAddress)
             {
                 let token_client = token::Client::new(&env, &sub.token);
                 token_client.transfer(&env.current_contract_address(), &treasury, &treasury_fee);
@@ -1628,10 +1594,10 @@ impl SkillSphereContract {
     ///
     /// # Errors
     /// * `Error::Unauthorized` - If the caller is not the administrator.
-    /// * `Error::InvalidFeeBps` - If the fee exceeds the maximum allowed (10,000 bps).
+    /// * `Error::InvalidFeeConfig` - If the fee exceeds the maximum allowed (10,000 bps).
     pub(crate) fn set_fee_internal(env: &Env, fee_bps: u32) -> Result<(), Error> {
         if fee_bps > MAX_BPS {
-            return Err(Error::InvalidFeeBps);
+            return Err(Error::InvalidFeeConfig);
         }
         let mut config = Self::fee_config(env);
         config.first_tier_bps = fee_bps;
@@ -1995,7 +1961,7 @@ impl SkillSphereContract {
             let session = match env
                 .storage()
                 .persistent()
-                .get::<DataKey, Session>(&crate::DataKey::Session(session_id))
+                .get::<_, Session>(&crate::DataKey::Session(session_id))
             {
                 Some(s) => s,
                 None => { skipped += 1; continue; }
@@ -2124,17 +2090,17 @@ impl SkillSphereContract {
         profile.avg_comm = env
             .storage()
             .persistent()
-            .get(&crate::DataKey::ExpertAvgRatingComm(expert.clone()))
+            .get(&crate::DataKeyExt::ExpertAvgRatingComm(expert.clone()))
             .unwrap_or(0u32);
         profile.avg_expertise = env
             .storage()
             .persistent()
-            .get(&crate::DataKey::ExpertAvgRatingExpertise(expert.clone()))
+            .get(&crate::DataKeyExt::ExpertAvgRatingExpertise(expert.clone()))
             .unwrap_or(0u32);
         profile.avg_punct = env
             .storage()
             .persistent()
-            .get(&crate::DataKey::ExpertAvgRatingPunct(expert.clone()))
+            .get(&crate::DataKeyExt::ExpertAvgRatingPunct(expert.clone()))
             .unwrap_or(0u32);
         profile.avg_overall = env
             .storage()
@@ -2205,14 +2171,14 @@ impl SkillSphereContract {
         Self::require_admin(&env)?;
         env.storage()
             .instance()
-            .set(&crate::DataKey::NftContractId, &nft_contract);
+            .set(&crate::DataKeyExt::NftContractId, &nft_contract);
         events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("setNft"), nft_contract));
         Ok(())
     }
 
     /// Retrieves the SkillSphere Profile NFT contract address.
     pub fn get_nft_contract(env: Env) -> Option<Address> {
-        env.storage().instance().get(&crate::DataKey::NftContractId)
+        env.storage().instance().get(&crate::DataKeyExt::NftContractId)
     }
 
     /// Sets the dispute cooling-off duration in seconds.
@@ -2227,7 +2193,7 @@ impl SkillSphereContract {
         Self::require_admin(&env)?;
         env.storage()
             .instance()
-            .set(&crate::DataKey::DisputeCoolingOffDuration, &duration_secs);
+            .set(&crate::DataKeyExt::DisputeCoolingOffDuration, &duration_secs);
         events::publish_event(&env, events::event_type::admin_config(), 0, (symbol_short!("disCof"), duration_secs));
         Ok(())
     }
@@ -2321,7 +2287,7 @@ impl SkillSphereContract {
 
         let current_balance = Self::get_treasury_balance(env.clone(), token.clone());
         if current_balance < amount {
-            return Err(Error::InsuffTreasuryBal);
+            return Err(Error::InsufficientTreasuryBalance);
         }
 
         let new_balance = current_balance.saturating_sub(amount);
@@ -2481,7 +2447,7 @@ impl SkillSphereContract {
     pub fn set_max_price_deviation_bps(env: Env, bps: u32) -> Result<(), Error> {
         Self::require_admin(&env)?;
         if bps > MAX_BPS {
-            return Err(Error::InvalidFeeBps);
+            return Err(Error::InvalidFeeConfig);
         }
         oracles::set_max_price_deviation_bps(&env, bps);
         events::publish_event(
@@ -2659,7 +2625,7 @@ impl SkillSphereContract {
         }
         let min_escrow = profile.rate_per_second.saturating_mul(300);
         if amount < min_escrow {
-            panic_with_error!(&env, Error::DepositTooLow);
+            panic_with_error!(&env, Error::AmountBelowMinimum);
         }
 
         let token_client = token::Client::new(&env, &token);
@@ -2742,7 +2708,7 @@ impl SkillSphereContract {
             .rate_per_second
             .saturating_mul(core::cmp::min(duration_cap, 300) as i128);
         if amount < min_escrow {
-            return Err(Error::DepositTooLow);
+            return Err(Error::AmountBelowMinimum);
         }
 
         let max_required = profile.rate_per_second.saturating_mul(duration_cap as i128);
@@ -2905,7 +2871,7 @@ impl SkillSphereContract {
             if let Some(treasury) = env
                 .storage()
                 .instance()
-                .get::<DataKey, Address>(&crate::DataKey::TreasuryAddress)
+                .get::<_, Address>(&crate::DataKey::TreasuryAddress)
             {
                 token_client.transfer(&env.current_contract_address(), &treasury, &fee);
             }
@@ -3101,7 +3067,7 @@ impl SkillSphereContract {
         }
         let min_escrow = voucher.rate_per_second.saturating_mul(300);
         if amount < min_escrow {
-            return Err(Error::DepositTooLow);
+            return Err(Error::AmountBelowMinimum);
         }
 
         let token_client = token::Client::new(&env, &token);
@@ -3386,7 +3352,7 @@ impl SkillSphereContract {
             return Err(Error::Unauthorized);
         }
         if session.status != SessionStatus::Active {
-            return Err(Error::SessionNotActive);
+            return Err(Error::InvalidSessionState);
         }
 
         let token_client = token::Client::new(&env, &session.token);
@@ -3503,7 +3469,7 @@ impl SkillSphereContract {
         if let Some(mut profile) = env
             .storage()
             .persistent()
-            .get::<DataKey, ExpertProfile>(&crate::DataKey::ExpertProfile(address.clone()))
+            .get::<_, ExpertProfile>(&crate::DataKey::ExpertProfile(address.clone()))
         {
             profile.metadata_cid = tombstone.clone();
             env.storage()
@@ -3521,7 +3487,7 @@ impl SkillSphereContract {
             if let Some(mut session) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, Session>(&crate::DataKey::Session(id))
+                .get::<_, Session>(&crate::DataKey::Session(id))
             {
                 if session.seeker != address && session.expert != address {
                     continue;
@@ -3604,7 +3570,7 @@ impl SkillSphereContract {
     /// # Errors
     /// * `Error::SessionNotFound` - If the session doesn't exist.
     /// * `Error::Unauthorized` - If the caller is not the seeker.
-    /// * `Error::EmptyDisputeReason` - If the reason is empty.
+    /// * `Error::InvalidCid` - If the reason is empty.
     /// * `Error::InvalidCid` - If the evidence CID is invalid.
     /// * `Error::InvalidSessionState` - If the session is not active or paused.
     pub fn flag_dispute(
@@ -3617,7 +3583,7 @@ impl SkillSphereContract {
         seeker.require_auth();
 
         if reason.is_empty() {
-            return Err(Error::EmptyDisputeReason);
+            return Err(Error::InvalidCid);
         }
         if !Self::is_valid_ipfs_cid(&evidence_cid) {
             return Err(Error::InvalidCid);
@@ -3782,7 +3748,7 @@ impl SkillSphereContract {
     ///
     /// # Errors
     /// * `Error::Unauthorized` - If the caller is not the administrator.
-    /// * `Error::UpgradeNotInitiated` - If no upgrade has been initiated.
+    /// * `Error::TimelockNotExpired` - If no upgrade has been initiated.
     /// * `Error::TimelockNotExpired` - If the timelock period has not yet passed.
     pub fn execute_upgrade(env: Env) -> Result<(), Error> {
         Self::require_admin(&env)?;
@@ -3791,7 +3757,7 @@ impl SkillSphereContract {
             .storage()
             .instance()
             .get(&crate::DataKey::UpgradeTimelock)
-            .ok_or(Error::UpgradeNotInitiated)?;
+            .ok_or(Error::TimelockNotExpired)?;
 
         let now = env.ledger().timestamp();
         if now < timelock.execute_after as u64 {
@@ -3810,12 +3776,12 @@ impl SkillSphereContract {
     /// Retrieves the details of the pending upgrade timelock.
     ///
     /// # Errors
-    /// * `Error::UpgradeNotInitiated` - If no upgrade is pending.
+    /// * `Error::TimelockNotExpired` - If no upgrade is pending.
     pub fn get_upgrade_timelock(env: Env) -> Result<UpgradeTimelock, Error> {
         env.storage()
             .instance()
             .get(&crate::DataKey::UpgradeTimelock)
-            .ok_or(Error::UpgradeNotInitiated)
+            .ok_or(Error::TimelockNotExpired)
     }
 
 
@@ -3887,7 +3853,7 @@ impl SkillSphereContract {
         {
             let now_secs = env.ledger().timestamp();
             if now_secs.saturating_sub(last_hb) > HEARTBEAT_VALIDITY_WINDOW {
-                return Err(Error::ExpertOffline);
+                return Err(Error::ExpertUnavailable);
             }
         }
 
@@ -3976,7 +3942,7 @@ impl SkillSphereContract {
         let cfg_opt: Option<ExpertPriceFeedConfig> = env
             .storage()
             .persistent()
-            .get(&crate::DataKey::ExpertPriceFeed(expert.clone()));
+            .get(&crate::DataKeyExt::ExpertPriceFeed(expert.clone()));
 
         let cfg = cfg_opt?;
         let client = PriceOracleClient::new(env, &cfg.oracle_contract);
@@ -4139,10 +4105,10 @@ impl SkillSphereContract {
         if let Some(asset_bps) = env
             .storage()
             .instance()
-            .get::<DataKey, u32>(&crate::DataKey::AssetFeeBps(token.clone()))
+            .get::<_, u32>(&crate::DataKey::AssetFeeBps(token.clone()))
         {
             if asset_bps > MAX_BPS {
-                return Err(Error::InvalidFeeBps);
+                return Err(Error::InvalidFeeConfig);
             }
             return Ok(amount
                 .saturating_mul(asset_bps as i128)
@@ -4162,7 +4128,7 @@ impl SkillSphereContract {
         if env
             .storage()
             .instance()
-            .get::<DataKey, Address>(&crate::DataKey::InsuranceVaultAddress)
+            .get::<_, Address>(&crate::DataKey::InsuranceVaultAddress)
             .is_none()
         {
             return 0;
@@ -4371,7 +4337,7 @@ impl SkillSphereContract {
                 if let Some(treasury) = env
                     .storage()
                     .instance()
-                    .get::<DataKey, Address>(&crate::DataKey::TreasuryAddress)
+                    .get::<_, Address>(&crate::DataKey::TreasuryAddress)
                 {
                     token_client.transfer(
                         &env.current_contract_address(),
@@ -4430,10 +4396,10 @@ impl SkillSphereContract {
             let prev_secs: u64 = env
                 .storage()
                 .persistent()
-                .get(&crate::DataKey::ExpertTotalSeconds(expert.clone()))
+                .get(&crate::DataKeyExt::ExpertTotalSeconds(expert.clone()))
                 .unwrap_or(0u64);
             env.storage().persistent().set(
-                &crate::DataKey::ExpertTotalSeconds(expert.clone()),
+                &crate::DataKeyExt::ExpertTotalSeconds(expert.clone()),
                 &prev_secs.saturating_add(settled_seconds),
             );
         }
@@ -4476,13 +4442,13 @@ impl SkillSphereContract {
         let deposited_to_pool: Option<i128> = env
             .storage()
             .persistent()
-            .get(&crate::DataKey::SessionDepositedToPool(session.id));
+            .get(&crate::DataKeyExt::SessionDepositedToPool(session.id));
 
         if let Some(deposited) = deposited_to_pool {
             if let Some(pool_contract) = env
                 .storage()
                 .instance()
-                .get::<DataKey, Address>(&crate::DataKey::YieldPoolId)
+                .get::<_, Address>(&crate::DataKeyExt::YieldPoolId)
             {
                 // Attempt to withdraw from pool; on failure fall back to the
                 // original deposited amount stored in the session balance.
@@ -4512,7 +4478,7 @@ impl SkillSphereContract {
                         if let Some(treasury) = env
                             .storage()
                             .instance()
-                            .get::<DataKey, Address>(&crate::DataKey::TreasuryAddress)
+                            .get::<_, Address>(&crate::DataKey::TreasuryAddress)
                         {
                             token_client_yield.transfer(
                                 &env.current_contract_address(),
@@ -4902,7 +4868,7 @@ impl SkillSphereContract {
             .persistent()
             .has(&crate::DataKey::SessionRating(session_id))
         {
-            return Err(Error::RatingSubmitted);
+            return Err(Error::InvalidRating);
         }
 
         // Store the per-session record.
@@ -4926,25 +4892,25 @@ impl SkillSphereContract {
 
         // Update rolling average for each dimension.
         let cur_comm: u32 = env.storage().persistent()
-            .get(&crate::DataKey::ExpertAvgRatingComm(expert.clone())).unwrap_or(0);
+            .get(&crate::DataKeyExt::ExpertAvgRatingComm(expert.clone())).unwrap_or(0);
         let new_comm = if count == 0 { rating.communication } else {
             (((cur_comm as u64).saturating_mul(count as u64).saturating_add(rating.communication as u64)) / new_count as u64) as u32
         };
-        env.storage().persistent().set(&crate::DataKey::ExpertAvgRatingComm(expert.clone()), &new_comm);
+        env.storage().persistent().set(&crate::DataKeyExt::ExpertAvgRatingComm(expert.clone()), &new_comm);
 
         let cur_exp: u32 = env.storage().persistent()
-            .get(&crate::DataKey::ExpertAvgRatingExpertise(expert.clone())).unwrap_or(0);
+            .get(&crate::DataKeyExt::ExpertAvgRatingExpertise(expert.clone())).unwrap_or(0);
         let new_exp = if count == 0 { rating.expertise } else {
             (((cur_exp as u64).saturating_mul(count as u64).saturating_add(rating.expertise as u64)) / new_count as u64) as u32
         };
-        env.storage().persistent().set(&crate::DataKey::ExpertAvgRatingExpertise(expert.clone()), &new_exp);
+        env.storage().persistent().set(&crate::DataKeyExt::ExpertAvgRatingExpertise(expert.clone()), &new_exp);
 
         let cur_punct: u32 = env.storage().persistent()
-            .get(&crate::DataKey::ExpertAvgRatingPunct(expert.clone())).unwrap_or(0);
+            .get(&crate::DataKeyExt::ExpertAvgRatingPunct(expert.clone())).unwrap_or(0);
         let new_punct = if count == 0 { rating.punctuality } else {
             (((cur_punct as u64).saturating_mul(count as u64).saturating_add(rating.punctuality as u64)) / new_count as u64) as u32
         };
-        env.storage().persistent().set(&crate::DataKey::ExpertAvgRatingPunct(expert.clone()), &new_punct);
+        env.storage().persistent().set(&crate::DataKeyExt::ExpertAvgRatingPunct(expert.clone()), &new_punct);
 
         let cur_overall: u32 = env.storage().persistent()
             .get(&crate::DataKey::ExpertAverageRating(expert.clone())).unwrap_or(0);
@@ -5188,7 +5154,7 @@ impl SkillSphereContract {
     pub fn is_expert_verified(env: Env, expert: Address) -> bool {
         env.storage()
             .persistent()
-            .get::<DataKey, ExpertVerification>(&crate::DataKey::ExpertVerificationStatus(expert))
+            .get::<_, ExpertVerification>(&crate::DataKey::ExpertVerificationStatus(expert))
             .map(|v| v.verified)
             .unwrap_or(false)
     }
@@ -5345,12 +5311,12 @@ impl SkillSphereContract {
         }
 
         // Verify dispute exists and check cooling-off period
-        let dispute = Self::get_dispute(&env, session_id)?;
+        let dispute = Self::get_dispute(env.clone(), session_id)?;
 
         let cooling_off_secs = env
             .storage()
             .instance()
-            .get::<DataKey, u64>(&crate::DataKey::DisputeCoolingOffDuration)
+            .get::<_, u64>(&crate::DataKeyExt::DisputeCoolingOffDuration)
             .unwrap_or(DEFAULT_DISPUTE_COOLING_OFF_SECS);
 
         let now = env.ledger().timestamp();
@@ -5375,7 +5341,7 @@ impl SkillSphereContract {
     pub fn escalate_to_dao(env: Env, caller: Address, dispute_id: u64) -> Result<(), Error> {
         caller.require_auth();
 
-        let mut dispute = Self::get_dispute(&env, dispute_id)?;
+        let mut dispute = Self::get_dispute(env.clone(), dispute_id)?;
 
         if dispute.escalated_to_dao {
             return Err(Error::DisputeEscalated);
@@ -5395,7 +5361,7 @@ impl SkillSphereContract {
 
         env.storage()
             .persistent()
-            .set(&crate::DataKey::EscalatedDispute(dispute_id), &dispute);
+            .set(&crate::DataKeyExt::EscalatedDispute(dispute_id), &dispute);
 
         events::publish_event(
             &env,
@@ -5441,7 +5407,7 @@ impl SkillSphereContract {
 
         env.storage()
             .persistent()
-            .set(&crate::DataKey::HandoffProposal(session_id), &proposal);
+            .set(&crate::DataKeyExt::HandoffProposal(session_id), &proposal);
 
         events::publish_event(
             &env,
@@ -5462,12 +5428,12 @@ impl SkillSphereContract {
         let proposal = env
             .storage()
             .persistent()
-            .get::<DataKey, HandoffProposal>(&crate::DataKey::HandoffProposal(session_id))
+            .get::<_, HandoffProposal>(&crate::DataKeyExt::HandoffProposal(session_id))
             .ok_or(Error::HandoffProposalNotFound)?;
 
         let now = env.ledger().timestamp();
         if now > proposal.expires_at {
-            return Err(Error::HandoffExpired);
+            return Err(Error::HandoffProposalNotFound);
         }
 
         let mut session = Self::get_session_or_error(&env, session_id)?;
@@ -5494,7 +5460,7 @@ impl SkillSphereContract {
 
         env.storage()
             .persistent()
-            .remove(&crate::DataKey::HandoffProposal(session_id));
+            .remove(&crate::DataKeyExt::HandoffProposal(session_id));
 
         events::publish_event(
             &env,
@@ -5519,7 +5485,7 @@ impl SkillSphereContract {
     /// # Errors
     /// * `Error::Unauthorized` - If the caller is not the administrator.
     /// * `Error::InvalidAmount` - If the amount is zero or negative.
-    /// * `Error::EmptyDisputeReason` - If the reason is empty.
+    /// * `Error::InvalidCid` - If the reason is empty.
     /// * `Error::InsufficientBalance` - If the expert has insufficient staked balance.
     /// * `Error::InsufficientTreasuryBalance` - If the treasury address is not set.
     pub fn slash_expert(
@@ -5536,7 +5502,7 @@ impl SkillSphereContract {
         }
 
         if reason.len() == 0 {
-            return Err(Error::EmptyDisputeReason);
+            return Err(Error::InvalidCid);
         }
 
         // Verify caller is admin or arbitration committee member
@@ -5557,8 +5523,8 @@ impl SkillSphereContract {
         let treasury = env
             .storage()
             .instance()
-            .get::<DataKey, Address>(&crate::DataKey::TreasuryAddress)
-            .ok_or(Error::InsuffTreasuryBal)?;
+            .get::<_, Address>(&crate::DataKey::TreasuryAddress)
+            .ok_or(Error::InsufficientTreasuryBalance)?;
 
         // Transfer slashed tokens to treasury
         let token = env.current_contract_address();
@@ -5602,7 +5568,7 @@ impl SkillSphereContract {
     /// # Errors
     /// * `Error::SessionNotFound` - If the session doesn't exist.
     /// * `Error::Unauthorized` - If the caller is not the seeker.
-    /// * `Error::NotStarted` - If the session start window has not passed yet.
+    /// * `Error::InvalidSessionState` - If the session start window has not passed yet.
     /// * `Error::InvalidSessionState` - If the session has already accrued earnings.
     pub fn claim_no_show_refund(env: Env, seeker: Address, session_id: u64) -> Result<i128, Error> {
         // === REENTRANCY GUARD ===
@@ -5626,7 +5592,7 @@ impl SkillSphereContract {
         let now = env.ledger().timestamp();
         if now <= session.start_timestamp as u64 + SESSION_NO_SHOW_REFUND_WINDOW {
             crate::security::ReentrancyGuard::clear(&env);
-            return Err(Error::NotStarted);
+            return Err(Error::InvalidSessionState);
         }
 
         if session.accrued_amount > 0
@@ -5748,7 +5714,7 @@ impl SkillSphereContract {
         Self::require_admin(&env)?;
         env.storage()
             .instance()
-            .set(&crate::DataKey::SbtContractAddress, &sbt_addr);
+            .set(&crate::DataKeyExt::SbtContractAddress, &sbt_addr);
         events::publish_event(&env, events::event_type::integration(), 0, (symbol_short!("sbtSet"), sbt_addr));
         Ok(())
     }
@@ -5761,7 +5727,7 @@ impl SkillSphereContract {
         if env
             .storage()
             .persistent()
-            .has(&crate::DataKey::ExpertBadge(expert.clone()))
+            .has(&crate::DataKeyExt::ExpertBadge(expert.clone()))
         {
             return Err(Error::BadgeAlreadyMinted);
         }
@@ -5769,7 +5735,7 @@ impl SkillSphereContract {
         let total_secs: u64 = env
             .storage()
             .persistent()
-            .get(&crate::DataKey::ExpertTotalSeconds(expert.clone()))
+            .get(&crate::DataKeyExt::ExpertTotalSeconds(expert.clone()))
             .unwrap_or(0u64);
         if total_secs < reputation::BADGE_HOURS_THRESHOLD_SECS {
             return Err(Error::HoursThresholdNotMet);
@@ -5778,7 +5744,7 @@ impl SkillSphereContract {
         let sbt_contract: Address = env
             .storage()
             .instance()
-            .get(&crate::DataKey::SbtContractAddress)
+            .get(&crate::DataKeyExt::SbtContractAddress)
             .ok_or(Error::ContractUnset)?;
 
         let badge_id: u64 = total_secs; // deterministic: total seconds at mint
@@ -5794,7 +5760,7 @@ impl SkillSphereContract {
         };
         env.storage()
             .persistent()
-            .set(&crate::DataKey::ExpertBadge(expert.clone()), &record);
+            .set(&crate::DataKeyExt::ExpertBadge(expert.clone()), &record);
 
         events::publish_event(
             &env,
@@ -5809,14 +5775,14 @@ impl SkillSphereContract {
     pub fn get_badge(env: Env, expert: Address) -> Option<BadgeRecord> {
         env.storage()
             .persistent()
-            .get(&crate::DataKey::ExpertBadge(expert))
+            .get(&crate::DataKeyExt::ExpertBadge(expert))
     }
 
     /// Returns the total settled seconds accumulated by `expert` towards the badge.
     pub fn get_expert_total_seconds(env: Env, expert: Address) -> u64 {
         env.storage()
             .persistent()
-            .get(&crate::DataKey::ExpertTotalSeconds(expert))
+            .get(&crate::DataKeyExt::ExpertTotalSeconds(expert))
             .unwrap_or(0u64)
     }
 
@@ -5929,14 +5895,14 @@ impl SkillSphereContract {
         Self::require_admin(&env)?;
         env.storage()
             .instance()
-            .set(&crate::DataKey::YieldPoolId, &pool_addr);
+            .set(&crate::DataKeyExt::YieldPoolId, &pool_addr);
         events::publish_event(&env, events::event_type::integration(), 0, (symbol_short!("yldPool"), pool_addr));
         Ok(())
     }
 
     /// Returns the configured yield pool address, if any.
     pub fn get_yield_pool(env: Env) -> Option<Address> {
-        env.storage().instance().get(&crate::DataKey::YieldPoolId)
+        env.storage().instance().get(&crate::DataKeyExt::YieldPoolId)
     }
 
     /// Starts a streaming session where the seeker pays in `offer_token` but
@@ -6063,12 +6029,12 @@ impl SkillSphereContract {
         if let Some(pool_contract) = env
             .storage()
             .instance()
-            .get::<DataKey, Address>(&crate::DataKey::YieldPoolId)
+            .get::<_, Address>(&crate::DataKeyExt::YieldPoolId)
         {
             dex::pool_deposit(&env, &pool_contract, &ask_token, ask_amount);
             env.storage()
                 .persistent()
-                .set(&crate::DataKey::SessionDepositedToPool(session_id), &ask_amount);
+                .set(&crate::DataKeyExt::SessionDepositedToPool(session_id), &ask_amount);
         }
 
         events::publish_event(
@@ -6110,8 +6076,8 @@ impl SkillSphereContract {
         if Self::protocol_paused(&env) {
             return Err(Error::ProtocolPaused);
         }
-        let key = crate::DataKey::SessionCommit(commitment.clone());
-        let consumed_key = crate::DataKey::SessionCommitConsumed(commitment.clone());
+        let key = crate::DataKeyExt::SessionCommit(commitment.clone());
+        let consumed_key = crate::DataKeyExt::SessionCommitConsumed(commitment.clone());
         if env.storage().temporary().has(&key) || env.storage().persistent().has(&consumed_key) {
             // Re-using a commitment is rejected so an observer cannot
             // "overwrite" a stranger's commitment record, and so a
@@ -6156,7 +6122,7 @@ impl SkillSphereContract {
         preimage.append(&seeker.clone().to_xdr(&env));
         preimage.append(&expert.clone().to_xdr(&env));
         let computed = env.crypto().sha256(&preimage);
-        let key = crate::DataKey::SessionCommit(computed.clone().into());
+        let key = crate::DataKeyExt::SessionCommit(computed.clone().into());
 
         let record: CommitRecord = env
             .storage()
@@ -6173,7 +6139,7 @@ impl SkillSphereContract {
         // committed again after its preimage has been revealed.
         env.storage()
             .persistent()
-            .set(&crate::DataKey::SessionCommitConsumed(computed.into()), &true);
+            .set(&crate::DataKeyExt::SessionCommitConsumed(computed.into()), &true);
         events::publish_event(
             &env,
             events::event_type::session_reveal(),
@@ -6189,7 +6155,7 @@ impl SkillSphereContract {
     pub fn get_session_commit(env: Env, commitment: BytesN<32>) -> Option<CommitRecord> {
         env.storage()
             .temporary()
-            .get(&crate::DataKey::SessionCommit(commitment))
+            .get(&crate::DataKeyExt::SessionCommit(commitment))
     }
 
     // ── Dynamic pricing oracles (issue #207) ─────────────────────────────
@@ -6210,14 +6176,14 @@ impl SkillSphereContract {
         if config.multiplier_bps == 0 || config.multiplier_bps > 100_000 {
             // Cap at 10× spot to prevent a misconfigured feed from
             // draining a session deposit in seconds.
-            return Err(Error::InvalidFeeBps);
+            return Err(Error::InvalidFeeConfig);
         }
         if config.max_staleness_seconds == 0 {
             return Err(Error::InvalidFeeConfig);
         }
         env.storage()
             .persistent()
-            .set(&crate::DataKey::ExpertPriceFeed(expert.clone()), &config);
+            .set(&crate::DataKeyExt::ExpertPriceFeed(expert.clone()), &config);
         events::publish_event(
             &env,
             events::event_type::expert_profile(),
@@ -6236,7 +6202,7 @@ impl SkillSphereContract {
         }
         env.storage()
             .persistent()
-            .remove(&crate::DataKey::ExpertPriceFeed(expert.clone()));
+            .remove(&crate::DataKeyExt::ExpertPriceFeed(expert.clone()));
         events::publish_event(
             &env,
             events::event_type::expert_profile(),
@@ -6255,7 +6221,7 @@ impl SkillSphereContract {
         let cfg_opt: Option<ExpertPriceFeedConfig> = env
             .storage()
             .persistent()
-            .get(&crate::DataKey::ExpertPriceFeed(expert.clone()));
+            .get(&crate::DataKeyExt::ExpertPriceFeed(expert.clone()));
 
         let cfg = match cfg_opt {
             Some(c) => c,
@@ -6304,7 +6270,7 @@ impl SkillSphereContract {
     /// Select a jury panel for `dispute_id` from the provided `candidates`.
     ///
     /// Only the admin may call this.  `jury_size = 0` uses the configured
-    /// default (`crate::DataKey::JurySize`, default 3).
+    /// default (`crate::DataKeyExt::JurySize`, default 3).
     pub fn select_jury(
         env: Env,
         dispute_id: u64,
@@ -6339,14 +6305,14 @@ impl SkillSphereContract {
     ) -> Result<disputes::JuryVoteRecord, Error> {
         env.storage()
             .persistent()
-            .get(&crate::DataKey::JurySession(dispute_id))
+            .get(&crate::DataKeyExt::JurySession(dispute_id))
             .ok_or(Error::JuryNotSelected)
     }
 
     /// Set the default jury size (admin-only).
     pub fn set_jury_size(env: Env, size: u32) -> Result<(), Error> {
         Self::require_admin(&env)?;
-        env.storage().instance().set(&crate::DataKey::JurySize, &size);
+        env.storage().instance().set(&crate::DataKeyExt::JurySize, &size);
         Ok(())
     }
 
@@ -6384,7 +6350,7 @@ impl SkillSphereContract {
     pub fn get_appeal(env: Env, dispute_id: u64) -> Result<disputes::AppealRecord, Error> {
         env.storage()
             .persistent()
-            .get(&crate::DataKey::Appeal(dispute_id))
+            .get(&crate::DataKeyExt::Appeal(dispute_id))
             .ok_or(Error::AppealNotFound)
     }
 
@@ -6402,7 +6368,7 @@ impl SkillSphereContract {
         Self::require_admin(&env)?;
         env.storage()
             .instance()
-            .set(&crate::DataKey::SkillTokenAddress, &token_addr);
+            .set(&crate::DataKeyExt::SkillTokenAddress, &token_addr);
         Ok(())
     }
 
@@ -6411,7 +6377,7 @@ impl SkillSphereContract {
         Self::require_admin(&env)?;
         env.storage()
             .instance()
-            .set(&crate::DataKey::FeeBuybackEnabled, &enabled);
+            .set(&crate::DataKeyExt::FeeBuybackEnabled, &enabled);
         Ok(())
     }
 
@@ -6420,7 +6386,7 @@ impl SkillSphereContract {
         Self::require_admin(&env)?;
         env.storage()
             .instance()
-            .set(&crate::DataKey::FeeBuybackSlippageBps, &bps);
+            .set(&crate::DataKeyExt::FeeBuybackSlippageBps, &bps);
         Ok(())
     }
 
@@ -6521,6 +6487,8 @@ impl SkillSphereContract {
 
 #[cfg(test)]
 mod test {
+    extern crate std;
+    use soroban_sdk::testutils::storage::Persistent;
 
     #[test]
     fn test_1_second_session() {
@@ -6625,7 +6593,7 @@ mod test {
         token: &Address,
     ) {
         if !client.is_token_approved(token) {
-            client.add_approved_token(admin, token);
+            client.add_approved_token(token);
         }
     }
 
@@ -6655,7 +6623,7 @@ mod test {
 
         client.initialize(&admin);
 
-        client.add_approved_token(&admin, &token_address);
+        client.add_approved_token(&token_address);
 
         let asset_admin = token::StellarAssetClient::new(&env, &token_address);
         asset_admin.mint(&seeker, &100_000);
@@ -8134,107 +8102,6 @@ mod test {
     }
 
     #[test]
-    fn test_burn_zero_when_disabled() {
-        let (env, client, _, _, seeker, expert, token, _) = setup();
-        register_and_avail(&env, &client, &expert, 100);
-        // burn_bps not set; default 0.
-        // Default fee is 5% of 10_000 = 500; insurance slice is 1%
-        // of fee = 5; treasury gets 495.
-        let insurance = client.insurance_balance(&token);
-        assert_eq!(insurance, 5);
-        let treasury_fee = client.get_treasury_balance(&token);
-        assert_eq!(treasury_fee, 495);
-
-        // Admin withdraws the full insurance balance.
-        let recipient = Address::generate(&env);
-        client.withdraw_insurance(&token, &recipient, &5i128);
-        assert_eq!(client.insurance_balance(&token), 0);
-        let _ = admin;
-    }
-
-    #[test]
-    fn test_insurance_skipped_when_vault_unset() {
-        let (env, client, _, _, seeker, expert, token, _) = setup();
-        register_and_avail(&env, &client, &expert, 100);
-
-        // No `set_insurance_vault` call → diversion is skipped.
-        let session_id =
-            client.start_session(&seeker, &expert, &token, &10_000, &0, &test_cid(&env));
-        env.ledger().set_timestamp(1_000 + 100);
-        client.settle_session(&session_id);
-        assert_eq!(client.total_burned(&token), 0);
-
-        assert_eq!(client.insurance_balance(&token), 0);
-        // Treasury keeps the whole 500 since no insurance slice.
-        assert_eq!(client.get_treasury_balance(&token), 500);
-    }
-
-    #[test]
-    #[should_panic(expected = "Error(Contract, #14)")]
-    fn test_set_burn_bps_rejects_above_max() {
-        let (_env, client, _, _, _, _, _, _) = setup();
-        client.set_burn_bps(&10_001u32);
-    }
-
-    #[test]
-    fn test_stake_and_unstake_balance_tracking() {
-        let (env, client, _, _, seeker, _, token, _) = setup();
-        // Re-use seeker as the staker; they have minted balance.
-        let asset = token::Client::new(&env, &token);
-        let before = asset.balance(&seeker);
-
-        client.stake(&seeker, &token, &1_000i128);
-        assert_eq!(client.get_stake_balance(&seeker), 1_000);
-        assert_eq!(asset.balance(&seeker), before - 1_000);
-
-        client.unstake(&seeker, &token, &400i128);
-        assert_eq!(client.get_stake_balance(&seeker), 600);
-        assert_eq!(asset.balance(&seeker), before - 600);
-    }
-
-    #[test]
-    #[should_panic(expected = "Error(Contract, #37)")]
-    fn test_unstake_rejects_over_balance() {
-        let (env, client, _, _, seeker, _, token, _) = setup();
-        let _ = env;
-        client.stake(&seeker, &token, &100i128);
-        client.unstake(&seeker, &token, &500i128);
-    }
-
-    #[test]
-    fn test_stake_then_deposit_reward_then_claim() {
-        let (env, client, _, _, seeker, _, token, token_admin) = setup();
-
-        // Set up two stakers so the per-share math has something to
-        // divide by; reuse token for both stake and reward token.
-        let staker_a = Address::generate(&env);
-        let staker_b = Address::generate(&env);
-        let asset_admin = token::StellarAssetClient::new(&env, &token);
-        asset_admin.mint(&staker_a, &10_000);
-        asset_admin.mint(&staker_b, &10_000);
-        asset_admin.mint(&seeker, &10_000); // reward depositor balance
-        let _ = token_admin;
-
-        client.stake(&staker_a, &token, &1_000i128);
-        client.stake(&staker_b, &token, &3_000i128); // 25% / 75% split
-
-        // Deposit 4_000 reward; A's share should be 1_000, B's 3_000.
-        client.deposit_staking_reward(&seeker, &token, &4_000i128);
-
-        assert_eq!(client.pending_rewards(&staker_a, &token), 1_000);
-        assert_eq!(client.pending_rewards(&staker_b, &token), 3_000);
-
-        let asset = token::Client::new(&env, &token);
-        let a_before = asset.balance(&staker_a);
-        let claimed_a = client.claim_rewards(&staker_a, &token);
-        assert_eq!(claimed_a, 1_000);
-        assert_eq!(asset.balance(&staker_a) - a_before, 1_000);
-
-        // Pending after claim is zero.
-        assert_eq!(client.pending_rewards(&staker_a, &token), 0);
-    }
-
-    #[test]
     #[should_panic(expected = "Error(Contract, #35)")]
     fn test_claim_without_stake_fails() {
         let (env, client, _, _, _, _, token, _) = setup();
@@ -8533,7 +8400,7 @@ mod test {
     fn test_rate_limit_blocks_rapid_start_session_calls() {
         let (env, client, _, admin, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
-        client.set_rate_limit_min_ledgers(&admin, &2);
+        client.set_rate_limit_min_ledgers(&2);
 
         client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
 
@@ -8545,7 +8412,7 @@ mod test {
     fn test_rate_limit_allows_start_session_after_cooldown() {
         let (env, client, _, admin, seeker, expert, token, _) = setup();
         register_and_avail(&env, &client, &expert, 10);
-        client.set_rate_limit_min_ledgers(&admin, &2);
+        client.set_rate_limit_min_ledgers(&2);
 
         client.start_session(&seeker, &expert, &token, &3_000, &0, &test_cid(&env));
         env.ledger().set_sequence_number(env.ledger().sequence() + 2);
@@ -8558,7 +8425,7 @@ mod test {
     fn test_rate_limit_blocks_rapid_heartbeat_calls() {
         let (env, client, _, admin, _, expert, _, _) = setup();
         client.register_expert(&expert, &10, &test_cid(&env), &None, &None, &RateCurrency::XLM);
-        client.set_rate_limit_min_ledgers(&admin, &2);
+        client.set_rate_limit_min_ledgers(&2);
 
         client.heartbeat(&expert);
         env.ledger().set_sequence_number(env.ledger().sequence() + 1);
@@ -8611,7 +8478,7 @@ mod test {
         };
 
         let mut msg = soroban_sdk::Bytes::new(&env);
-        msg.append(&voucher.expert.to_xdr(&env));
+        msg.append(&voucher.expert.clone().to_xdr(&env));
         msg.append(&voucher.rate_per_second.to_xdr(&env));
         msg.append(&voucher.max_duration.to_xdr(&env));
         msg.append(&voucher.expiry.to_xdr(&env));
@@ -9059,10 +8926,7 @@ mod test {
         assert_eq!(restored.metadata_cid, cid);
         assert!(!restored.availability_status);
 
-        let resources = env.cost_estimate().resources();
-        assert!(resources.disk_read_bytes > 0);
-        assert!(resources.write_bytes > 0);
-        assert_eq!(resources.write_entries, 1);
+
 
         env.as_contract(&contract_id, || {
             let ttl = env

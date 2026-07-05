@@ -4,9 +4,15 @@
 //! trustline), the amount is stored here. The recipient can retry via
 //! `claim_failed_transfer`. Entries expire after 180 days.
 
-use soroban_sdk::{symbol_short, Address, Env};
+use soroban_sdk::{contracttype, symbol_short, Address, Env};
 
-use crate::{events, DataKey};
+use crate::events;
+
+#[contracttype]
+#[derive(Clone)]
+pub enum RecoveryKey {
+    FailedTransfer(Address),
+}
 
 /// 180 days in seconds.
 pub const DLQ_EXPIRY_SECS: u64 = 180 * 24 * 60 * 60;
@@ -19,7 +25,7 @@ fn dlq_ts_key(recipient: &Address) -> (soroban_sdk::Symbol, Address) {
 /// Store a failed transfer amount in the dead letter queue.
 /// If an entry already exists, the amounts are summed.
 pub fn enqueue_failed_transfer(env: &Env, recipient: &Address, amount: i128) {
-    let key = DataKey::FailedTransfer(recipient.clone());
+    let key = RecoveryKey::FailedTransfer(recipient.clone());
     let prev: i128 = env
         .storage()
         .persistent()
@@ -54,7 +60,7 @@ pub fn claim_failed_transfer(
 ) -> Result<i128, crate::Error> {
     recipient.require_auth();
 
-    let key = DataKey::FailedTransfer(recipient.clone());
+    let key = RecoveryKey::FailedTransfer(recipient.clone());
     let amount: i128 = env
         .storage()
         .persistent()
@@ -101,6 +107,6 @@ pub fn claim_failed_transfer(
 pub fn pending_failed_transfer(env: &Env, recipient: &Address) -> i128 {
     env.storage()
         .persistent()
-        .get(&DataKey::FailedTransfer(recipient.clone()))
+        .get(&RecoveryKey::FailedTransfer(recipient.clone()))
         .unwrap_or(0i128)
 }
