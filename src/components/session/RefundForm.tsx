@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useId, useState } from "react";
 import {
@@ -133,7 +133,6 @@ function SummaryRow({
  * form only appears for active or paused sessions.
  */
 export function RefundForm({
-  sessionId,
   sessionTitle,
   sessionStatus,
   escrowAmount,

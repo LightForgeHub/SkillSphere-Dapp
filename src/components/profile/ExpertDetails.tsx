@@ -144,7 +144,6 @@ export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProp
     
   // Calculate USD rates
   const hourlyRateUSD = rates ? expert.hourlyRate * rates.usd : null;
-  const minuteRateUSD = hourlyRateUSD ? hourlyRateUSD / 60 : null;
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 py-8">
