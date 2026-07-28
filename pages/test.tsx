@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import LoadingAndEmptyDemo from "../src/components/__demo__/LoadingAndEmptyDemo";
 
