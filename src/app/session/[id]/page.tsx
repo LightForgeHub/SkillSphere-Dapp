@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { LiveCounter } from "@/components/session/LiveCounter";
 import { SessionNotes } from "@/components/session/SessionNotes";
 import { AppealFormModal } from "@/components/session/AppealForm";
@@ -12,6 +12,7 @@ import { Modal } from "@/components/ui/Modal";
 import { useWallet } from "@/providers/WalletProvider";
 import { CodeWorkspace } from "@/components/session/CodeWorkspace";
 import { SessionChat } from "@/components/session/SessionChat";
+import VideoCall from "@/components/session/VideoCall";
 import {
   User,
   Wallet,
@@ -73,6 +74,7 @@ export default function SessionPage() {
   const router = useRouter();
   const wallet = useWallet();
   const sessionId = params.id as string;
+  const searchParams = useSearchParams();
 
   const [session] = useState<SessionData>(() => ({
     ...MOCK_SESSION,
@@ -88,6 +90,11 @@ export default function SessionPage() {
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showAppealModal, setShowAppealModal] = useState(false);
+  const [isPictureInPicture, setIsPictureInPicture] = useState(false);
+
+  const roleParam = searchParams.get("role");
+  const isExpert = roleParam === "expert";
+  const userRole = isExpert ? "expert" : "seeker";
 
   /**
    * A resolved dispute attached to this session, if any.
@@ -187,31 +194,62 @@ export default function SessionPage() {
 
         <div className={cn("grid gap-6", gridClassName)}>
           <div className={cn("space-y-6 flex flex-col", mainColumnClass)}>
-            <Card
-              variant="glow"
-              className="relative overflow-hidden flex-1 min-h-[300px]"
-            >
-              <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
-              <CardContent className="flex flex-col items-center justify-center h-full py-16">
-                <LiveCounter
-                  ratePerSecond={session.ratePerSecond}
-                  onTotalChange={setTotalStreamed}
-                  remainingSeconds={remainingSeconds}
-                  className="mb-8"
-                />
+            {isPictureInPicture ? (
+              <Card
+                variant="glow"
+                className="relative overflow-hidden flex-1 min-h-[300px]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+                <CardContent className="flex flex-col items-center justify-center h-full py-16">
+                  <LiveCounter
+                    ratePerSecond={session.ratePerSecond}
+                    onTotalChange={setTotalStreamed}
+                    remainingSeconds={remainingSeconds}
+                    className="mb-8"
+                  />
 
-                <div className="flex items-center gap-3">
-                  <Badge variant="success" className="text-xs">
-                    <span className="size-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
-                    Session Active
-                  </Badge>
-                  <Badge variant="info" className="text-xs">
-                    <Zap className="size-3" />
-                    Live
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="flex items-center gap-3 mb-4">
+                    <Badge variant="success" className="text-xs">
+                      <span className="size-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
+                      Session Active
+                    </Badge>
+                    <Badge variant="info" className="text-xs">
+                      <Zap className="size-3" />
+                      Live
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-foreground/50">Video call is floating</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="relative flex-1 min-h-[450px] rounded-2xl overflow-hidden border border-purple-500/30 bg-black">
+                <VideoCall
+                  expertName={session.expertName}
+                  seekerName="You"
+                  expertAvatar={session.expertAvatar || "/assets/Avatar.svg"}
+                  seekerAvatar="/assets/Avatar.svg"
+                  onEndCall={handleEndSession}
+                  isPictureInPicture={isPictureInPicture}
+                  onTogglePIP={() => setIsPictureInPicture(!isPictureInPicture)}
+                  sessionId={sessionId}
+                  role={userRole}
+                />
+              </div>
+            )}
+
+            {isPictureInPicture && (
+              <VideoCall
+                expertName={session.expertName}
+                seekerName="You"
+                expertAvatar={session.expertAvatar || "/assets/Avatar.svg"}
+                seekerAvatar="/assets/Avatar.svg"
+                onEndCall={handleEndSession}
+                isPictureInPicture={isPictureInPicture}
+                onTogglePIP={() => setIsPictureInPicture(!isPictureInPicture)}
+                sessionId={sessionId}
+                role={userRole}
+              />
+            )}
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
               {[
