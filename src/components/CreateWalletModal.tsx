@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { X, CheckCircle, AlertCircle } from "lucide-react";
+import { useWallet } from "@/providers/WalletProvider";
 
 type ModalState = "idle" | "connecting" | "connected" | "error";
 
@@ -12,14 +13,13 @@ interface Props {
 
 export default function CreateWalletModal({ open, onClose }: Props) {
   const [state, setState] = useState<ModalState>("idle");
-  const [method, setMethod] = useState<string | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
+  const { connect, error } = useWallet();
 
   // reset when opened
   useEffect(() => {
     if (open) {
       setState("idle");
-      setMethod(null);
     }
   }, [open]);
 
@@ -38,15 +38,10 @@ export default function CreateWalletModal({ open, onClose }: Props) {
     if (e.target === backdropRef.current) onClose();
   }
 
-  function simulateConnect(wallet: string) {
-    setMethod(wallet);
+  async function handleConnect() {
     setState("connecting");
-    // fake async
-    setTimeout(() => {
-      // deterministic success for Freighter, random for Albedo
-      if (wallet === "Freighter") setState("connected");
-      else setState(Math.random() > 0.4 ? "connected" : "error");
-    }, 1200);
+    const connected = await connect();
+    setState(connected ? "connected" : "error");
   }
 
   return (
@@ -70,15 +65,10 @@ export default function CreateWalletModal({ open, onClose }: Props) {
         <div className="mt-6 space-y-3">
           {/* Default / Options */}
           {state === "idle" && (
-            <div className="space-y-3">
-              <button onClick={() => simulateConnect("Freighter")} className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#4B0082] to-[#1E90FF] text-white border border-white/10 rounded-lg hover:opacity-90 transition-opacity">
+            <div>
+              <button onClick={() => void handleConnect()} className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#4B0082] to-[#1E90FF] text-white border border-white/10 rounded-lg hover:opacity-90 transition-opacity">
                 <span>Freighter</span>
                 <span className="text-xs text-white/90">Recommended</span>
-              </button>
-
-              <button onClick={() => simulateConnect("Albedo")} className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#1a1a2e] to-[#16213e] text-white border border-white/10 rounded-lg hover:opacity-90 transition-opacity">
-                <span>Albedo</span>
-                <span className="text-xs text-white/90">Secure</span>
               </button>
             </div>
           )}
@@ -90,7 +80,7 @@ export default function CreateWalletModal({ open, onClose }: Props) {
                 <div className="w-3 h-3 rounded-full bg-white/60 animate-bounce" />
               </div>
               <div>
-                <div className="text-sm">Connecting to {method}…</div>
+                <div className="text-sm">Connecting to Freighter…</div>
                 <div className="text-xs text-muted-foreground">Please approve the connection in your wallet.</div>
               </div>
             </div>
@@ -102,7 +92,7 @@ export default function CreateWalletModal({ open, onClose }: Props) {
               <CheckCircle className="w-8 h-8 text-green-400" />
               <div>
                 <div className="text-sm">Connected</div>
-                <div className="text-xs text-muted-foreground">{method} is now connected.</div>
+                <div className="text-xs text-muted-foreground">Freighter is now connected.</div>
               </div>
             </div>
           )}
@@ -113,13 +103,23 @@ export default function CreateWalletModal({ open, onClose }: Props) {
               <AlertCircle className="w-8 h-8 text-red-400" />
               <div>
                 <div className="text-sm">Connection failed</div>
-                <div className="text-xs text-muted-foreground">Unable to connect to {method}. Try another wallet.</div>
+                <div className="text-xs text-muted-foreground">
+                  {error ?? "Unable to connect to Freighter. Please try again."}
+                </div>
               </div>
             </div>
           )}
         </div>
 
         <div className="mt-6 flex justify-end">
+          {state === "error" && (
+            <button
+              onClick={() => void handleConnect()}
+              className="mr-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+            >
+              Try again
+            </button>
+          )}
           <button onClick={onClose} className="px-4 py-2 bg-white/5 rounded-lg">Close</button>
         </div>
       </div>

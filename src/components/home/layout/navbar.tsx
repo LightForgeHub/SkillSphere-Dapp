@@ -6,11 +6,23 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import CreateWalletModal from '@/components/CreateWalletModal';
+import { useWallet } from '@/providers/WalletProvider';
+
+function shortenAddress(address: string): string {
+  return `${address.slice(0, 4)}…${address.slice(-4)}`;
+}
 
 export default function NavBar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
+  const {
+    address,
+    network,
+    isLoading,
+    isWrongNetwork,
+    disconnect,
+  } = useWallet();
 
   // Hide navbar on auth routes
   const authRoutes = ['/login', '/sign-in', '/sign-up'];
@@ -21,7 +33,17 @@ export default function NavBar() {
   const isLandingPage = pathname === '/';
 
   return (
-    <div className="w-full h-[78px] flex items-center text-foreground overflow-x-hidden"
+    <>
+      {address && isWrongNetwork && (
+        <div
+          role="alert"
+          className="w-full border-b border-red-500/50 bg-red-900/80 px-4 py-2 text-center text-sm font-medium text-red-200"
+        >
+          Freighter Wallet is set to {network}. Please switch to TESTNET in
+          Freighter extension settings.
+        </div>
+      )}
+      <div className="w-full h-[78px] flex items-center text-foreground overflow-x-hidden"
       style={{
         backgroundColor: "var(--background)",
         backgroundImage: "var(--bg-full-pattern)",
@@ -84,10 +106,32 @@ export default function NavBar() {
                 </>
               ) : (
                 <>
-                  <button onClick={() => setWalletOpen(true)} className="flex items-center space-x-2 px-4 h-10 text-sm font-medium bg-[#FA7F2B] rounded-lg hover:bg-[#e67425] transition-colors cursor-pointer whitespace-nowrap">
-      <Wallet className="w-5 h-5 text-foreground" />
-                    <span>Connect Wallet</span>
+                  <button
+                    onClick={() => {
+                      if (!address) setWalletOpen(true);
+                    }}
+                    disabled={isLoading}
+                    className="flex items-center space-x-2 px-4 h-10 text-sm font-medium bg-[#FA7F2B] rounded-lg hover:bg-[#e67425] transition-colors cursor-pointer whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60"
+                    title={address ?? "Connect Freighter wallet"}
+                  >
+                    <Wallet className="w-5 h-5 text-foreground" />
+                    <span className={address ? "font-mono" : undefined}>
+                      {address
+                        ? shortenAddress(address)
+                        : isLoading
+                          ? "Connecting…"
+                          : "Connect Wallet"}
+                    </span>
                   </button>
+
+                  {address && (
+                    <button
+                      onClick={disconnect}
+                      className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      Disconnect
+                    </button>
+                  )}
                   
                   <button className="p-2 bg-card border border-border rounded-lg hover:bg-[#251241] transition-colors">
                     <Bell className="w-5 h-5 text-foreground" />
@@ -153,10 +197,31 @@ export default function NavBar() {
                   </>
                 ) : (
                   <div className="pt-4 border-t border-border space-y-4">
-                    <button onClick={() => setWalletOpen(true)} className="w-full flex items-center justify-center space-x-2 px-4 py-2 text-sm bg-[#FA7F2B] rounded-lg">
-                      <img src="/wallet-icon.png" alt="wallet" className="w-5 h-5 invert" />
-                      <span>Connect Wallet</span>
+                    <button
+                      onClick={() => {
+                        if (!address) setWalletOpen(true);
+                      }}
+                      disabled={isLoading}
+                      className="w-full flex items-center justify-center space-x-2 px-4 py-2 text-sm bg-[#FA7F2B] rounded-lg disabled:cursor-not-allowed disabled:opacity-60"
+                      title={address ?? "Connect Freighter wallet"}
+                    >
+                      <Wallet className="w-5 h-5" />
+                      <span className={address ? "font-mono" : undefined}>
+                        {address
+                          ? shortenAddress(address)
+                          : isLoading
+                            ? "Connecting…"
+                            : "Connect Wallet"}
+                      </span>
                     </button>
+                    {address && (
+                      <button
+                        onClick={disconnect}
+                        className="w-full text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        Disconnect
+                      </button>
+                    )}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <img src="/avatar.png" alt="Profile" className="w-10 h-10 rounded-full border-2 border-[#FA7F2B]" />
@@ -173,5 +238,6 @@ export default function NavBar() {
       </nav>
       <CreateWalletModal open={walletOpen} onClose={() => setWalletOpen(false)} />
     </div>
+    </>
   );
 }
