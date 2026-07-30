@@ -375,6 +375,7 @@ export default function SessionPage() {
                 <CardContent className="py-4">
                   <SessionNotes
                     sessionId={sessionId}
+                    role={userRole}
                     onSaveToServer={saveNotesToServer}
                   />
                 </CardContent>
