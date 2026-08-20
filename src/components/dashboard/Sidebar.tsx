@@ -39,7 +39,12 @@ export default function Sidebar() {
 
   useEffect(() => {
     const v = safeLocalStorage.get("dashboard_profile")
-    if (v) setProfile(JSON.parse(v))
+    if (v) {
+      try {
+        const parsed = JSON.parse(v)
+        if (parsed && typeof parsed === "object") setProfile(parsed)
+      } catch {}
+    }
   }, [])
 
   useEffect(() => {
