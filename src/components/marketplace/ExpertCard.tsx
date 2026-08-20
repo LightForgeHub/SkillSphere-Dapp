@@ -16,7 +16,7 @@ interface ExpertCardProps {
 export default function ExpertCard({ expert }: ExpertCardProps) {
     const queryClient = useQueryClient();
     const { multiplier, isSurgeActive } = useSurgeMultiplier();
-    const { rates, isLoading: ratesLoading } = useCurrency();
+    const { rates } = useCurrency();
 
     const handleMouseEnter = () => {
         prefetchExpert(queryClient, expert.id);

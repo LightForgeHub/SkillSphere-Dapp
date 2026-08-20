@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import { Bell, X } from "lucide-react";
 
 interface Notification {
@@ -174,12 +175,12 @@ export default function NotificationHub() {
             {/* Footer */}
             {notifications.length > 0 && (
               <div className="border-t border-zinc-800 px-4 py-3 bg-zinc-800/40">
-                <a
+                <Link
                   href="/dashboard/notifications"
                   className="text-xs font-medium text-violet-400 hover:text-violet-300 transition-colors"
                 >
                   View all notifications →
-                </a>
+                </Link>
               </div>
             )}
           </div>

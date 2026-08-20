@@ -23,8 +23,6 @@
 # misc
 .DS_Store
 *.pem
-/contracts/target
-/contracts/test_snapshots
 
 # debug
 npm-debug.log*

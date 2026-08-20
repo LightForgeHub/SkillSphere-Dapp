@@ -185,15 +185,19 @@ const DISPLAY_CURRENCIES: DisplayCurrency[] = ["XLM", "USD", "EUR", "GBP", "JPY"
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { address, network } = useWallet();
+  const { address, network, isWrongNetwork } = useWallet();
   const { selectedCurrency, setSelectedCurrency, convert } = useCurrency();
 
   return (
     <>
       {/* Network mismatch alert banner */}
-      {address && network !== null && network !== "TESTNET" && (
-        <div className="w-full bg-red-900/80 border-b border-red-500/50 py-2 px-4 text-center text-sm font-medium text-red-200">
-          Freighter Wallet is set to {network}. Please switch to TESTNET in Freighter extension settings.
+      {address && isWrongNetwork && (
+        <div
+          role="alert"
+          className="w-full bg-red-900/80 border-b border-red-500/50 py-2 px-4 text-center text-sm font-medium text-red-200"
+        >
+          Freighter Wallet is set to {network}. Please switch to TESTNET in
+          Freighter extension settings.
         </div>
       )}
     <header className="sticky top-0 z-30 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-md">

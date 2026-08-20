@@ -37,7 +37,7 @@ export function useHeartbeatPing(expertId: string) {
     try {
       const result = await pingHeartbeat(expertId);
       setLastHeartbeat(result.lastHeartbeat);
-    } catch (error) {
+    } catch {
       setPingError("Failed to send heartbeat. Please try again.");
     } finally {
       setIsPinging(false);

@@ -5,6 +5,8 @@
 
 export const MOCK_WALLET_ADDRESS = "GBRPYHIL2CI3WHZDTOOQFC6EB4KJJGUJQNZVIU3TWCYGIQUI5GUDFQD";
 export const MOCK_NETWORK = "TESTNET";
+export const MOCK_NETWORK_PASSPHRASE =
+  "Test SDF Network ; September 2015";
 export const MOCK_BALANCE = "1000.00";
 
 export interface MockWalletConfig {
@@ -45,15 +47,23 @@ export const mockFreighterApi = {
 
   getNetwork: async () => ({
     network: MOCK_NETWORK,
+    networkPassphrase: MOCK_NETWORK_PASSPHRASE,
+    error: null,
+  }),
+
+  requestAccess: async () => ({
+    address: MOCK_WALLET_ADDRESS,
     error: null,
   }),
 
   setAllowed: async () => ({
+    isAllowed: true,
     error: null,
   }),
 
   signTransaction: async (xdr: string) => ({
-    signedXDR: xdr,
+    signedTxXdr: xdr,
+    signerAddress: MOCK_WALLET_ADDRESS,
     error: null,
   }),
 
@@ -71,6 +81,8 @@ export function verifySignature(
   _publicKey: string,
   _signedXDR: string
 ): boolean {
+  void _publicKey;
+  void _signedXDR;
   return true;
 }
 
@@ -81,6 +93,7 @@ export function verifySignature(
 export function simulateTransactionSubmission(
   _xdr: string
 ): { hash: string; error: null } | { hash: null; error: string } {
+  void _xdr;
   const mockHash = "0000000000000000000000000000000000000000000000000000000000000000";
   return {
     hash: mockHash,
