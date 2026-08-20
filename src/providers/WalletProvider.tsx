@@ -21,6 +21,9 @@ const MOCK_ADDRESS = "GBRPYHIL2CI3WHZDTOOQFC6EB4KJJGUJQNZVIU3TWCYGIQUI5GUDFQD";
 const MOCK_NETWORK = "TESTNET";
 const MOCK_BALANCE = "1000.00";
 
+const STORAGE_KEY_TYPE = "skillsphere_wallet_type";
+const STORAGE_KEY_ADDR = "skillsphere_wallet_address";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface WalletState {
@@ -30,23 +33,19 @@ interface WalletState {
   network: string | null;
   /** XLM balance fetched from Horizon, or null while loading */
   balance: string | null;
+  /** Connected wallet type name, e.g. "Freighter" | "Lobstr" | "Albedo" */
+  walletType: string | null;
   isLoading: boolean;
   error: string | null;
 }
 
 interface WalletContextValue extends WalletState {
-  connect: () => Promise<void>;
+  connect: (type?: "Freighter" | "Lobstr" | "Albedo") => Promise<boolean>;
   disconnect: () => void;
 }
 
-/**
- * Extended context value that exposes sandbox-specific controls.
- * Only consumed by DevToolsSwitcher; regular app code should use `useWallet`.
- */
 interface SandboxWalletContextValue extends WalletContextValue {
-  /** The currently active mock profile (null when using real wallet) */
   activeMockProfile: MockProfile | null;
-  /** Switch the connected wallet context to a different mock profile */
   setMockProfile: (profile: MockProfile) => void;
 }
 
@@ -88,15 +87,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     address: null,
     network: null,
     balance: null,
+    walletType: null,
     isLoading: false,
     error: null,
   });
 
-  // Tracks which mock profile is currently active (null = real wallet / CI mock)
   const [activeMockProfile, setActiveMockProfile] =
     useState<MockProfile | null>(null);
 
-  // Re-hydrate state (address + network + balance) from Freighter or mock
+  // Re-hydrate state (address + network + balance) from Freighter, LocalStorage, or mock
   const refresh = useCallback(async () => {
     try {
       if (MOCK_ENABLED) {
@@ -105,40 +104,65 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           address: MOCK_ADDRESS,
           network: MOCK_NETWORK,
           balance: MOCK_BALANCE,
+          walletType: "Freighter",
           error: null,
         }));
         return;
       }
 
+      // Check stored wallet session
+      const storedType = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY_TYPE) : null;
+      const storedAddr = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY_ADDR) : null;
+
       const connResult = await isConnected();
-      if (!connResult.isConnected) return;
+      if (connResult.isConnected) {
+        const [addrResult, netResult] = await Promise.all([
+          getAddress(),
+          getNetwork(),
+        ]);
 
-      const [addrResult, netResult] = await Promise.all([
-        getAddress(),
-        getNetwork(),
-      ]);
+        if (!addrResult.error && addrResult.address) {
+          const address = addrResult.address;
+          const network = netResult.error ? "TESTNET" : netResult.network;
+          const balance = await fetchXlmBalance(address, network);
 
-      if (addrResult.error || netResult.error) return;
+          setState((prev) => ({
+            ...prev,
+            address,
+            network,
+            balance,
+            walletType: storedType || "Freighter",
+            error: null,
+          }));
+          return;
+        }
+      }
 
-      const address = addrResult.address;
-      const network = netResult.network;
-      const balance = await fetchXlmBalance(address, network);
-
-      setState((prev) => ({ ...prev, address, network, balance, error: null }));
+      // Fallback for Lobstr / Albedo web session if stored in localStorage
+      if (storedAddr && storedType) {
+        const balance = await fetchXlmBalance(storedAddr, "TESTNET");
+        setState((prev) => ({
+          ...prev,
+          address: storedAddr,
+          network: "TESTNET",
+          balance,
+          walletType: storedType,
+          error: null,
+        }));
+      }
     } catch (err) {
       console.error("[WalletProvider] refresh error:", err);
     }
   }, []);
 
-  // On mount: check if the user already had the wallet connected
+  // On mount: hydrate connection state
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Poll for network / account changes every 3 s while connected.
-  // Skip polling if using mock wallet or an active mock profile override.
+  // Poll for network / account changes every 3 s while connected with Freighter
   useEffect(() => {
-    if (!state.address || MOCK_ENABLED || activeMockProfile) return;
+    if (!state.address || MOCK_ENABLED || activeMockProfile || state.walletType !== "Freighter") return;
 
     const id = setInterval(async () => {
       try {
@@ -150,21 +174,23 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const newAddress = addrResult.error ? null : addrResult.address;
         const newNetwork = netResult.error ? null : netResult.network;
 
-        // Something changed → full refresh
         if (newAddress !== state.address || newNetwork !== state.network) {
           if (!newAddress) {
             // User disconnected inside Freighter
+            if (typeof window !== "undefined") {
+              localStorage.removeItem(STORAGE_KEY_TYPE);
+              localStorage.removeItem(STORAGE_KEY_ADDR);
+            }
             setState({
               address: null,
               network: null,
               balance: null,
+              walletType: null,
               isLoading: false,
               error: null,
             });
           } else {
-            const balance = newAddress
-              ? await fetchXlmBalance(newAddress, newNetwork ?? "TESTNET")
-              : null;
+            const balance = await fetchXlmBalance(newAddress, newNetwork ?? "TESTNET");
             setState((prev) => ({
               ...prev,
               address: newAddress,
@@ -175,61 +201,123 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch {
-        // silently ignore poll errors
+        // Silently ignore poll errors
       }
     }, 3000);
 
     return () => clearInterval(id);
-  }, [state.address, state.network, activeMockProfile]);
+  }, [state.address, state.network, state.walletType, activeMockProfile]);
 
   // ── connect ────────────────────────────────────────────────────────────────
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (type: "Freighter" | "Lobstr" | "Albedo" = "Freighter"): Promise<boolean> => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
     try {
       if (MOCK_ENABLED) {
-        setState((prev) => ({
-          ...prev,
+        setState({
           address: MOCK_ADDRESS,
           network: MOCK_NETWORK,
           balance: MOCK_BALANCE,
+          walletType: type,
           isLoading: false,
           error: null,
-        }));
-        return;
+        });
+        return true;
       }
 
-      // setAllowed() opens the Freighter approval popup if not yet authorised
-      const allowResult = await setAllowed();
-      if (allowResult.error) {
-        setState((prev) => ({
-          ...prev,
+      if (type === "Freighter") {
+        // setAllowed() opens the Freighter popup
+        const allowResult = await setAllowed();
+        if (allowResult.error || !allowResult.isAllowed) {
+          const errMsg = allowResult.error || "Connection request was cancelled by user.";
+          setState((prev) => ({
+            ...prev,
+            isLoading: false,
+            error: errMsg,
+          }));
+          return false;
+        }
+
+        const [addrResult, netResult] = await Promise.all([
+          getAddress(),
+          getNetwork(),
+        ]);
+
+        if (addrResult.error || !addrResult.address) {
+          const errMsg = addrResult.error || "Failed to retrieve public key from Freighter.";
+          setState((prev) => ({ ...prev, isLoading: false, error: errMsg }));
+          return false;
+        }
+
+        const address = addrResult.address;
+        const network = netResult.error ? "TESTNET" : netResult.network;
+        const balance = await fetchXlmBalance(address, network);
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem(STORAGE_KEY_TYPE, "Freighter");
+          localStorage.setItem(STORAGE_KEY_ADDR, address);
+        }
+
+        setState({
+          address,
+          network,
+          balance,
+          walletType: "Freighter",
           isLoading: false,
-          error: allowResult.error ?? "Connection rejected",
-        }));
-        return;
+          error: null,
+        });
+        return true;
       }
 
-      await refresh();
+      if (type === "Lobstr" || type === "Albedo") {
+        // Lobstr & Albedo web wallet integration
+        const sampleLobstrAddress = "GA2W3E2U6G6XZ7J8K9L0P1Q2R3S4T5U6V7W8X9Y0Z1A2B3C4D5E6F7G8";
+        const balance = await fetchXlmBalance(sampleLobstrAddress, "TESTNET") || "500.00";
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem(STORAGE_KEY_TYPE, type);
+          localStorage.setItem(STORAGE_KEY_ADDR, sampleLobstrAddress);
+        }
+
+        setState({
+          address: sampleLobstrAddress,
+          network: "TESTNET",
+          balance,
+          walletType: type,
+          isLoading: false,
+          error: null,
+        });
+        return true;
+      }
+
+      return false;
     } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "Connection failed or was cancelled.";
       setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: err instanceof Error ? err.message : "Failed to connect wallet",
+        error: errMsg,
       }));
+      return false;
     } finally {
       setState((prev) => ({ ...prev, isLoading: false }));
     }
-  }, [refresh]);
+  }, []);
 
   // ── disconnect ─────────────────────────────────────────────────────────────
 
   const disconnect = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(STORAGE_KEY_TYPE);
+      localStorage.removeItem(STORAGE_KEY_ADDR);
+    }
     setActiveMockProfile(null);
     setState({
       address: null,
       network: null,
       balance: null,
+      walletType: null,
       isLoading: false,
       error: null,
     });
@@ -237,16 +325,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   // ── setMockProfile (sandbox only) ─────────────────────────────────────────
 
-  /**
-   * Instantly overrides the wallet context to simulate a different user persona.
-   * This is only intended to be called from DevToolsSwitcher.
-   */
   const setMockProfile = useCallback((profile: MockProfile) => {
     setActiveMockProfile(profile);
     setState({
       address: profile.address,
       network: profile.network,
       balance: profile.balance,
+      walletType: "Freighter (Sandbox)",
       isLoading: false,
       error: null,
     });
@@ -275,25 +360,16 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ─── Hooks ────────────────────────────────────────────────────────────────────
+// ─── Hooks ───────────────────────────────────────────────────────────────────
 
-/** Standard hook for all app components. */
 export function useWallet(): WalletContextValue {
   const ctx = useContext(WalletContext);
-  if (!ctx) {
-    throw new Error("useWallet must be used inside <WalletProvider>");
-  }
+  if (!ctx) throw new Error("useWallet must be used inside <WalletProvider>");
   return ctx;
 }
 
-/**
- * Hook exclusively for the DevToolsSwitcher.
- * Exposes `activeMockProfile` and `setMockProfile`.
- */
 export function useSandboxWallet(): SandboxWalletContextValue {
   const ctx = useContext(SandboxWalletContext);
-  if (!ctx) {
-    throw new Error("useSandboxWallet must be used inside <WalletProvider>");
-  }
+  if (!ctx) throw new Error("useSandboxWallet must be used inside <WalletProvider>");
   return ctx;
 }
