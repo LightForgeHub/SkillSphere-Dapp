@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { X, CheckCircle, AlertCircle } from "lucide-react";
+import { X, CheckCircle, AlertCircle, Wallet } from "lucide-react";
+import { useWallet } from "@/providers/WalletProvider";
 
 type ModalState = "idle" | "connecting" | "connected" | "error";
 
@@ -11,19 +12,27 @@ interface Props {
 }
 
 export default function CreateWalletModal({ open, onClose }: Props) {
+  const { connect, address, error: walletError } = useWallet();
   const [state, setState] = useState<ModalState>("idle");
   const [method, setMethod] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
 
-  // reset when opened
+  // Reset when opened
   useEffect(() => {
     if (open) {
-      setState("idle");
-      setMethod(null);
+      if (address) {
+        setState("connected");
+        setMethod("Freighter");
+      } else {
+        setState("idle");
+        setMethod(null);
+        setErrorMsg(null);
+      }
     }
-  }, [open]);
+  }, [open, address]);
 
-  // Escape to close
+  // Escape key listener
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -38,14 +47,28 @@ export default function CreateWalletModal({ open, onClose }: Props) {
     if (e.target === backdropRef.current) onClose();
   }
 
-  function simulateConnect(wallet: string) {
-    setMethod(wallet);
+  async function handleFreighterConnect() {
+    setMethod("Freighter");
     setState("connecting");
-    // fake async
+    setErrorMsg(null);
+
+    try {
+      await connect();
+      setState("connected");
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+    } catch (err: unknown) {
+      setState("error");
+      setErrorMsg(err instanceof Error ? err.message : "Connection failed");
+    }
+  }
+
+  function simulateAlbedoConnect() {
+    setMethod("Albedo");
+    setState("connecting");
     setTimeout(() => {
-      // deterministic success for Freighter, random for Albedo
-      if (wallet === "Freighter") setState("connected");
-      else setState(Math.random() > 0.4 ? "connected" : "error");
+      setState(Math.random() > 0.4 ? "connected" : "error");
     }, 1200);
   }
 
@@ -53,74 +76,114 @@ export default function CreateWalletModal({ open, onClose }: Props) {
     <div
       ref={backdropRef}
       onMouseDown={clickOutside}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
     >
-      <div className="relative w-[min(520px,94%)] bg-[var(--background)] border border-white/10 rounded-xl p-6">
-        <button
-          onClick={onClose}
-          aria-label="close"
-          className="absolute right-3 top-3 p-2 rounded-md hover:bg-white/5"
-        >
-          <X className="w-5 h-5" />
-        </button>
+      <div className="relative w-full max-w-md bg-card border border-border/80 rounded-2xl p-6 shadow-2xl space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-2 border-b border-border/40">
+          <div className="flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-purple-400" />
+            <h3 className="text-lg font-bold text-foreground">Connect Wallet</h3>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close modal"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-        <h3 className="text-lg font-semibold">Connect Your Wallet</h3>
-        <p className="text-sm text-muted-foreground mt-1">Choose a wallet to connect to SkillSphere.</p>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Connect your Stellar wallet to stream per-second consultation payments on SkillSphere.
+        </p>
 
-        <div className="mt-6 space-y-3">
-          {/* Default / Options */}
+        {/* Options / States */}
+        <div className="space-y-3 pt-2">
           {state === "idle" && (
             <div className="space-y-3">
-              <button onClick={() => simulateConnect("Freighter")} className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#4B0082] to-[#1E90FF] text-white border border-white/10 rounded-lg hover:opacity-90 transition-opacity">
-                <span>Freighter</span>
-                <span className="text-xs text-white/90">Recommended</span>
+              <button
+                onClick={handleFreighterConnect}
+                className="w-full flex items-center justify-between px-4 py-3.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white rounded-xl font-medium transition-all shadow-md group"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-bold">Freighter Wallet</span>
+                </div>
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-white/20 text-white">
+                  Stellar Official
+                </span>
               </button>
 
-              <button onClick={() => simulateConnect("Albedo")} className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#1a1a2e] to-[#16213e] text-white border border-white/10 rounded-lg hover:opacity-90 transition-opacity">
-                <span>Albedo</span>
-                <span className="text-xs text-white/90">Secure</span>
+              <button
+                onClick={simulateAlbedoConnect}
+                className="w-full flex items-center justify-between px-4 py-3.5 bg-muted/60 hover:bg-muted text-foreground border border-border/60 rounded-xl font-medium transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <span>Albedo Wallet</span>
+                </div>
+                <span className="text-[11px] font-semibold text-muted-foreground">
+                  Web-based
+                </span>
               </button>
             </div>
           )}
 
-          {/* Connecting */}
+          {/* Connecting State */}
           {state === "connecting" && (
-            <div className="flex items-center gap-3">
-              <div className="animate-pulse w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                <div className="w-3 h-3 rounded-full bg-white/60 animate-bounce" />
-              </div>
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
+              <div className="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin shrink-0" />
               <div>
-                <div className="text-sm">Connecting to {method}…</div>
-                <div className="text-xs text-muted-foreground">Please approve the connection in your wallet.</div>
+                <p className="text-sm font-semibold text-foreground">
+                  Connecting to {method}…
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Please approve the connection popup in your Freighter extension.
+                </p>
               </div>
             </div>
           )}
 
-          {/* Connected */}
+          {/* Connected State */}
           {state === "connected" && (
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-8 h-8 text-green-400" />
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+              <CheckCircle className="w-6 h-6 shrink-0" />
               <div>
-                <div className="text-sm">Connected</div>
-                <div className="text-xs text-muted-foreground">{method} is now connected.</div>
+                <p className="text-sm font-bold">Wallet Connected!</p>
+                <p className="text-xs text-emerald-300/80 font-mono truncate max-w-[280px]">
+                  {address || "Freighter is ready"}
+                </p>
               </div>
             </div>
           )}
 
-          {/* Error */}
+          {/* Error State */}
           {state === "error" && (
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-8 h-8 text-red-400" />
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+              <AlertCircle className="w-6 h-6 shrink-0 mt-0.5" />
               <div>
-                <div className="text-sm">Connection failed</div>
-                <div className="text-xs text-muted-foreground">Unable to connect to {method}. Try another wallet.</div>
+                <p className="text-sm font-bold">Connection Failed</p>
+                <p className="text-xs text-red-300/80">
+                  {errorMsg || walletError || `Unable to connect to ${method}. Please verify Freighter extension is installed.`}
+                </p>
+                <button
+                  onClick={() => setState("idle")}
+                  className="mt-2 text-xs font-semibold underline text-purple-400 hover:text-purple-300"
+                >
+                  Try again
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        <div className="mt-6 flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 bg-white/5 rounded-lg">Close</button>
+        {/* Footer */}
+        <div className="pt-2 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted rounded-lg transition-colors"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
