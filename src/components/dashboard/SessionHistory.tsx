@@ -33,7 +33,7 @@ export default function SessionHistory() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold mb-2">Session History</h2>
-          <p className="text-gray-400">View your past sessions and transaction details on Stellar Explorer.</p>
+          <p className="text-muted-foreground">View your past sessions and transaction details on Stellar Explorer.</p>
         </div>
         <div className="flex gap-3">
           <button
@@ -51,9 +51,6 @@ export default function SessionHistory() {
             Download PDF Receipt
           </button>
         </div>
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Session History</h2>
-        <p className="text-muted-foreground">View your past sessions and transaction details on Stellar Explorer.</p>
       </div>
 
       {/* Sessions Table */}
