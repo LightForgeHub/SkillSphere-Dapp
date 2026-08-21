@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeSanitize from "rehype-sanitize";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { cn } from "@/components/ui/utils";
 
 interface SessionNotesProps {
@@ -14,6 +12,67 @@ interface SessionNotesProps {
 const storageKey = (id: string) => `session-notes-${id}`;
 const SYNC_INTERVAL = 2000;
 const DEBOUNCE_MS = 800;
+
+function SimpleMarkdownPreview({ text }: { text: string }) {
+  const lines = text.split("\n");
+
+  return (
+    <div className="space-y-2 text-sm leading-relaxed">
+      {lines.map((line, idx) => {
+        if (line.startsWith("# ")) {
+          return (
+            <h1 key={idx} className="text-lg font-bold text-white border-b border-white/10 pb-1 mt-2">
+              {line.slice(2)}
+            </h1>
+          );
+        }
+        if (line.startsWith("## ")) {
+          return (
+            <h2 key={idx} className="text-base font-bold text-white/90 border-b border-white/10 pb-0.5 mt-2">
+              {line.slice(3)}
+            </h2>
+          );
+        }
+        if (line.startsWith("### ")) {
+          return (
+            <h3 key={idx} className="text-sm font-semibold text-white/85 mt-1.5">
+              {line.slice(4)}
+            </h3>
+          );
+        }
+        if (line.startsWith("- ") || line.startsWith("* ")) {
+          return (
+            <li key={idx} className="ml-4 list-disc text-white/80">
+              {line.slice(2)}
+            </li>
+          );
+        }
+        if (line.startsWith("> ")) {
+          return (
+            <blockquote key={idx} className="border-l-2 border-violet-500/50 pl-3 italic text-white/60 my-1">
+              {line.slice(2)}
+            </blockquote>
+          );
+        }
+        if (line.startsWith("```")) {
+          return (
+            <div key={idx} className="font-mono text-xs text-muted-foreground">
+              {line}
+            </div>
+          );
+        }
+        if (line.trim() === "") {
+          return <div key={idx} className="h-2" />;
+        }
+        return (
+          <p key={idx} className="text-white/80 font-normal">
+            {line}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 export function SessionNotes({ sessionId, role, onSaveToServer }: SessionNotesProps) {
   const [content, setContent] = useState("");
@@ -72,69 +131,66 @@ export function SessionNotes({ sessionId, role, onSaveToServer }: SessionNotesPr
   useEffect(() => {
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(
-          `/api/session/${sessionId}/notes?role=${role}&since=${lastSyncTs.current}`
-        );
+        const res = await fetch(`/api/session/${sessionId}/notes`);
+        if (!res.ok) return;
         const data = await res.json();
-        if (data.content !== null && data.timestamp > lastSyncTs.current) {
-          lastSyncTs.current = data.timestamp;
-          if (data.timestamp > lastSentTs.current) {
-            setContent(data.content);
+        if (data.updatedAt && data.updatedAt > lastSyncTs.current) {
+          if (Date.now() - lastSentTs.current > DEBOUNCE_MS + 200) {
+            setContent(data.content ?? "");
+            sessionStorage.setItem(storageKey(sessionId), data.content ?? "");
+            lastSyncTs.current = data.updatedAt;
           }
         }
       } catch {
-        // silent
+        // polling error ignored
       }
     }, SYNC_INTERVAL);
+
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [sessionId, role]);
+  }, [sessionId]);
 
-  async function handleFinalize() {
-    setSaveStatus("saving");
-    sessionStorage.setItem(storageKey(sessionId), content);
-    try {
-      await onSaveToServer(content);
-      setSaveStatus("saved");
-      sessionStorage.removeItem(storageKey(sessionId));
-    } catch {
-      setSaveStatus("error");
-    }
-  }
-
-  function handleDownload() {
-    const blob = new Blob([content], { type: "text/markdown" });
+  const handleDownload = useCallback(() => {
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `session-notes-${sessionId}.md`;
+    a.download = `session-${sessionId}-notes.md`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }
+  }, [content, sessionId]);
+
+  const handleFinalize = useCallback(async () => {
+    setSaveStatus("saving");
+    try {
+      sessionStorage.setItem(storageKey(sessionId), content);
+      await onSaveToServer(content);
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    } catch {
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus("idle"), 4000);
+    }
+  }, [content, sessionId, onSaveToServer]);
 
   return (
-    <div className="flex flex-col gap-2 h-full">
+    <div className="flex flex-col h-full space-y-3 bg-zinc-900/60 p-4 rounded-xl border border-zinc-800">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-white/50 uppercase tracking-wide">
-          Session Notes
-        </span>
+        <h3 className="text-sm font-semibold text-white">Session Notes</h3>
         <div className="flex items-center gap-2">
           {syncStatus === "syncing" && (
-            <span className="text-[10px] text-blue-300/50">syncing…</span>
+            <span className="text-[10px] text-violet-400 animate-pulse">Syncing…</span>
           )}
-          <span className="text-[10px] text-white/30">
-            {saveStatus === "saving" && "Saving…"}
-            {saveStatus === "saved" && "✓ Saved"}
-            {saveStatus === "error" && "Save failed"}
-            {saveStatus === "idle" && "Auto-saves every 10s"}
-          </span>
+          {saveStatus === "saved" && (
+            <span className="text-[10px] text-emerald-400">Saved to Cloud</span>
+          )}
         </div>
       </div>
 
-      <div className="flex gap-1 rounded-lg border border-white/10 bg-white/5 p-0.5">
+      <div className="flex rounded-lg bg-white/5 p-0.5">
         <button
           onClick={() => setActiveTab("write")}
           className={cn(
@@ -163,77 +219,15 @@ export function SessionNotes({ sessionId, role, onSaveToServer }: SessionNotesPr
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="Take notes in Markdown&#8230;"
-          className="flex-1 min-h-[200px] w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 font-mono"
+          placeholder="Take notes in Markdown…"
+          className="flex-1 min-h-[200px] w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20 font-mono"
         />
       )}
 
       {activeTab === "preview" && (
         <div className="flex-1 min-h-[200px] w-full overflow-auto rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/90">
           {content ? (
-            <div className="markdown-body space-y-2">
-              <ReactMarkdown
-                rehypePlugins={[rehypeSanitize]}
-                components={{
-                  h1: ({ children }) => (
-                    <h1 className="text-lg font-bold text-white border-b border-white/10 pb-1">{children}</h1>
-                  ),
-                  h2: ({ children }) => (
-                    <h2 className="text-base font-bold text-white/90 border-b border-white/10 pb-0.5">{children}</h2>
-                  ),
-                  h3: ({ children }) => (
-                    <h3 className="text-sm font-semibold text-white/85">{children}</h3>
-                  ),
-                  p: ({ children }) => (
-                    <p className="text-sm text-white/80 leading-relaxed">{children}</p>
-                  ),
-                  ul: ({ children }) => (
-                    <ul className="list-disc list-inside text-sm text-white/80 space-y-0.5">{children}</ul>
-                  ),
-                  ol: ({ children }) => (
-                    <ol className="list-decimal list-inside text-sm text-white/80 space-y-0.5">{children}</ol>
-                  ),
-                  li: ({ children }) => (
-                    <li className="text-sm text-white/80">{children}</li>
-                  ),
-                  code: ({ children, className }) => {
-                    const isInline = !className;
-                    if (isInline) {
-                      return (
-                        <code className="rounded bg-white/10 px-1 py-0.5 text-xs font-mono text-violet-300">
-                          {children}
-                        </code>
-                      );
-                    }
-                    return (
-                      <pre className="rounded-lg bg-black/40 border border-white/10 p-3 overflow-x-auto">
-                        <code className="text-xs font-mono text-green-300">{children}</code>
-                      </pre>
-                    );
-                  },
-                  pre: ({ children }) => <>{children}</>,
-                  blockquote: ({ children }) => (
-                    <blockquote className="border-l-2 border-violet-500/50 pl-3 italic text-white/60">
-                      {children}
-                    </blockquote>
-                  ),
-                  a: ({ children, href }) => (
-                    <a href={href} target="_blank" rel="noopener noreferrer" className="text-violet-400 underline hover:text-violet-300">
-                      {children}
-                    </a>
-                  ),
-                  strong: ({ children }) => (
-                    <strong className="font-semibold text-white">{children}</strong>
-                  ),
-                  em: ({ children }) => (
-                    <em className="italic text-white/85">{children}</em>
-                  ),
-                  hr: () => <hr className="border-white/10 my-3" />,
-                }}
-              >
-                {content}
-              </ReactMarkdown>
-            </div>
+            <SimpleMarkdownPreview text={content} />
           ) : (
             <p className="text-white/30 italic">No content to preview</p>
           )}
