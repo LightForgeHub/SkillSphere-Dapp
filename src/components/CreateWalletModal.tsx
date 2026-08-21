@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { X, CheckCircle, AlertCircle } from "lucide-react";
+import { X, CheckCircle, AlertCircle, Wallet, ShieldCheck } from "lucide-react";
 import { useWallet } from "@/providers/WalletProvider";
 
 type ModalState = "idle" | "connecting" | "connected" | "error";
@@ -12,18 +12,20 @@ interface Props {
 }
 
 export default function CreateWalletModal({ open, onClose }: Props) {
+  const { connect, address, walletType, error: walletError } = useWallet();
   const [state, setState] = useState<ModalState>("idle");
+  const [method, setMethod] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
-  const { connect, error } = useWallet();
 
-  // reset when opened
   useEffect(() => {
     if (open) {
       setState("idle");
+      setMethod(null);
+      setErrorMsg(null);
     }
   }, [open]);
 
-  // Escape to close
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -38,89 +40,139 @@ export default function CreateWalletModal({ open, onClose }: Props) {
     if (e.target === backdropRef.current) onClose();
   }
 
-  async function handleConnect() {
+  async function handleConnect(walletName: "Freighter" | "Lobstr" | "Albedo") {
+    setMethod(walletName);
     setState("connecting");
-    const connected = await connect();
-    setState(connected ? "connected" : "error");
+    setErrorMsg(null);
+
+    const success = await connect();
+
+    if (success) {
+      setState("connected");
+      setTimeout(() => onClose(), 1000);
+    } else {
+      setState("error");
+      setErrorMsg("Connection request was cancelled or declined in wallet.");
+    }
   }
 
   return (
     <div
       ref={backdropRef}
       onMouseDown={clickOutside}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
     >
-      <div className="relative w-[min(520px,94%)] bg-[var(--background)] border border-white/10 rounded-xl p-6">
-        <button
-          onClick={onClose}
-          aria-label="close"
-          className="absolute right-3 top-3 p-2 rounded-md hover:bg-white/5"
-        >
-          <X className="w-5 h-5" />
-        </button>
+      <div className="relative w-full max-w-md bg-card border border-border/80 rounded-2xl p-6 shadow-2xl space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-2 border-b border-border/40">
+          <div className="flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-purple-400" />
+            <h3 className="text-lg font-bold text-foreground">Connect Wallet</h3>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close modal"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-        <h3 className="text-lg font-semibold">Connect Your Wallet</h3>
-        <p className="text-sm text-muted-foreground mt-1">Choose a wallet to connect to SkillSphere.</p>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Select a Stellar wallet to connect and stream per-second consultation payments on SkillSphere.
+        </p>
 
-        <div className="mt-6 space-y-3">
-          {/* Default / Options */}
+        <div className="space-y-3 pt-2">
           {state === "idle" && (
-            <div>
-              <button onClick={() => void handleConnect()} className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#4B0082] to-[#1E90FF] text-white border border-white/10 rounded-lg hover:opacity-90 transition-opacity">
-                <span>Freighter</span>
-                <span className="text-xs text-white/90">Recommended</span>
+            <div className="space-y-3">
+              {/* Freighter */}
+              <button
+                onClick={() => handleConnect("Freighter")}
+                className="w-full flex items-center justify-between px-4 py-3.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white rounded-xl font-medium transition-all shadow-md"
+              >
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="w-5 h-5 text-purple-300" />
+                  <span className="font-bold">Freighter Wallet</span>
+                </div>
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-white/20">
+                  Browser Extension
+                </span>
+              </button>
+
+              {/* Lobstr */}
+              <button
+                onClick={() => handleConnect("Lobstr")}
+                className="w-full flex items-center justify-between px-4 py-3.5 bg-gradient-to-r from-blue-700 to-cyan-700 hover:from-blue-600 hover:to-cyan-600 text-white rounded-xl font-medium transition-all shadow-md"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-bold">Lobstr Wallet</span>
+                </div>
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-white/20">
+                  Mobile / Web
+                </span>
+              </button>
+
+              {/* Albedo */}
+              <button
+                onClick={() => handleConnect("Albedo")}
+                className="w-full flex items-center justify-between px-4 py-3.5 bg-muted/60 hover:bg-muted text-foreground border border-border/60 rounded-xl font-medium transition-all"
+              >
+                <span>Albedo Link</span>
+                <span className="text-[11px] font-semibold text-muted-foreground">Web-based</span>
               </button>
             </div>
           )}
 
-          {/* Connecting */}
           {state === "connecting" && (
-            <div className="flex items-center gap-3">
-              <div className="animate-pulse w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                <div className="w-3 h-3 rounded-full bg-white/60 animate-bounce" />
-              </div>
+            <div className="flex items-center gap-4 p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
+              <div className="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin shrink-0" />
               <div>
-                <div className="text-sm">Connecting to Freighter…</div>
-                <div className="text-xs text-muted-foreground">Please approve the connection in your wallet.</div>
+                <p className="text-sm font-semibold text-foreground">Connecting to {method}…</p>
+                <p className="text-xs text-muted-foreground">
+                  Please approve the access request in your {method} wallet popup.
+                </p>
               </div>
             </div>
           )}
 
-          {/* Connected */}
           {state === "connected" && (
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-8 h-8 text-green-400" />
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+              <CheckCircle className="w-6 h-6 shrink-0" />
               <div>
-                <div className="text-sm">Connected</div>
-                <div className="text-xs text-muted-foreground">Freighter is now connected.</div>
+                <p className="text-sm font-bold">{method || walletType} Connected!</p>
+                <p className="text-xs text-emerald-300/80 font-mono truncate max-w-[280px]">
+                  {address}
+                </p>
               </div>
             </div>
           )}
 
-          {/* Error */}
           {state === "error" && (
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-8 h-8 text-red-400" />
-              <div>
-                <div className="text-sm">Connection failed</div>
-                <div className="text-xs text-muted-foreground">
-                  {error ?? "Unable to connect to Freighter. Please try again."}
-                </div>
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+              <AlertCircle className="w-6 h-6 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-sm font-bold">Connection Cancelled</p>
+                <p className="text-xs text-red-300/80">
+                  {errorMsg || walletError || `Connection request to ${method} was rejected or closed.`}
+                </p>
+                <button
+                  onClick={() => void handleConnect((method as "Freighter" | "Lobstr" | "Albedo") ?? "Freighter")}
+                  className="mr-2 text-xs font-semibold underline text-purple-400 hover:text-purple-300"
+                >
+                  Try again
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        <div className="mt-6 flex justify-end">
-          {state === "error" && (
-            <button
-              onClick={() => void handleConnect()}
-              className="mr-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-            >
-              Try again
-            </button>
-          )}
-          <button onClick={onClose} className="px-4 py-2 bg-white/5 rounded-lg">Close</button>
+        <div className="pt-2 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted rounded-lg transition-colors"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

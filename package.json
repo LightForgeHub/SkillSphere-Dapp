@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "indexer": "tsx src/indexer/index.ts",
-    "test:indexer": "tsx tests/indexer.spec.ts"
+    "test:indexer": "tsx tests/indexer.spec.ts",
+    "test:validation": "npx tsx tests/validation.spec.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
