@@ -13,15 +13,22 @@ export default function DashboardTopBar({ onToggleMenu }: { onToggleMenu?: () =>
   const pathname = usePathname()
   
   const isProfilePage = pathname === "/dashboard/profile"
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false)
+
+  const handleToggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen)
+    onToggleMenu?.()
+  }
 
   return (
     <header className="w-full bg-background border-b border-white/5 px-4 md:px-8 py-3 flex items-center justify-between sticky top-0 z-50">
       {/* Left: Hamburger, Logo and Breadcrumbs */}
       <div className="flex justify-between items-center md:min-w-[380px] gap-4 md:gap-12">
         <button
-          onClick={onToggleMenu}
+          onClick={handleToggleMenu}
           className="lg:hidden p-2 -ml-2 text-white/60 hover:text-white transition-colors"
           aria-label="Toggle Menu"
+          aria-expanded={isMenuOpen}
         >
           <Menu className="w-6 h-6" />
         </button>
@@ -41,7 +48,7 @@ export default function DashboardTopBar({ onToggleMenu }: { onToggleMenu?: () =>
       {/* Right: Actions and User */}
       <div className="flex  items-center gap-5 md:min-w-[780px]">
         {/* Notification Icon */}
-        <button className="p-2 text-white/40 hover:text-white transition-colors relative">
+        <button className="p-2 text-white/40 hover:text-white transition-colors relative" aria-label="Notifications">
           <Bell className="w-5 h-5" />
           <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-purple-500 rounded-full border border-[#05010d]" />
         </button>

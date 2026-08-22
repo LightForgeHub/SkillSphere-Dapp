@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
 import { X, Download, FileText, Clock, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -12,6 +12,8 @@ interface Props {
   fileName?: string;
 }
 
+const FOCUSABLE_SELECTORS = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export default function DownloadModal({
   open,
   onClose,
@@ -20,15 +22,65 @@ export default function DownloadModal({
   fileName = "submission.pdf",
 }: Props) {
   const backdropRef = useRef<HTMLDivElement | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<Element | null>(null);
 
-  // Escape to close
+  // Focus trap handler
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+
+      if (event.key === "Tab" && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll(FOCUSABLE_SELECTORS);
+        const firstElement = focusableElements[0] as HTMLElement | undefined;
+        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
+
+        if (event.shiftKey) {
+          if (document.activeElement === firstElement) {
+            event.preventDefault();
+            lastElement?.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            event.preventDefault();
+            firstElement?.focus();
+          }
+        }
+      }
+    },
+    [onClose]
+  );
+
+  // Manage focus and event listeners when modal opens/closes
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+    if (open) {
+      previousActiveElement.current = document.activeElement;
+      document.body.style.overflow = "hidden";
+      window.addEventListener("keydown", handleKeyDown);
+
+      // Focus first focusable element
+      setTimeout(() => {
+        const focusableElements = modalRef.current?.querySelectorAll(FOCUSABLE_SELECTORS);
+        if (focusableElements && focusableElements.length > 0) {
+          (focusableElements[0] as HTMLElement).focus();
+        }
+      }, 0);
+    } else {
+      document.body.style.overflow = "unset";
+      window.removeEventListener("keydown", handleKeyDown);
+      if (previousActiveElement.current instanceof HTMLElement) {
+        previousActiveElement.current.focus();
+      }
     }
-    if (open) window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+
+    return () => {
+      document.body.style.overflow = "unset";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, handleKeyDown]);
 
   if (!open) return null;
 
@@ -42,17 +94,25 @@ export default function DownloadModal({
     onClose();
   }
 
+  const modalTitleId = "download-modal-title";
+
   return (
     <div
       ref={backdropRef}
       onMouseDown={clickOutside}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
     >
-      <div className="relative w-[min(520px,94%)] bg-card border border-border rounded-xl p-6 space-y-6">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={modalTitleId}
+        className="relative w-[min(520px,94%)] bg-card border border-border rounded-xl p-6 space-y-6"
+      >
         {/* Close Button */}
         <button
           onClick={onClose}
-          aria-label="close"
+          aria-label="Close modal"
           className="absolute right-3 top-3 p-2 rounded-md hover:bg-accent transition-colors"
         >
           <X className="w-5 h-5 text-foreground" />
@@ -60,7 +120,7 @@ export default function DownloadModal({
 
         {/* Header */}
         <div>
-          <h3 className="text-lg font-semibold text-foreground">Download Submission</h3>
+          <h3 id={modalTitleId} className="text-lg font-semibold text-foreground">Download Submission</h3>
           <p className="text-sm text-foreground/60 mt-1">
             Review and download the student submission
           </p>

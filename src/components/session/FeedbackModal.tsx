@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Star, Loader2, X } from "lucide-react";
 
 interface FeedbackFormData {
@@ -35,6 +35,8 @@ const RATING_CATEGORIES = [
   },
 ];
 
+const FOCUSABLE_SELECTORS = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export default function FeedbackModal({
   expertName,
   isOpen,
@@ -50,6 +52,65 @@ export default function FeedbackModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<Element | null>(null);
+
+  // Focus trap handler
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+
+      if (event.key === "Tab" && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll(FOCUSABLE_SELECTORS);
+        const firstElement = focusableElements[0] as HTMLElement | undefined;
+        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
+
+        if (event.shiftKey) {
+          if (document.activeElement === firstElement) {
+            event.preventDefault();
+            lastElement?.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            event.preventDefault();
+            firstElement?.focus();
+          }
+        }
+      }
+    },
+    [onClose]
+  );
+
+  // Manage focus and event listeners when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      previousActiveElement.current = document.activeElement;
+      document.body.style.overflow = "hidden";
+      window.addEventListener("keydown", handleKeyDown);
+
+      // Focus first focusable element
+      setTimeout(() => {
+        const focusableElements = modalRef.current?.querySelectorAll(FOCUSABLE_SELECTORS);
+        if (focusableElements && focusableElements.length > 0) {
+          (focusableElements[0] as HTMLElement).focus();
+        }
+      }, 0);
+    } else {
+      document.body.style.overflow = "unset";
+      window.removeEventListener("keydown", handleKeyDown);
+      if (previousActiveElement.current instanceof HTMLElement) {
+        previousActiveElement.current.focus();
+      }
+    }
+
+    return () => {
+      document.body.style.overflow = "unset";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, handleKeyDown]);
 
   if (!isOpen) return null;
 
@@ -127,29 +188,38 @@ export default function FeedbackModal({
     </div>
   );
 
+  const modalTitleId = "feedback-modal-title";
+
   return (
     <>
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="relative w-full max-w-md rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl">
+        <div
+          ref={modalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={modalTitleId}
+          className="relative w-full max-w-md rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl"
+        >
           {/* Close button */}
           <button
             onClick={onClose}
             className="absolute right-4 top-4 rounded-lg p-1 text-zinc-400 hover:text-zinc-200 transition-colors"
-            aria-label="Close"
+            aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
 
           {/* Header */}
           <div className="border-b border-zinc-800 px-6 py-4">
-            <h2 className="text-lg font-bold text-zinc-100">
+            <h2 id={modalTitleId} className="text-lg font-bold text-zinc-100">
               Rate Your Session with {expertName}
             </h2>
             <p className="text-sm text-zinc-400 mt-1">

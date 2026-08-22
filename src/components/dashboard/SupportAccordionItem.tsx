@@ -22,42 +22,51 @@ export const SupportAccordionItem: React.FC<SupportAccordionItemProps> = ({
     isOpen,
     onToggle,
 }) => {
+    const contentId = `accordion-content-${title.replace(/\s+/g, '-').toLowerCase()}`
+    
     return (
         <div className="border-b border-border">
-            <div
-                className={cn(
-                    "flex items-center justify-between py-[12px] px-[24px] cursor-pointer transition-colors duration-200 group hover:bg-card",
-                    isOpen && "bg-card/50"
-                )}
-                onClick={onToggle}
-            >
-                <div className="flex flex-col gap-[4px] flex-1 mr-4">
-                    <div className="flex items-center gap-2">
-                        <span className="text-[14px] font-medium text-[#CCCCCC] font-ubuntu leading-[17px]">
-                            {title}
-                            <span className="text-[#888888] ml-2 font-normal">({subtitle})</span>
-                        </span>
-                    </div>
-                </div>
-
+            <h3 className="m-0">
                 <button
                     className={cn(
-                        "flex items-center justify-center px-[12px] py-[6px] rounded-[48px] border border-border min-w-[64px] h-[26px] transition-all duration-200 hover:border-[#444444]",
-                        isOpen && "bg-white border-white"
+                        "w-full flex items-center justify-between py-[12px] px-[24px] cursor-pointer transition-colors duration-200 group hover:bg-card text-left bg-transparent border-none",
+                        isOpen && "bg-card/50"
                     )}
+                    onClick={onToggle}
+                    aria-expanded={isOpen}
+                    aria-controls={contentId}
                 >
+                    <div className="flex flex-col gap-[4px] flex-1 mr-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[14px] font-medium text-[#CCCCCC] font-ubuntu leading-[17px]">
+                                {title}
+                                <span className="text-[#888888] ml-2 font-normal">({subtitle})</span>
+                            </span>
+                        </div>
+                    </div>
+
                     <span
                         className={cn(
-                            "text-[12px] font-normal leading-[14px]",
-                            isOpen ? "text-black" : "text-foreground"
+                            "inline-flex items-center justify-center px-[12px] py-[6px] rounded-[48px] border border-border min-w-[64px] h-[26px] transition-all duration-200",
+                            isOpen && "bg-white border-white"
                         )}
                     >
-                        {isOpen ? "Close" : "Expand"}
+                        <span
+                            className={cn(
+                                "text-[12px] font-normal leading-[14px]",
+                                isOpen ? "text-black" : "text-foreground"
+                            )}
+                        >
+                            {isOpen ? "Close" : "Expand"}
+                        </span>
                     </span>
                 </button>
-            </div>
+            </h3>
 
             <div
+                id={contentId}
+                role="region"
+                aria-labelledby={contentId}
                 className={cn(
                     "grid transition-all duration-300 ease-in-out overflow-hidden",
                     isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"

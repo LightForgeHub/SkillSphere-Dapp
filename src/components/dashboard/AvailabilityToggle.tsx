@@ -37,6 +37,8 @@ export default function AvailabilityToggle({
             isAvailable ? "bg-green-500/30" : "bg-slate-700/30"
           }`}
           aria-label="Toggle availability"
+          aria-pressed={isAvailable}
+          role="switch"
         >
           <span
             className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${

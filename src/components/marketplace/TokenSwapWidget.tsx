@@ -158,6 +158,7 @@ export default function TokenSwapWidget({
           onClick={() => refreshReferenceRate()}
           disabled={isRefreshingRate}
           className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-purple-300 transition-colors disabled:opacity-50"
+          aria-label="Refresh live rate"
           title="Refresh live rate"
         >
           <RefreshCw size={12} className={isRefreshingRate ? "animate-spin" : ""} />
@@ -176,6 +177,7 @@ export default function TokenSwapWidget({
             onClick={handleMax}
             disabled={balanceUnavailable}
             className="text-purple-300 hover:text-purple-200 disabled:opacity-50 transition-colors"
+            aria-label="Set maximum amount"
           >
             Max
           </button>

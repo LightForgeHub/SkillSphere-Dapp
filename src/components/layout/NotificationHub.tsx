@@ -92,6 +92,8 @@ export default function NotificationHub() {
         onClick={handleOpen}
         className="relative flex items-center justify-center w-10 h-10 rounded-lg border border-zinc-700 bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-all"
         aria-label="Notifications"
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
@@ -117,6 +119,7 @@ export default function NotificationHub() {
               <button
                 onClick={handleClose}
                 className="rounded-lg p-1 text-zinc-400 hover:text-zinc-200 transition-colors"
+                aria-label="Close notifications"
               >
                 <X className="h-4 w-4" />
               </button>

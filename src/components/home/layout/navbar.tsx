@@ -144,6 +144,7 @@ export default function NavBar() {
                       <button
                         onClick={handleCopyAddress}
                         className="p-1 text-muted-foreground hover:text-white transition-colors"
+                        aria-label="Copy address"
                         title="Copy Address"
                       >
                         {copied ? (
@@ -156,6 +157,7 @@ export default function NavBar() {
                     <button
                       onClick={disconnect}
                       className="p-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"
+                      aria-label="Disconnect wallet"
                       title="Disconnect Wallet"
                     >
                       <LogOut className="w-4 h-4" />
@@ -173,7 +175,7 @@ export default function NavBar() {
                   </button>
                 )}
 
-                <button className="p-2 bg-card border border-border rounded-lg hover:bg-accent transition-colors">
+                <button className="p-2 bg-card border border-border rounded-lg hover:bg-accent transition-colors" aria-label="Notifications">
                   <Bell className="w-5 h-5 text-foreground" />
                 </button>
               </div>
@@ -182,6 +184,8 @@ export default function NavBar() {
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="md:hidden p-2 rounded-lg hover:bg-accent transition-colors"
+                aria-label="Toggle menu"
+                aria-expanded={mobileMenuOpen}
               >
                 {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
               </button>
