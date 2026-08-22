@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronRight, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useWallet } from '@/providers/WalletProvider';
 
@@ -19,6 +19,8 @@ interface FundSessionModalProps {
 
 type Step = 'duration' | 'confirm' | 'success';
 
+const FOCUSABLE_SELECTORS = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export default function FundSessionModal({
   expertName,
   expertHourlyRate,
@@ -32,6 +34,8 @@ export default function FundSessionModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [rentFee, setRentFee] = useState<number | null>(null);
   const [isEstimatingRent, setIsEstimatingRent] = useState(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<Element | null>(null);
 
   const hourlyRate = parseInt(expertHourlyRate?.replace(/\D/g, '') || '50');
   const depositAmount = (hourlyRate * duration) / 60;
@@ -39,6 +43,63 @@ export default function FundSessionModal({
   const gasFee = rentFee ?? 0;
   const totalAmount = depositAmount + gasFee + platformFee;
   const sessionId = `SESSION_${Date.now()}`;
+
+  // Focus trap handler
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+
+      if (event.key === 'Tab' && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll(FOCUSABLE_SELECTORS);
+        const firstElement = focusableElements[0] as HTMLElement | undefined;
+        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
+
+        if (event.shiftKey) {
+          if (document.activeElement === firstElement) {
+            event.preventDefault();
+            lastElement?.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            event.preventDefault();
+            firstElement?.focus();
+          }
+        }
+      }
+    },
+    [onClose]
+  );
+
+  // Manage focus and event listeners when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      previousActiveElement.current = document.activeElement;
+      document.body.style.overflow = 'hidden';
+      window.addEventListener('keydown', handleKeyDown);
+
+      // Focus first focusable element
+      setTimeout(() => {
+        const focusableElements = modalRef.current?.querySelectorAll(FOCUSABLE_SELECTORS);
+        if (focusableElements && focusableElements.length > 0) {
+          (focusableElements[0] as HTMLElement).focus();
+        }
+      }, 0);
+    } else {
+      document.body.style.overflow = 'unset';
+      window.removeEventListener('keydown', handleKeyDown);
+      if (previousActiveElement.current instanceof HTMLElement) {
+        previousActiveElement.current.focus();
+      }
+    }
+
+    return () => {
+      document.body.style.overflow = 'unset';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, handleKeyDown]);
 
   // Simulate RPC call for state rent
   const fetchRentEstimate = async () => {
@@ -55,7 +116,7 @@ export default function FundSessionModal({
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       fetchRentEstimate();
     }
@@ -108,13 +169,22 @@ export default function FundSessionModal({
     </div>
   ) : null;
 
+  const modalTitleId = 'fund-session-modal-title';
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gradient-to-br from-purple-600/20 to-pink-600/20 border border-purple-500/30 rounded-2xl shadow-2xl max-w-md w-full relative">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={modalTitleId}
+        className="bg-gradient-to-br from-purple-600/20 to-pink-600/20 border border-purple-500/30 rounded-2xl shadow-2xl max-w-md w-full relative"
+      >
         {/* Close Button */}
         {currentStep !== 'success' && (
           <button
             onClick={onClose}
+            aria-label="Close modal"
             className="absolute top-4 right-4 p-2 hover:bg-purple-500/20 rounded-lg transition-all"
           >
             <X size={24} />
@@ -123,7 +193,7 @@ export default function FundSessionModal({
 
         {/* Header */}
         <div className="p-6 border-b border-purple-500/20">
-          <h2 className="text-2xl font-bold">Fund Your Session</h2>
+          <h2 id={modalTitleId} className="text-2xl font-bold">Fund Your Session</h2>
           <p className="text-sm text-muted-foreground mt-2">with {expertName}</p>
         </div>
 
@@ -136,11 +206,13 @@ export default function FundSessionModal({
                 <label className="block text-sm font-semibold mb-4">
                   Session Duration
                 </label>
-                <div className="grid grid-cols-3 gap-3 mb-6">
+                <div className="grid grid-cols-3 gap-3 mb-6" role="radiogroup" aria-label="Session duration">
                   {[30, 60, 90].map((min) => (
                     <button
                       key={min}
                       onClick={() => handleDurationChange(min)}
+                      role="radio"
+                      aria-checked={duration === min}
                       className={`py-3 rounded-lg font-medium transition-all ${
                         duration === min
                           ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
@@ -153,14 +225,16 @@ export default function FundSessionModal({
                 </div>
 
                 {/* Custom Duration */}
-                <label className="text-xs text-muted-foreground mb-2 block">Custom Duration (minutes)</label>
+                <label htmlFor="custom-duration" className="text-xs text-muted-foreground mb-2 block">Custom Duration (minutes)</label>
                 <input
+                  id="custom-duration"
                   type="number"
                   min="15"
                   max="240"
                   step="15"
                   value={duration}
                   onChange={(e) => handleDurationChange(parseInt(e.target.value) || 60)}
+                  aria-label="Custom duration in minutes"
                   className="w-full px-4 py-2 bg-purple-600/10 border border-purple-500/30 rounded-lg focus:outline-none focus:border-purple-500/60"
                 />
               </div>

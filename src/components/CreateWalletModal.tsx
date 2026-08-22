@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { X, CheckCircle, AlertCircle, Wallet, ShieldCheck } from "lucide-react";
 import { useWallet } from "@/providers/WalletProvider";
 
@@ -11,12 +11,16 @@ interface Props {
   onClose: () => void;
 }
 
+const FOCUSABLE_SELECTORS = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export default function CreateWalletModal({ open, onClose }: Props) {
   const { connect, address, walletType, error: walletError } = useWallet();
   const [state, setState] = useState<ModalState>("idle");
   const [method, setMethod] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElement = useRef<Element | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -26,13 +30,62 @@ export default function CreateWalletModal({ open, onClose }: Props) {
     }
   }, [open]);
 
+  // Focus trap handler
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+
+      if (event.key === "Tab" && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll(FOCUSABLE_SELECTORS);
+        const firstElement = focusableElements[0] as HTMLElement | undefined;
+        const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
+
+        if (event.shiftKey) {
+          if (document.activeElement === firstElement) {
+            event.preventDefault();
+            lastElement?.focus();
+          }
+        } else {
+          if (document.activeElement === lastElement) {
+            event.preventDefault();
+            firstElement?.focus();
+          }
+        }
+      }
+    },
+    [onClose]
+  );
+
+  // Manage focus and event listeners when modal opens/closes
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+    if (open) {
+      previousActiveElement.current = document.activeElement;
+      document.body.style.overflow = "hidden";
+      window.addEventListener("keydown", handleKeyDown);
+
+      // Focus first focusable element
+      setTimeout(() => {
+        const focusableElements = modalRef.current?.querySelectorAll(FOCUSABLE_SELECTORS);
+        if (focusableElements && focusableElements.length > 0) {
+          (focusableElements[0] as HTMLElement).focus();
+        }
+      }, 0);
+    } else {
+      document.body.style.overflow = "unset";
+      window.removeEventListener("keydown", handleKeyDown);
+      if (previousActiveElement.current instanceof HTMLElement) {
+        previousActiveElement.current.focus();
+      }
     }
-    if (open) window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+
+    return () => {
+      document.body.style.overflow = "unset";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, handleKeyDown]);
 
   if (!open) return null;
 
@@ -56,18 +109,26 @@ export default function CreateWalletModal({ open, onClose }: Props) {
     }
   }
 
+  const modalTitleId = "connect-wallet-modal-title";
+
   return (
     <div
       ref={backdropRef}
       onMouseDown={clickOutside}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
     >
-      <div className="relative w-full max-w-md bg-card border border-border/80 rounded-2xl p-6 shadow-2xl space-y-5">
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={modalTitleId}
+        className="relative w-full max-w-md bg-card border border-border/80 rounded-2xl p-6 shadow-2xl space-y-5"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b border-border/40">
           <div className="flex items-center gap-2">
             <Wallet className="w-5 h-5 text-purple-400" />
-            <h3 className="text-lg font-bold text-foreground">Connect Wallet</h3>
+            <h3 id={modalTitleId} className="text-lg font-bold text-foreground">Connect Wallet</h3>
           </div>
           <button
             onClick={onClose}

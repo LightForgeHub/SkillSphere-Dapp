@@ -73,6 +73,9 @@ function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
     <div className="relative">
       <button
         onClick={() => setMenuOpen((o) => !o)}
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
+        aria-label="Wallet menu"
         className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-sm text-zinc-200 transition-all hover:border-zinc-500 hover:bg-zinc-700/60"
       >
         {/* Network badge */}
@@ -144,6 +147,7 @@ function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
                 <button
                   onClick={handleCopy}
                   className="shrink-0 rounded p-1 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  aria-label="Copy address"
                   title="Copy address"
                 >
                   {copied ? (
@@ -257,6 +261,7 @@ export default function Navbar() {
             className="rounded-lg p-2 text-zinc-400 hover:text-zinc-100 transition-colors md:hidden"
             onClick={() => setMobileOpen((o) => !o)}
             aria-label="Toggle menu"
+            aria-expanded={mobileOpen}
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>

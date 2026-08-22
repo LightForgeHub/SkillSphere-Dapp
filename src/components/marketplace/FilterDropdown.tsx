@@ -18,6 +18,9 @@ export const FilterDropdown = ({
         <div className="relative">
             <button
                 onClick={() => setIsOpen(!isOpen)}
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
+                aria-label={`Filter: ${value}`}
                 className="flex items-center gap-3 px-3 py-2 bg-card font-bold rounded-lg hover:border-gray-600 transition-colors text-sm text-[#F3F4F6]/70"
             >
                 <span>{value}</span>
@@ -30,8 +33,13 @@ export const FilterDropdown = ({
                     <div
                         className="fixed inset-0 z-10"
                         onClick={() => setIsOpen(false)}
+                        aria-hidden="true"
                     />
-                    <div className="absolute left-0 right-0 mt-2 p-2 w-[180px] bg-card border border-border rounded-lg shadow-xl z-20 py-1">
+                    <div
+                        className="absolute left-0 right-0 mt-2 p-2 w-[180px] bg-card border border-border rounded-lg shadow-xl z-20 py-1"
+                        role="listbox"
+                        aria-label="Filter options"
+                    >
                         {options.map((option) => (
                             <button
                                 key={option}
@@ -39,6 +47,8 @@ export const FilterDropdown = ({
                                     onChange(option);
                                     setIsOpen(false);
                                 }}
+                                role="option"
+                                aria-selected={value === option}
                                 className={`w-full text-left px-4 py-2 mb-2 text-sm transition-colors rounded-md ${value === option
                                     ? 'bg-gray-600/60 text-purple-400'
                                     : 'text-muted-foreground hover:bg-accent'

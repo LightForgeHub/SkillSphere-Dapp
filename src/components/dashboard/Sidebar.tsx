@@ -59,6 +59,9 @@ export default function Sidebar() {
       <div className="md:hidden mb-4">
         <button
           onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label="Toggle navigation menu"
           className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-card text-foreground"
         >
           {activeItem}
@@ -140,6 +143,8 @@ export default function Sidebar() {
             onClick={() => setDesktopProfileOpen((v) => !v)}
             className="w-full flex items-center justify-between bg-card rounded-xl px-3 py-2"
             aria-expanded={desktopProfileOpen}
+            aria-haspopup="menu"
+            aria-label="Profile selection menu"
           >
               <div className="flex items-center gap-2">
               <img src={`/assets/${encodeURIComponent("Avatar Placeholder.png")}`} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
