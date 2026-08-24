@@ -140,10 +140,7 @@ interface ExpertDetailsProps {
 }
 
 export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProps) {
-  const { rates } = useCurrency();
-    
-  // Calculate USD rates
-  const hourlyRateUSD = rates ? expert.hourlyRate * rates.usd : null;
+  const { convert, selectedCurrency } = useCurrency();
 
 
   return (
@@ -209,10 +206,10 @@ export default function ExpertDetails({ expert, onBookClick }: ExpertDetailsProp
                 <div className="text-sm text-gray-400">Total Sessions</div>
               </div>
               <div className="bg-black/30 rounded-lg p-4">
-                <div className="text-2xl font-bold text-purple-400">{expert.hourlyRate} XLM/hr</div>
-                <div className="text-sm text-gray-400">
-                  {hourlyRateUSD ? `($${hourlyRateUSD.toFixed(2)} / hr)` : 'Hourly Rate'}
-                </div>
+                <div className="text-2xl font-bold text-purple-400">{convert(expert.hourlyRate)} / hr</div>
+                {selectedCurrency !== "XLM" && (
+                  <div className="text-sm text-gray-400">{expert.hourlyRate.toFixed(4)} XLM/hr</div>
+                )}
               </div>
               <div className="bg-black/30 rounded-lg p-4">
                 <div className="text-2xl font-bold text-purple-400">{expert.reviews}</div>

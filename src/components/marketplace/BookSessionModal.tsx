@@ -5,6 +5,7 @@ import { ChevronRight, CheckCircle, CalendarClock } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { useCurrency } from "@/hooks/useCurrency";
 
 interface BookSessionModalProps {
   expertName: string;
@@ -26,6 +27,9 @@ export default function BookSessionModal({
   const [currentStep, setCurrentStep] = useState<Step>("deposit");
   const [isProcessing, setIsProcessing] = useState(false);
   const [reservationId, setReservationId] = useState<string | null>(null);
+  const { convert, selectedCurrency } = useCurrency();
+  const slotFeeXlm = Number.parseFloat(slotFee);
+  const displaySlotFee = Number.isFinite(slotFeeXlm) ? convert(slotFeeXlm) : `${slotFee} XLM`;
 
   const handleDeposit = async () => {
     setIsProcessing(true);
@@ -61,7 +65,12 @@ export default function BookSessionModal({
               </div>
               <div className="border-t border-white/10 pt-4 flex items-center justify-between">
                 <span className="text-sm text-white/60">Slot Reservation Fee</span>
-                <span className="text-lg font-bold text-purple-400">{slotFee} XLM</span>
+                <div className="text-right">
+                  <span className="text-lg font-bold text-purple-400">{displaySlotFee}</span>
+                  {selectedCurrency !== "XLM" && (
+                    <p className="text-xs text-white/50">{slotFee} XLM</p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -122,7 +131,7 @@ export default function BookSessionModal({
                 <h3 className="text-xl font-bold">Session Reserved!</h3>
                 <p className="text-sm text-white/60 max-w-sm">
                   Your appointment with <span className="text-white font-semibold">{expertName}</span> has been secured.
-                  The slot fee of <span className="text-purple-400 font-semibold">{slotFee} XLM</span> will be applied to your final session invoice.
+                  The slot fee of <span className="text-purple-400 font-semibold">{displaySlotFee}</span>{selectedCurrency !== "XLM" ? ` (${slotFee} XLM)` : ""} will be applied to your final session invoice.
                 </p>
               </div>
             </div>

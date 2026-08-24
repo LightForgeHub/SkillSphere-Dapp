@@ -7,6 +7,9 @@ import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import CreateWalletModal from "@/components/CreateWalletModal";
 import { useWallet } from "@/providers/WalletProvider";
+import { useCurrency, type DisplayCurrency } from "@/hooks/useCurrency";
+
+const DISPLAY_CURRENCIES: DisplayCurrency[] = ["XLM", "USD", "EUR", "GBP", "JPY"];
 
 function shortenAddress(address: string): string {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
@@ -18,6 +21,7 @@ export default function NavBar() {
   const [copied, setCopied] = useState(false);
   const pathname = usePathname() ?? "";
   const { address, balance, network, isLoading, isWrongNetwork, disconnect } = useWallet();
+  const { selectedCurrency, setSelectedCurrency, convert } = useCurrency();
 
   const authRoutes = ["/login", "/sign-in", "/sign-up"];
   if (authRoutes.includes(pathname)) return null;
@@ -115,6 +119,17 @@ export default function NavBar() {
               <div className="hidden md:flex items-center space-x-4 ml-6">
                 <ThemeToggle />
 
+                <select
+                  value={selectedCurrency}
+                  onChange={(event) => setSelectedCurrency(event.target.value as DisplayCurrency)}
+                  className="rounded-lg border border-border bg-card/40 px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
+                  aria-label="Select display currency"
+                >
+                  {DISPLAY_CURRENCIES.map((currency) => (
+                    <option key={currency} value={currency}>{currency}</option>
+                  ))}
+                </select>
+
                 {isLandingPage ? (
                   <>
                     <Link href="/login">
@@ -138,7 +153,7 @@ export default function NavBar() {
                       </span>
                       {balance && (
                         <span className="text-xs font-mono text-muted-foreground border-l border-border/40 pl-2">
-                          {balance} XLM
+                          {convert(Number(balance))}
                         </span>
                       )}
                       <button
@@ -208,6 +223,20 @@ export default function NavBar() {
                 </Link>
 
                 <div className="pt-2 border-t border-border/40">
+                  <label className="flex items-center justify-between text-sm">
+                    <span>Currency</span>
+                    <select
+                      value={selectedCurrency}
+                      onChange={(event) => setSelectedCurrency(event.target.value as DisplayCurrency)}
+                      className="rounded-lg border border-border bg-card px-2 py-1 text-xs"
+                      aria-label="Select display currency"
+                    >
+                      {DISPLAY_CURRENCIES.map((currency) => (
+                        <option key={currency} value={currency}>{currency}</option>
+                      ))}
+                    </select>
+                  </label>
+
                   {address ? (
                     <button
                       onClick={disconnect}

@@ -16,7 +16,7 @@ interface ExpertCardProps {
 export default function ExpertCard({ expert }: ExpertCardProps) {
     const queryClient = useQueryClient();
     const { multiplier, isSurgeActive } = useSurgeMultiplier();
-    const { rates } = useCurrency();
+    const { convert, selectedCurrency } = useCurrency();
 
     const handleMouseEnter = () => {
         prefetchExpert(queryClient, expert.id);
@@ -25,9 +25,8 @@ export default function ExpertCard({ expert }: ExpertCardProps) {
     // Calculate surge percentage for display
     const surgePercent = Math.round((multiplier - 1) * 100);
     
-    // Calculate hourly and per-minute USD rates
-    const hourlyRateUSD = rates ? expert.hourlyRate * rates.usd : null;
-    const minuteRateUSD = hourlyRateUSD ? hourlyRateUSD / 60 : null;
+    const displayHourlyRate = convert(expert.hourlyRate);
+    const displayMinuteRate = convert(expert.hourlyRate / 60);
 
     return (
         <Link href={`/explore-experts/${expert.id}`}>
@@ -74,11 +73,11 @@ export default function ExpertCard({ expert }: ExpertCardProps) {
                                 className="font-bold text-lg text-purple-400 cursor-help"
                                 title="Rate may increase during high demand periods"
                             >
-                                {expert.hourlyRate} XLM/hr
+                                {displayHourlyRate} / hr
                             </span>
-                            {minuteRateUSD && (
+                            {selectedCurrency !== 'XLM' && (
                                 <span className="text-sm text-gray-400">
-                                    (${minuteRateUSD.toFixed(2)} / min)
+                                    {expert.hourlyRate.toFixed(4)} XLM/hr ({displayMinuteRate} / min)
                                 </span>
                             )}
                             {isSurgeActive && (
