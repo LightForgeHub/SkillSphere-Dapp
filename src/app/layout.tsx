@@ -19,6 +19,7 @@ import { QueryProvider } from "@/providers/QueryProvider";
 import { DevToolsSwitcher } from "@/components/ui/DevToolsSwitcher";
 import { OnboardingProvider } from "@/providers/OnboardingProvider";
 import OnboardingTour from "@/components/layout/OnboardingTour";
+import { CurrencyProvider } from "@/hooks/useCurrency";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -136,22 +137,24 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <QueryProvider>
-              <WalletProvider>
-                <ModalProvider>
-                  <OnboardingProvider>
-                    <AppLayout
-                      headerSlot={<NavBar />}
-                      footerSlot={<Footer />}
-                    >
-                      {children}
-                      <OnboardingTour />
-                    </AppLayout>
-                    <DevToolsSwitcher />
-                  </OnboardingProvider>
-                </ModalProvider>
-              </WalletProvider>
-            </QueryProvider>
+            <CurrencyProvider>
+              <QueryProvider>
+                <WalletProvider>
+                  <ModalProvider>
+                    <OnboardingProvider>
+                      <AppLayout
+                        headerSlot={<NavBar />}
+                        footerSlot={<Footer />}
+                      >
+                        {children}
+                        <OnboardingTour />
+                      </AppLayout>
+                      <DevToolsSwitcher />
+                    </OnboardingProvider>
+                  </ModalProvider>
+                </WalletProvider>
+              </QueryProvider>
+            </CurrencyProvider>
           </AuthProvider>
         </ThemeProvider>
         {/* Register service worker after page is interactive */}

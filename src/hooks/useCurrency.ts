@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { createContext, createElement, useState, useEffect, useCallback, useContext } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,8 @@ export interface UseCurrencyReturn {
   convert: (xlmAmount: number) => string;
   isLoading: boolean;
 }
+
+const CurrencyContext = createContext<UseCurrencyReturn | null>(null);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -46,7 +48,7 @@ const CURRENCY_DECIMALS: Record<DisplayCurrency, number> = {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useCurrency(): UseCurrencyReturn {
+function useCurrencyState(): UseCurrencyReturn {
   const [selectedCurrency, setSelectedCurrency] =
     useState<DisplayCurrency>("USD");
   const [rates, setRates] = useState<CurrencyRates | null>(null);
@@ -102,4 +104,20 @@ export function useCurrency(): UseCurrencyReturn {
   );
 
   return { selectedCurrency, setSelectedCurrency, rates, convert, isLoading };
+}
+
+export function CurrencyProvider({ children }: { children: React.ReactNode }) {
+  const value = useCurrencyState();
+
+  return createElement(CurrencyContext.Provider, { value }, children);
+}
+
+export function useCurrency(): UseCurrencyReturn {
+  const context = useContext(CurrencyContext);
+
+  if (!context) {
+    throw new Error("useCurrency must be used within a CurrencyProvider");
+  }
+
+  return context;
 }
