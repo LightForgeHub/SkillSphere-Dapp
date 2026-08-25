@@ -96,7 +96,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
         aria-modal="true"
         aria-labelledby={titleId}
         className={cn(
-          "relative w-full max-w-2xl bg-card border border-white/10 rounded-3xl shadow-2xl overflow-hidden transition-all transform animate-in fade-in zoom-in duration-200",
+          "relative flex w-full max-w-2xl flex-col bg-card border border-white/10 rounded-3xl shadow-2xl overflow-hidden transition-all transform animate-in fade-in zoom-in duration-200",
           className
         )}
       >
@@ -117,7 +117,7 @@ export function Modal({ isOpen, onClose, title, children, className }: ModalProp
         )}
 
         {/* Body */}
-        <div className="h-full">{children}</div>
+        <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
       </div>
     </div>
   );

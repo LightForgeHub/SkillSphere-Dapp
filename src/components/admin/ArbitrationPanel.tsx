@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { ExternalLink, CheckCircle, Loader2 } from "lucide-react";
+import { getSubmittedDisputes } from "@/lib/disputes-store";
+import { mockSessions, mockExperts } from "@/utils/data/mock-data";
 
 interface DisputeSession {
   id: string;
@@ -24,7 +26,7 @@ interface DisputeSession {
 }
 
 interface ArbitrationPanelProps {
-  disputes: DisputeSession[];
+  disputes?: DisputeSession[];
   onResolve?: (disputeId: string, resolution: "seeker" | "expert") => Promise<void>;
 }
 
@@ -75,6 +77,42 @@ const MOCK_DISPUTES: DisputeSession[] = [
 export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }: ArbitrationPanelProps) {
   const [resolving, setResolving] = useState<string | null>(null);
   const [resolvedDisputes, setResolvedDisputes] = useState<Set<string>>(new Set());
+  const [submittedAppeals] = useState(() => getSubmittedDisputes());
+
+  // Map submitted appeals into the SAME DisputeSession card model as the
+  // mock disputes so every card in this panel renders identically.
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const submittedAsDisputes: DisputeSession[] = submittedAppeals.map((appeal) => {
+    const session = mockSessions.find((s) => s.id === appeal.sessionId);
+    const expert = mockExperts.find((e) => e.id === session?.expertId);
+    const attachments = appeal.evidence.map((f) => f.name);
+    const notes = [
+      appeal.evidenceDescription || appeal.reason,
+      attachments.length > 0
+        ? `Attachments (${attachments.length}): ${attachments.join(", ")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    return {
+      id: appeal.id,
+      seeker: {
+        name: capitalize(appeal.raisedBy),
+        address: appeal.claimantAddress || "—",
+      },
+      expert: {
+        name: session?.expertName ?? "Unassigned",
+        address: expert?.walletAddress ?? "—",
+      },
+      amount: session?.price ?? "—",
+      status: "pending" as const,
+      createdAt: appeal.createdAt,
+      evidence: { notes },
+    };
+  });
+
+  const allDisputes = [...submittedAsDisputes, ...disputes];
 
   const handleResolve = async (disputeId: string, resolution: "seeker" | "expert") => {
     setResolving(disputeId);
@@ -97,34 +135,34 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-zinc-100 mb-2">Dispute Arbitration Panel</h2>
-        <p className="text-sm text-zinc-400">
+        <h2 className="text-2xl font-bold text-foreground mb-2">Dispute Arbitration Panel</h2>
+        <p className="text-sm text-muted-foreground">
           Review and resolve active disputes. All evidence is stored on IPFS.
         </p>
       </div>
 
-      {disputes.length === 0 ? (
-        <div className="rounded-lg border border-zinc-700 bg-zinc-800/40 p-8 text-center">
-          <p className="text-zinc-400">No active disputes</p>
+      {allDisputes.length === 0 ? (
+        <div className="rounded-lg border border-border bg-card/60 p-8 text-center">
+          <p className="text-muted-foreground">No active disputes</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {disputes.map((dispute) => {
+          {allDisputes.map((dispute) => {
             const isResolved = resolvedDisputes.has(dispute.id);
             const isResolving = resolving === dispute.id;
 
             return (
               <div
                 key={dispute.id}
-                className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-6 hover:border-zinc-600 transition-colors"
+                className="rounded-lg border border-border bg-card p-6 hover:border-border/80 transition-colors"
               >
                 {/* Header with ID and Status */}
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-sm font-mono font-semibold text-zinc-100">
+                    <h3 className="text-sm font-mono font-semibold text-foreground">
                       {dispute.id}
                     </h3>
-                    <p className="text-xs text-zinc-400 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {new Date(dispute.createdAt).toLocaleDateString()} at{" "}
                       {new Date(dispute.createdAt).toLocaleTimeString()}
                     </p>
@@ -145,29 +183,29 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
                 </div>
 
                 {/* Parties and Amount */}
-                <div className="grid grid-cols-3 gap-4 mb-4 pb-4 border-b border-zinc-800">
+                <div className="grid grid-cols-3 gap-4 mb-4 pb-4 border-b border-border">
                   <div>
-                    <p className="text-xs text-zinc-400 mb-1">Seeker</p>
-                    <p className="text-sm font-medium text-zinc-100">
+                    <p className="text-xs text-muted-foreground mb-1">Seeker</p>
+                    <p className="text-sm font-medium text-foreground">
                       {dispute.seeker.name}
                     </p>
-                    <p className="text-xs text-zinc-500 font-mono mt-1">
+                    <p className="text-xs text-muted-foreground font-mono mt-1">
                       {dispute.seeker.address.slice(0, 10)}...
                       {dispute.seeker.address.slice(-10)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-zinc-400 mb-1">Amount in Dispute</p>
-                    <p className="text-lg font-bold text-zinc-100">
+                    <p className="text-xs text-muted-foreground mb-1">Amount in Dispute</p>
+                    <p className="text-lg font-bold text-foreground">
                       {dispute.amount}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-zinc-400 mb-1">Expert</p>
-                    <p className="text-sm font-medium text-zinc-100">
+                    <p className="text-xs text-muted-foreground mb-1">Expert</p>
+                    <p className="text-sm font-medium text-foreground">
                       {dispute.expert.name}
                     </p>
-                    <p className="text-xs text-zinc-500 font-mono mt-1">
+                    <p className="text-xs text-muted-foreground font-mono mt-1">
                       {dispute.expert.address.slice(0, 10)}...
                       {dispute.expert.address.slice(-10)}
                     </p>
@@ -175,13 +213,13 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
                 </div>
 
                 {/* Evidence Section */}
-                <div className="mb-4 pb-4 border-b border-zinc-800">
-                  <p className="text-sm font-semibold text-zinc-200 mb-3">Evidence</p>
+                <div className="mb-4 pb-4 border-b border-border">
+                  <p className="text-sm font-semibold text-foreground/90 mb-3">Evidence</p>
                   <div className="space-y-3">
                     {dispute.evidence.notes && (
-                      <div className="rounded-lg bg-zinc-800/40 p-3">
-                        <p className="text-xs text-zinc-400 mb-1">Admin Notes</p>
-                        <p className="text-sm text-zinc-300">
+                      <div className="rounded-lg bg-muted/40 p-3">
+                        <p className="text-xs text-muted-foreground mb-1">Admin Notes</p>
+                        <p className="text-sm text-foreground/75 whitespace-pre-line">
                           {dispute.evidence.notes}
                         </p>
                       </div>
@@ -189,7 +227,7 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
 
                     {dispute.evidence.chatHistory && (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-zinc-400">Chat History:</span>
+                        <span className="text-xs text-muted-foreground">Chat History:</span>
                         <a
                           href={getIPFSUrl(dispute.evidence.chatHistory)}
                           target="_blank"
@@ -205,7 +243,7 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
                     {dispute.evidence.screenshots &&
                       dispute.evidence.screenshots.length > 0 && (
                         <div className="space-y-2">
-                          <p className="text-xs text-zinc-400">Screenshots:</p>
+                          <p className="text-xs text-muted-foreground">Screenshots:</p>
                           <div className="flex flex-wrap gap-2">
                             {dispute.evidence.screenshots.map((screenshot, idx) => (
                               <a

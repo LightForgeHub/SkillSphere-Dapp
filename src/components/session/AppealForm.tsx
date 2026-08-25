@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useId, useRef, useState } from "react";
+import React, { useId, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -15,6 +15,10 @@ import {
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { TxProgressStepper } from "@/components/ui/TxProgressStepper";
+import { useWallet } from "@/providers/WalletProvider";
+import { useSorobanTx, TxStep } from "@/hooks/useSorobanTx";
+import { submitDispute, type SubmitDisputeParams } from "@/lib/disputes";
 import { cn } from "@/components/ui/utils";
 import type { Dispute, DisputeVerdict } from "../../../utils/types/types";
 
@@ -29,6 +33,8 @@ interface AppealFormProps {
   sessionTitle: string;
   /** Called when the user successfully submits an appeal. */
   onAppealSubmitted?: (appealId: string) => void;
+  /** Called when the user cancels/dismisses the form (e.g. closes the modal). */
+  onCancel?: () => void;
 }
 
 type Step = "form" | "confirm" | "success";
@@ -102,15 +108,23 @@ function FileChip({ file, onRemove }: FileChipProps) {
  * mount this component when the dispute status is `resolved` and the current
  * user is one of the parties (expert or seeker).
  */
-export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealFormProps) {
+export function AppealForm({ dispute, sessionTitle, onAppealSubmitted, onCancel }: AppealFormProps) {
   const [step, setStep] = useState<Step>("form");
   const [grounds, setGrounds] = useState("");
   const [evidenceDescription, setEvidenceDescription] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [appealId, setAppealId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const wallet = useWallet();
+  const {
+    step: txStep,
+    error: txError,
+    executeTx,
+    reset: resetTx,
+  } = useSorobanTx();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const groundsId = useId();
@@ -120,6 +134,11 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
   const isFormValid =
     grounds.trim().length >= groundsMinLength &&
     (evidenceDescription.trim().length > 0 || files.length > 0);
+
+  const isTxInFlight =
+    txStep !== TxStep.IDLE &&
+    txStep !== TxStep.SUCCESS &&
+    txStep !== TxStep.ERROR;
 
   // ── File handling ─────────────────────────────────────────────────────────
 
@@ -168,18 +187,45 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
 
   // ── Submission ────────────────────────────────────────────────────────────
 
+  useEffect(() => {
+    if (txStep === TxStep.SUCCESS && appealId && step !== "success") {
+      setStep("success");
+      onAppealSubmitted?.(appealId);
+    }
+    if (txStep === TxStep.ERROR) {
+      setSubmitError(txError ?? "Appeal submission failed. Please try again.");
+    }
+  }, [txStep, txError, appealId, step, onAppealSubmitted]);
+
   async function handleSubmit() {
     if (!isFormValid) return;
-    setIsSubmitting(true);
+    setSubmitError(null);
 
-    // Simulate async submission (replace with real Soroban / API call)
-    await new Promise((resolve) => setTimeout(resolve, 1800));
+    const params: SubmitDisputeParams = {
+      sessionId: dispute.sessionId,
+      raisedBy: dispute.raisedBy,
+      reason: grounds.trim(),
+      evidenceDescription: evidenceDescription.trim(),
+      evidence: files.map((f) => ({
+        name: f.name,
+        size: f.size,
+        type: f.type,
+      })),
+    };
 
-    const id = `APPEAL_${Date.now()}`;
-    setAppealId(id);
-    setIsSubmitting(false);
-    setStep("success");
-    onAppealSubmitted?.(id);
+    const walletCtx =
+      wallet.address && wallet.networkPassphrase
+        ? {
+            address: wallet.address,
+            networkPassphrase: wallet.networkPassphrase,
+            signTransaction: wallet.signTransaction,
+          }
+        : undefined;
+
+    void executeTx(async () => {
+      const result = await submitDispute(params, walletCtx);
+      setAppealId(result.id);
+    });
   }
 
   function handleReset() {
@@ -189,6 +235,13 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
     setFiles([]);
     setFileError(null);
     setAppealId(null);
+    setSubmitError(null);
+    resetTx();
+  }
+
+  function handleCancel() {
+    handleReset();
+    onCancel?.();
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -196,7 +249,7 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
   return (
     <section
       aria-labelledby="appeal-form-heading"
-      className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-amber-500/5 to-orange-500/5 p-6 space-y-6"
+      className="rounded-2xl border border-white/10 bg-card p-6 space-y-6"
     >
       {/* ── Header ── */}
       <div className="flex items-start gap-3">
@@ -238,15 +291,6 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
         </div>
       )}
 
-      {/* ── Info Banner ── */}
-      <div className="flex items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/8 px-4 py-3">
-        <Info className="size-4 shrink-0 text-blue-400 mt-0.5" aria-hidden="true" />
-        <p className="text-xs text-foreground/60 leading-relaxed">
-          Appeals are reviewed by a community jury. Providing clear grounds and
-          supporting evidence improves the chance of a fair reassessment.
-        </p>
-      </div>
-
       {/* ── Step: Form ── */}
       {step === "form" && (
         <div className="space-y-5">
@@ -266,11 +310,11 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
               rows={4}
               placeholder="Explain why you believe the verdict was incorrect. Be specific about what was misrepresented or overlooked during the original dispute review."
               className={cn(
-                "w-full resize-none rounded-xl border bg-white/5 px-4 py-3 text-sm text-foreground/90 placeholder:text-foreground/30",
-                "focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all",
+                "w-full resize-none rounded-xl border-2 bg-white/5 px-4 py-3 text-sm text-foreground/90 placeholder:text-foreground/30",
+                "focus:outline-none transition-all",
                 grounds.trim().length > 0 && grounds.trim().length < groundsMinLength
-                  ? "border-amber-500/50"
-                  : "border-white/10 focus:border-primary/50"
+                  ? "border-amber-500"
+                  : "border-yellow-500/70"
               )}
               aria-required="true"
               aria-describedby={`${groundsId}-hint`}
@@ -303,7 +347,7 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
               onChange={(e) => setEvidenceDescription(e.target.value)}
               rows={3}
               placeholder="Describe any new evidence that was not presented during the initial dispute — links, timestamps, screenshots, chat logs, etc."
-              className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-foreground/90 placeholder:text-foreground/30 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/30 transition-all"
+              className="w-full resize-none rounded-xl border-2 border-yellow-500/70 bg-white/5 px-4 py-3 text-sm text-foreground/90 placeholder:text-foreground/30 focus:outline-none transition-all"
               aria-describedby={`${evidenceId}-hint`}
             />
             <p id={`${evidenceId}-hint`} className="text-[11px] text-foreground/30">
@@ -389,19 +433,20 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
             <Button
               variant="outline"
               size="sm"
-              className="flex-1"
-              onClick={handleReset}
+              className="flex-1 border border-red-500/40 text-red-400 hover:bg-red-500/10"
+              onClick={handleCancel}
+              disabled={isTxInFlight}
               type="button"
             >
-              Clear Form
+              Cancel
             </Button>
             <Button
               size="sm"
-              className="flex-1 gap-2"
-              disabled={!isFormValid}
+              className="flex-1 gap-2 bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors cursor-pointer text-white"
+              disabled={!isFormValid || isTxInFlight}
               onClick={() => setStep("confirm")}
               type="button"
-              aria-disabled={!isFormValid}
+              aria-disabled={!isFormValid || isTxInFlight}
             >
               <Paperclip className="size-4" aria-hidden="true" />
               Review & Submit
@@ -444,61 +489,94 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
             </p>
           </div>
 
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1"
-              onClick={() => setStep("form")}
-              disabled={isSubmitting}
-              type="button"
-            >
-              Go Back
-            </Button>
-            <Button
-              size="sm"
-              className="flex-1 gap-2"
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              type="button"
-            >
-              {isSubmitting ? (
-                <>
-                  <span
-                    className="size-4 rounded-full border-2 border-white/30 border-t-white animate-spin"
-                    aria-hidden="true"
-                  />
-                  Submitting…
-                </>
-              ) : (
-                <>
-                  <SendHorizonal className="size-4" aria-hidden="true" />
-                  Confirm Appeal
-                </>
-              )}
-            </Button>
-          </div>
+          {/* Submission error — keep form data for retry */}
+          {submitError && (
+            <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+              <AlertTriangle className="size-4 shrink-0 text-red-400 mt-0.5" aria-hidden="true" />
+              <p className="text-xs text-foreground/70 leading-relaxed">{submitError}</p>
+            </div>
+          )}
+
+          {/* Wallet gate */}
+          {!wallet.address ? (
+            <div className="flex flex-col items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/8 px-4 py-3">
+              <p className="text-xs text-foreground/70 leading-relaxed">
+                Connect your wallet to submit an appeal.
+              </p>
+              <Button
+                size="sm"
+                onClick={() => void wallet.connect()}
+                type="button"
+                className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors cursor-pointer text-white"
+              >
+                Connect Wallet
+              </Button>
+            </div>
+          ) : wallet.isWrongNetwork ? (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/8 px-4 py-3">
+              <AlertTriangle className="size-4 shrink-0 text-amber-400 mt-0.5" aria-hidden="true" />
+              <p className="text-xs text-foreground/70 leading-relaxed">
+                Switch your wallet to the supported Stellar network before submitting.
+              </p>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 border border-red-500/40 text-red-400 hover:bg-red-500/10"
+                onClick={() => setStep("form")}
+                disabled={isTxInFlight}
+                type="button"
+              >
+                Go Back
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1 gap-2 bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors cursor-pointer text-white"
+                onClick={handleSubmit}
+                disabled={isTxInFlight}
+                type="button"
+              >
+                {isTxInFlight ? (
+                  <>
+                    <span
+                      className="size-4 rounded-full border-2 border-white/30 border-t-white animate-spin"
+                      aria-hidden="true"
+                    />
+                    Submitting…
+                  </>
+                ) : (
+                  <>
+                    <SendHorizonal className="size-4" aria-hidden="true" />
+                    Confirm Appeal
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── Step: Success ── */}
       {step === "success" && (
         <div className="flex flex-col items-center gap-5 py-4 text-center">
-          <div className="relative">
-            <div
-              className="absolute inset-0 bg-emerald-500/30 rounded-full blur-lg animate-pulse"
-              aria-hidden="true"
-            />
-            <div className="relative rounded-full border border-emerald-500/50 bg-emerald-500/15 p-4">
-              <CheckCircle2 className="size-8 text-emerald-400" aria-hidden="true" />
-            </div>
-          </div>
+          <CheckCircle2 className="size-14 text-emerald-500" aria-hidden="true" />
 
           <div className="space-y-1.5">
-            <h3 className="text-base font-bold text-foreground">Appeal Submitted</h3>
+            <h3 className="text-base font-bold text-foreground">Thank You for Contacting Support</h3>
             <p className="text-xs text-foreground/55 max-w-xs leading-relaxed">
-              Your appeal has been sent to the community jury for review. You will
-              be notified once a decision is reached.
+              We have received your dispute appeal and are reviewing it. It takes
+              about 7 days to hear back from us. Thank you for your patience.
+            </p>
+          </div>
+
+          {/* Jury review notice */}
+          <div className="flex items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/8 px-4 py-3">
+            <Info className="size-4 shrink-0 text-blue-400 mt-0.5" aria-hidden="true" />
+            <p className="text-xs text-foreground/60 leading-relaxed text-left">
+              Appeals are reviewed by a community jury. Providing clear grounds
+              and supporting evidence improves the chance of a fair reassessment.
             </p>
           </div>
 
@@ -508,8 +586,25 @@ export function AppealForm({ dispute, sessionTitle, onAppealSubmitted }: AppealF
               <span className="font-mono font-semibold text-foreground/80">{appealId}</span>
             </div>
           )}
+
+          {/* Explicit close action so the confirmation can't be missed */}
+          <Button
+            size="sm"
+            onClick={handleCancel}
+            className="min-w-[160px] bg-gradient-to-r from-purple-600 to-purple-700 rounded-lg hover:from-purple-700 hover:to-purple-800 transition-colors cursor-pointer text-white"
+            type="button"
+          >
+            Done
+          </Button>
         </div>
       )}
+
+      {/* Transaction progress overlay — reuses the shared wheels/stepper UX */}
+      <TxProgressStepper
+        step={txStep}
+        error={txError}
+        onClose={resetTx}
+      />
     </section>
   );
 }
@@ -543,13 +638,14 @@ export function AppealFormModal({
       isOpen={isOpen}
       onClose={onClose}
       title="Community Dispute Appeal"
-      className="max-w-2xl"
+      className="max-w-2xl max-h-[90vh]"
     >
       <div className="p-6">
         <AppealForm
           dispute={dispute}
           sessionTitle={sessionTitle}
           onAppealSubmitted={handleSubmitted}
+          onCancel={onClose}
         />
       </div>
     </Modal>

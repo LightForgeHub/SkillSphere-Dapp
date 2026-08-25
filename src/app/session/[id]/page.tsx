@@ -448,7 +448,7 @@ export default function SessionPage() {
           onClose={() => setShowAppealModal(false)}
           dispute={sessionDispute}
           sessionTitle={session.category}
-          onAppealSubmitted={() => setShowAppealModal(false)}
+          onAppealSubmitted={() => undefined}
         />
       )}
     </div>
