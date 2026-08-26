@@ -1,4 +1,17 @@
-import type { DisputeAdapter, SubmitDisputeParams, SubmitDisputeResult } from "../disputes";
+import {
+  Address,
+  Contract,
+  nativeToScVal,
+  rpc,
+  TransactionBuilder,
+  xdr,
+} from "@stellar/stellar-sdk";
+import type {
+  DisputeAdapter,
+  SubmitDisputeParams,
+  SubmitDisputeResult,
+} from "../disputes";
+import { allocateDisputeId } from "../disputes-store";
 
 // ---------------------------------------------------------------------------
 // Soroban dispute adapter (real submission path)
@@ -12,18 +25,27 @@ import type { DisputeAdapter, SubmitDisputeParams, SubmitDisputeResult } from ".
 //     session_id:           u64,     // reviewed session being contested
 //     reason:               String,  // grounds for the appeal
 //     evidence_description: String,  // narrative description
-//     evidence:             Vec<Bytes>, // evidence metadata (encoded)
+//     evidence:             Vec<Bytes>, // evidence metadata (JSON-encoded)
 //     raised_by:            Symbol,  // "seeker" | "expert"
 //   )
 //
-// The exact argument encoding is isolated here so the UI never depends on
-// contract details. When a deployed contract exposes `submit_dispute`, only
-// this adapter needs to be pointed at it — the UI, the store and the mock
-// adapter are unchanged.
+// The full pipeline is: build -> simulate -> prepare -> Freighter sign ->
+// submit -> poll for ledger confirmation. Argument encoding is isolated here
+// so the UI never depends on contract details. Pointing this adapter at a
+// deployed contract requires only the NEXT_PUBLIC_DISPUTE_CONTRACT_ID env var.
 
-const CONTRACT_ID =
-  process.env.NEXT_PUBLIC_DISPUTE_CONTRACT_ID ||
-  "CCYUGVNBPA2Z7Z6U6Y6XU6Y6XU6Y6XU6Y6XU6Y6XU6Y";
+const CONTRACT_ID = process.env.NEXT_PUBLIC_DISPUTE_CONTRACT_ID ?? "";
+
+const RPC_URL =
+  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || "https://soroban-testnet.stellar.org";
+
+const NETWORK_PASSPHRASE =
+  process.env.NEXT_PUBLIC_SOROBAN_NETWORK_PASSPHRASE ||
+  "Test SDF Network ; September 2015";
+
+/** How many times to poll the RPC for ledger confirmation, and how fast. */
+const CONFIRM_POLL_ATTEMPTS = 10;
+const CONFIRM_POLL_INTERVAL_MS = 3000;
 
 /** Adapter needs the wallet context (uses the project's existing wallet). */
 export interface SorobanWalletContext {
@@ -35,6 +57,7 @@ export interface SorobanWalletContext {
   ) => Promise<string>;
 }
 
+/** Typed failure for every configuration/signing/confirmation problem. */
 export class SorobanContractSeamError extends Error {
   constructor(message: string) {
     super(message);
@@ -43,44 +66,162 @@ export class SorobanContractSeamError extends Error {
 }
 
 /**
- * Real Soroban submit_dispute implementation.
+ * Validates and returns the configured dispute contract id.
  *
- * Intended pipeline (same state machine as every other on-chain flow):
+ * @throws SorobanContractSeamError when NEXT_PUBLIC_DISPUTE_CONTRACT_ID is
+ *         missing or not a valid Stellar contract id (C + 55 chars).
+ */
+function requireContractId(): string {
+  if (!/^C[A-Z0-9]{55}$/.test(CONTRACT_ID)) {
+    throw new SorobanContractSeamError(
+      "NEXT_PUBLIC_DISPUTE_CONTRACT_ID is not configured with a valid deployed " +
+        "contract id. Set it in the environment to enable on-chain appeals, or use " +
+        "NEXT_PUBLIC_DISPUTE_ADAPTER=mock for local demo submissions."
+    );
+  }
+  return CONTRACT_ID;
+}
+
+/**
+ * Encodes evidence metadata as a contract `Vec<Bytes>` where each entry is
+ * the JSON form of `{ name, size, type }` — metadata only, never file bytes.
+ */
+function buildEvidenceScVal(
+  evidence: SubmitDisputeParams["evidence"]
+): xdr.ScVal {
+  return xdr.ScVal.scvVec(
+    evidence.map((item) =>
+      xdr.ScVal.scvBytes(
+        Buffer.from(
+          JSON.stringify({ name: item.name, size: item.size, type: item.type }),
+          "utf8"
+        )
+      )
+    )
+  );
+}
+
+/**
+ * Builds the `submit_dispute` invoke-host-function operation with arguments
+ * mapped from frontend params into their ScVal representations.
+ */
+function buildSubmitOperation(
+  params: SubmitDisputeParams,
+  callerAddress: string,
+  contractId: string
+) {
+  const contract = new Contract(contractId);
+  return contract.call(
+    "submit_dispute",
+    new Address(callerAddress).toScVal(),
+    nativeToScVal(BigInt(params.sessionId || "0"), { type: "u64" }),
+    nativeToScVal(params.reason),
+    nativeToScVal(params.evidenceDescription || ""),
+    buildEvidenceScVal(params.evidence),
+    nativeToScVal(params.raisedBy, { type: "symbol" })
+  );
+}
+
+/**
+ * Polls the RPC until the submitted transaction is confirmed or failed.
  *
- *   build invocation -> simulate -> assemble -> Freighter sign -> submit -> confirm
+ * @returns The confirmed transaction hash.
+ * @throws SorobanContractSeamError when the transaction fails on ledger or
+ *         confirmation cannot be observed within the polling window.
+ */
+async function waitForConfirmation(
+  server: rpc.Server,
+  txHash: string
+): Promise<string> {
+  for (let attempt = 0; attempt < CONFIRM_POLL_ATTEMPTS; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, CONFIRM_POLL_INTERVAL_MS));
+    const response = await server.getTransaction(txHash);
+
+    if (response.status === rpc.Api.GetTransactionStatus.SUCCESS) {
+      return txHash;
+    }
+    if (response.status === rpc.Api.GetTransactionStatus.FAILED) {
+      throw new SorobanContractSeamError(
+        "The submit_dispute transaction failed on ledger. No dispute was recorded."
+      );
+    }
+  }
+  throw new SorobanContractSeamError(
+    "Timed out waiting for ledger confirmation. Check the transaction hash on an explorer before retrying."
+  );
+}
+
+/**
+ * Real Soroban `submit_dispute` implementation driving the same transaction
+ * state machine as the rest of the dApp:
  *
- * The sign/submit/confirm half is gated behind a typed `SorobanContractSeamError`
- * because the `submit_dispute` entry point is not yet deployed on the configured
- * contract. `call` is therefore not reachable in the current repo state; the error
- * below keeps the on-chain path explicit instead of silently faking a confirmed
- * transaction. The contract id above is the single config seam to update.
+ *   build -> simulate -> prepare -> Freighter sign -> submit -> confirm
+ *
+ * Requires a deployed contract id via NEXT_PUBLIC_DISPUTE_CONTRACT_ID; all
+ * failures surface as typed `SorobanContractSeamError`s handled by the UI's
+ * existing error states (form data preserved, no success projection written).
  */
 export class SorobanDisputeAdapter implements DisputeAdapter {
   private wallet: SorobanWalletContext | null = null;
 
+  /** Binds the connected wallet used to sign the submission. */
   bind(wallet: SorobanWalletContext): void {
     this.wallet = wallet;
   }
 
+  /**
+   * Builds, signs, submits, and confirms the on-chain dispute submission.
+   *
+   * @returns The dispute id and confirmed transaction hash.
+   * @throws SorobanContractSeamError for missing wallet/config, simulation
+   *         failures, signature rejection, ledger failure, or poll timeout.
+   */
   async submitDispute(params: SubmitDisputeParams): Promise<SubmitDisputeResult> {
-    // `params` is reserved for the future `new rpc.Contract(CONTRACT_ID).call(
-    //   "submit_dispute", wallet.address, sessionId, reason, evidenceMetadata, raisedBy
-    // )` invocation. Referenced here so the interface stays concretely typed.
-    void params;
-
     const wallet = this.wallet;
     if (!wallet || !wallet.address) {
       throw new SorobanContractSeamError("Connect your wallet to submit an appeal.");
     }
+    const passphrase = wallet.networkPassphrase || NETWORK_PASSPHRASE;
+    const contractId = requireContractId();
+    const server = new rpc.Server(RPC_URL, { allowHttp: true });
 
-    void CONTRACT_ID;
-    void wallet;
+    const operation = buildSubmitOperation(params, wallet.address, contractId);
+    const account = await server.getAccount(wallet.address);
 
-    throw new SorobanContractSeamError(
-      "The submit_dispute entry point is not deployed on the configured contract yet. " +
-        "Enable NEXT_PUBLIC_DISPUTE_ADAPTER=mock for a local demo submission of the same " +
-        "transaction flow, or deploy the expected contract so this adapter can sign and " +
-        "confirm the transaction."
-    );
+    const unsigned = new TransactionBuilder(account, {
+      fee: "100",
+      networkPassphrase: passphrase,
+    })
+      .addOperation(operation)
+      .setTimeout(30)
+      .build();
+
+    const simulated = await server.simulateTransaction(unsigned);
+    if ("error" in simulated && simulated.error) {
+      throw new SorobanContractSeamError(
+        "The contract rejected the submit_dispute invocation: " + simulated.error
+      );
+    }
+
+    const prepared = await server.prepareTransaction(unsigned);
+    const signedXdr = await wallet.signTransaction(prepared.toXDR(), {
+      networkPassphrase: passphrase,
+    });
+
+    const signedTx = TransactionBuilder.fromXDR(signedXdr, passphrase);
+    const sent = await server.sendTransaction(signedTx);
+
+    if (sent.errorResult) {
+      throw new SorobanContractSeamError(
+        "The network rejected the submit_dispute transaction."
+      );
+    }
+
+    const txHash = await waitForConfirmation(server, sent.hash);
+
+    return {
+      id: allocateDisputeId(),
+      txHash,
+    };
   }
 }
