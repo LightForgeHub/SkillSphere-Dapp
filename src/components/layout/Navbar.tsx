@@ -21,7 +21,7 @@ function networkBadgeColor(network: string | null): string {
     case "TESTNET":
       return "bg-amber-500/20 text-amber-400 border-amber-500/30";
     default:
-      return "bg-zinc-700/40 text-zinc-400 border-zinc-600/30";
+      return "bg-muted text-muted-foreground border-border";
   }
 }
 
@@ -76,7 +76,7 @@ function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
         aria-expanded={menuOpen}
         aria-haspopup="menu"
         aria-label="Wallet menu"
-        className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-sm text-zinc-200 transition-all hover:border-zinc-500 hover:bg-zinc-700/60"
+        className="flex items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 py-2 text-sm text-foreground transition-all hover:border-border hover:bg-muted"
       >
         {/* Network badge */}
         {network && (
@@ -89,13 +89,13 @@ function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
 
         {/* Balance (converted to selected currency) */}
         {balance !== null && (
-          <span className="hidden sm:inline text-zinc-300 font-mono text-xs">
+          <span className="hidden sm:inline text-foreground/80 font-mono text-xs">
             {convert(Number(balance))}
           </span>
         )}
 
         {/* Address */}
-        <span className="font-mono text-xs text-violet-300">
+        <span className="font-mono text-xs text-violet-500">
           {shortenAddress(address)}
         </span>
 
@@ -111,11 +111,11 @@ function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
             onClick={() => setMenuOpen(false)}
           />
 
-          <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-zinc-700 bg-zinc-900 p-3 shadow-xl">
+          <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-border bg-card p-3 shadow-xl">
             {/* Network + balance summary */}
-            <div className="mb-3 rounded-lg bg-zinc-800/60 p-3">
+            <div className="mb-3 rounded-lg bg-muted/60 p-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-zinc-400">Network</span>
+                <span className="text-xs text-muted-foreground">Network</span>
                 <span
                   className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${networkBadgeColor(network)}`}
                 >
@@ -123,13 +123,13 @@ function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-zinc-400">Balance</span>
+                <span className="text-xs text-muted-foreground">Balance</span>
                 <div className="text-right">
-                  <span className="text-sm font-mono font-medium text-zinc-200">
+                  <span className="text-sm font-mono font-medium text-foreground">
                     {balance !== null ? convert(Number(balance)) : "—"}
                   </span>
                   {balance !== null && selectedCurrency !== "XLM" && (
-                    <p className="text-[10px] text-zinc-500 font-mono">
+                    <p className="text-[10px] text-muted-foreground font-mono">
                       {balance} XLM
                     </p>
                   )}
@@ -139,14 +139,14 @@ function WalletButton({ convert, selectedCurrency }: WalletButtonProps) {
 
             {/* Full address */}
             <div className="mb-3">
-              <p className="mb-1 text-xs text-zinc-400">Address</p>
-              <div className="flex items-center gap-2 rounded-lg bg-zinc-800/60 px-2 py-1.5">
-                <p className="flex-1 truncate font-mono text-[11px] text-zinc-300">
+              <p className="mb-1 text-xs text-muted-foreground">Address</p>
+              <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-2 py-1.5">
+                <p className="flex-1 truncate font-mono text-[11px] text-foreground/80">
                   {address}
                 </p>
                 <button
                   onClick={handleCopy}
-                  className="shrink-0 rounded p-1 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
                   aria-label="Copy address"
                   title="Copy address"
                 >
@@ -204,12 +204,12 @@ export default function Navbar() {
           Freighter extension settings.
         </div>
       )}
-    <header className="sticky top-0 z-30 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link
           href="/"
-          className="flex items-center gap-2 text-lg font-bold text-violet-400 hover:text-violet-300 transition-colors"
+          className="flex items-center gap-2 text-lg font-bold text-violet-500 hover:text-violet-400 transition-colors"
         >
           <Zap className="h-5 w-5" />
           SkillSphere
@@ -228,7 +228,7 @@ export default function Navbar() {
                   ? "escrow-flow"
                   : undefined
               }
-              className="text-sm font-medium text-zinc-400 hover:text-zinc-100 transition-colors"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               {label}
             </Link>
@@ -241,11 +241,11 @@ export default function Navbar() {
           <select
             value={selectedCurrency}
             onChange={(e) => setSelectedCurrency(e.target.value as DisplayCurrency)}
-            className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-2 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
+            className="rounded-lg border border-border bg-muted/60 px-2 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-border focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer"
             aria-label="Select display currency"
           >
             {DISPLAY_CURRENCIES.map((c) => (
-              <option key={c} value={c} className="bg-zinc-900">
+              <option key={c} value={c} className="bg-background">
                 {c}
               </option>
             ))}
@@ -258,7 +258,7 @@ export default function Navbar() {
 
           {/* Mobile menu toggle */}
           <button
-            className="rounded-lg p-2 text-zinc-400 hover:text-zinc-100 transition-colors md:hidden"
+            className="rounded-lg p-2 text-muted-foreground hover:text-foreground transition-colors md:hidden"
             onClick={() => setMobileOpen((o) => !o)}
             aria-label="Toggle menu"
             aria-expanded={mobileOpen}
@@ -270,13 +270,13 @@ export default function Navbar() {
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <nav className="border-t border-zinc-800/60 bg-zinc-950/95 px-4 py-4 md:hidden">
+        <nav className="border-t border-border bg-background px-4 py-4 md:hidden">
           <ul className="flex flex-col gap-3">
             {NAV_LINKS.map(({ href, label }) => (
               <li key={href}>
                 <Link
                   href={href}
-                  className="block rounded-lg px-3 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100 transition-colors"
+                  className="block rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                   onClick={() => setMobileOpen(false)}
                 >
                   {label}

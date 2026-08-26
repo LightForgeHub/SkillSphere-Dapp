@@ -7,7 +7,7 @@ import CoursePricingPanel from "@/components/dashboard/CoursePricingPanel";
 import CourseSection from "@/components/dashboard/CourseSection";
 import { cn } from "@/components/ui/utils";
 
-const lbl = "block text-[#FCFCFC] text-sm font-normal leading-6 mb-2";
+const lbl = "block text-foreground text-sm font-normal leading-6 mb-2";
 const baseInput =
   "bg-card border-white/5 text-foreground placeholder:text-foreground/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
 const errorInput =

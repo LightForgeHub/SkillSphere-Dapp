@@ -14,7 +14,7 @@ import {
 import { FileUpload } from "@/components/ui/FileUpload";
 
 // ─── Shared label style ───────────────────────────────────────────────────────
-const label = "block text-[#FCFCFC] text-sm font-normal leading-6 mb-2";
+const label = "block text-foreground text-sm font-normal leading-6 mb-2";
 
 // ─── TagInput ─────────────────────────────────────────────────────────────────
 function TagInput({
@@ -53,8 +53,8 @@ function TagInput({
       {tags.map((tag) => (
         <span
           key={tag}
-          className="inline-flex items-center gap-1.5 bg-[#9B59FF]/15 border border-[#9B59FF]/25 text-[#C49DFF] text-xs px-3 py-1.5 rounded-lg"
-        >
+className="inline-flex items-center gap-1.5 bg-[#9B59FF]/15 border border-[#9B59FF]/25 text-violet-600 text-xs px-3 py-1.5 rounded-lg"
+          >
           {tag}
           <button
             type="button"
