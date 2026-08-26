@@ -38,9 +38,9 @@ export const SupportAccordionItem: React.FC<SupportAccordionItemProps> = ({
                 >
                     <div className="flex flex-col gap-[4px] flex-1 mr-4">
                         <div className="flex items-center gap-2">
-                            <span className="text-[14px] font-medium text-[#CCCCCC] font-ubuntu leading-[17px]">
+                            <span className="text-[14px] font-medium text-foreground font-ubuntu leading-[17px]">
                                 {title}
-                                <span className="text-[#888888] ml-2 font-normal">({subtitle})</span>
+                                <span className="text-muted-foreground ml-2 font-normal">({subtitle})</span>
                             </span>
                         </div>
                     </div>
@@ -48,13 +48,13 @@ export const SupportAccordionItem: React.FC<SupportAccordionItemProps> = ({
                     <span
                         className={cn(
                             "inline-flex items-center justify-center px-[12px] py-[6px] rounded-[48px] border border-border min-w-[64px] h-[26px] transition-all duration-200",
-                            isOpen && "bg-white border-white"
+                            isOpen && "bg-foreground border-foreground"
                         )}
                     >
                         <span
                             className={cn(
                                 "text-[12px] font-normal leading-[14px]",
-                                isOpen ? "text-black" : "text-foreground"
+                                isOpen ? "text-background" : "text-foreground"
                             )}
                         >
                             {isOpen ? "Close" : "Expand"}
@@ -73,7 +73,7 @@ export const SupportAccordionItem: React.FC<SupportAccordionItemProps> = ({
                 )}
             >
                 <div className="overflow-hidden">
-                    <div className="px-[24px] pb-[16px] text-[#A0A0A0] text-[14px] leading-relaxed">
+                    <div className="px-[24px] pb-[16px] text-muted-foreground text-[14px] leading-relaxed">
                         {content}
                     </div>
                 </div>

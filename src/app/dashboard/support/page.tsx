@@ -4,6 +4,7 @@ import { ShieldAlert } from "lucide-react"
 import { SupportAccordion, FAQItem } from "@/components/dashboard/SupportAccordion"
 import { AppealFormModal } from "@/components/session/AppealForm"
 import { mockSessions } from "@/utils/data/mock-data"
+import { formatDate } from "@/utils/time"
 import type { Dispute } from "../../../../utils/types/types"
 
 const reviewedSessions = mockSessions.filter((s) => s.status === "completed")
@@ -138,7 +139,7 @@ export default function SupportPage() {
                     {session.title}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-500">
-                    {new Date(`${session.date}T00:00:00`).toLocaleDateString()} · {session.duration} · with {session.expertName}
+                    {formatDate(`${session.date}T00:00:00`)} · {session.duration} · with {session.expertName}
                   </p>
                 </div>
                 <button
@@ -158,7 +159,7 @@ export default function SupportPage() {
         </div>
       )}
 
-      <div className="max-w-[1030px]">
+      <div className="w-full">
         <SupportAccordion items={FAQ_ITEMS} />
       </div>
 

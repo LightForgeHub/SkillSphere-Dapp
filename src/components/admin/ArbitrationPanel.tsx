@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ExternalLink, CheckCircle, Loader2 } from "lucide-react";
 import { getSubmittedDisputes } from "@/lib/disputes-store";
+import type { SubmittedDispute } from "@/lib/disputes";
 import { mockSessions, mockExperts } from "@/utils/data/mock-data";
+import { formatDate, formatTime } from "@/utils/time";
 
 interface DisputeSession {
   id: string;
@@ -77,7 +79,14 @@ const MOCK_DISPUTES: DisputeSession[] = [
 export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }: ArbitrationPanelProps) {
   const [resolving, setResolving] = useState<string | null>(null);
   const [resolvedDisputes, setResolvedDisputes] = useState<Set<string>>(new Set());
-  const [submittedAppeals] = useState(() => getSubmittedDisputes());
+  // Start empty so the server HTML and the client's first (hydration) render
+  // match — localStorage is only available in the browser, so it is loaded
+  // after mount. React updates the list immediately afterwards without a
+  // hydration mismatch.
+  const [submittedAppeals, setSubmittedAppeals] = useState<SubmittedDispute[]>([]);
+  useEffect(() => {
+    setSubmittedAppeals(getSubmittedDisputes());
+  }, []);
 
   // Map submitted appeals into the SAME DisputeSession card model as the
   // mock disputes so every card in this panel renders identically.
@@ -112,7 +121,12 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
     };
   });
 
-  const allDisputes = [...submittedAsDisputes, ...disputes];
+  // Newest submissions first, then the existing dispute list below.
+  const sortedSubmittedAppeals = [...submittedAsDisputes].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  const allDisputes = [...sortedSubmittedAppeals, ...disputes];
 
   const handleResolve = async (disputeId: string, resolution: "seeker" | "expert") => {
     setResolving(disputeId);
@@ -163,8 +177,8 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
                       {dispute.id}
                     </h3>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(dispute.createdAt).toLocaleDateString()} at{" "}
-                      {new Date(dispute.createdAt).toLocaleTimeString()}
+{formatDate(dispute.createdAt)} at{" "}
+                    {formatTime(dispute.createdAt)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

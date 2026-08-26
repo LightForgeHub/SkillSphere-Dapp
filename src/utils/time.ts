@@ -32,3 +32,42 @@ export function formatTimeAgo(timestamp: number | null): string {
   const days = Math.floor(hours / 24);
   return `${days} day${days !== 1 ? 's' : ''} ago`;
 }
+
+/**
+ * Month labels used by formatDate — fixed (not locale-derived) so server and
+ * client always render identical output during SSR hydration.
+ */
+const MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const;
+
+/**
+ * Formats a date as a deterministic "Jun 5, 2025" string.
+ * Avoids toLocaleDateString(), which differs between server and client
+ * locales and causes React hydration mismatches.
+ *
+ * @param date - ISO date string, timestamp, or Date
+ * @returns Formatted date, or an em dash when the input is invalid
+ */
+export function formatDate(date: string | number | Date): string {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '—';
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+/**
+ * Formats a date's time-of-day as a deterministic zero-padded "HH:MM" string.
+ * Avoids toLocaleTimeString(), which differs between server and client
+ * locales and causes React hydration mismatches.
+ *
+ * @param date - ISO date string, timestamp, or Date
+ * @returns Formatted time, or an em dash when the input is invalid
+ */
+export function formatTime(date: string | number | Date): string {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '—';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
