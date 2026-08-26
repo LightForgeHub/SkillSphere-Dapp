@@ -7,6 +7,18 @@ import type { SubmittedDispute } from "@/lib/disputes";
 import { mockSessions, mockExperts } from "@/utils/data/mock-data";
 import { formatDate, formatTime } from "@/utils/time";
 
+/**
+ * Renders an address as the card's truncated `head...tail` form. Short or
+ * missing values (e.g. an unknown counterparty) pass through untouched so a
+ * placeholder never becomes a nonsense `Ã¢â‚¬â€...Ã¢â‚¬â€` string.
+ */
+function shortAddress(address: string): string {
+  if (!address) return "Ã¢â‚¬â€";
+  return address.length > 20
+    ? `${address.slice(0, 10)}...${address.slice(-10)}`
+    : address;
+}
+
 interface DisputeSession {
   id: string;
   seeker: {
@@ -76,11 +88,15 @@ const MOCK_DISPUTES: DisputeSession[] = [
   },
 ];
 
+/**
+ * Admin dispute arbitration dashboard: renders locally submitted appeals
+ * mapped into the shared card model alongside the seeded dispute list.
+ */
 export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }: ArbitrationPanelProps) {
   const [resolving, setResolving] = useState<string | null>(null);
   const [resolvedDisputes, setResolvedDisputes] = useState<Set<string>>(new Set());
   // Start empty so the server HTML and the client's first (hydration) render
-  // match — localStorage is only available in the browser, so it is loaded
+  // match Ã¢â‚¬â€ localStorage is only available in the browser, so it is loaded
   // after mount. React updates the list immediately afterwards without a
   // hydration mismatch.
   const [submittedAppeals, setSubmittedAppeals] = useState<SubmittedDispute[]>([]);
@@ -89,8 +105,11 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
   }, []);
 
   // Map submitted appeals into the SAME DisputeSession card model as the
-  // mock disputes so every card in this panel renders identically.
+  // mock disputes so every card in this panel renders identically. The
+  // claimant is placed in the column matching their role Ã¢â‚¬â€ an expert-raised
+  // appeal never renders under the "Seeker" label.
   const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const claimantIsSeeker = (appeal: SubmittedDispute) => appeal.raisedBy === "seeker";
   const submittedAsDisputes: DisputeSession[] = submittedAppeals.map((appeal) => {
     const session = mockSessions.find((s) => s.id === appeal.sessionId);
     const expert = mockExperts.find((e) => e.id === session?.expertId);
@@ -107,14 +126,22 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
     return {
       id: appeal.id,
       seeker: {
-        name: capitalize(appeal.raisedBy),
-        address: appeal.claimantAddress || "—",
+        name: claimantIsSeeker(appeal)
+          ? capitalize(appeal.raisedBy)
+          : session?.seekerName ?? "Ã¢â‚¬â€",
+        address: claimantIsSeeker(appeal)
+          ? appeal.claimantAddress || ""
+          : "",
       },
       expert: {
-        name: session?.expertName ?? "Unassigned",
-        address: expert?.walletAddress ?? "—",
+        name: claimantIsSeeker(appeal)
+          ? session?.expertName ?? "Unassigned"
+          : capitalize(appeal.raisedBy),
+        address: claimantIsSeeker(appeal)
+          ? expert?.walletAddress ?? ""
+          : appeal.claimantAddress || "",
       },
-      amount: session?.price ?? "—",
+      amount: session?.price ?? "Ã¢â‚¬â€",
       status: "pending" as const,
       createdAt: appeal.createdAt,
       evidence: { notes },
@@ -142,6 +169,7 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
     }
   };
 
+  /** Builds the public gateway URL for a stored evidence hash. */
   const getIPFSUrl = (hash: string): string => {
     return `https://ipfs.io/ipfs/${hash}`;
   };
@@ -204,8 +232,7 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
                       {dispute.seeker.name}
                     </p>
                     <p className="text-xs text-muted-foreground font-mono mt-1">
-                      {dispute.seeker.address.slice(0, 10)}...
-                      {dispute.seeker.address.slice(-10)}
+                      {shortAddress(dispute.seeker.address)}
                     </p>
                   </div>
                   <div>
@@ -220,8 +247,7 @@ export default function ArbitrationPanel({ disputes = MOCK_DISPUTES, onResolve }
                       {dispute.expert.name}
                     </p>
                     <p className="text-xs text-muted-foreground font-mono mt-1">
-                      {dispute.expert.address.slice(0, 10)}...
-                      {dispute.expert.address.slice(-10)}
+                      {shortAddress(dispute.expert.address)}
                     </p>
                   </div>
                 </div>

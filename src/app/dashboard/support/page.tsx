@@ -5,6 +5,7 @@ import { SupportAccordion, FAQItem } from "@/components/dashboard/SupportAccordi
 import { AppealFormModal } from "@/components/session/AppealForm"
 import { mockSessions } from "@/utils/data/mock-data"
 import { formatDate } from "@/utils/time"
+import { useSandboxWallet } from "@/providers/WalletProvider"
 import type { Dispute } from "../../../../utils/types/types"
 
 const reviewedSessions = mockSessions.filter((s) => s.status === "completed")
@@ -92,24 +93,32 @@ const FAQ_ITEMS: FAQItem[] = [
   },
 ]
 
+/** Support & FAQ page with reviewed-session appeal entry points. */
 export default function SupportPage() {
   const [appealDispute, setAppealDispute] = useState<Dispute | null>(null);
+  const { activeMockProfile } = useSandboxWallet();
+
+  // The dApp has no production role context yet; the dev-only mock profile is
+  // the sole role source. Defaults to "seeker" for real wallets until an auth
+  // role lands â€” ArbitrationPanel maps the claimant slot correctly either way.
+  const claimantRole: "seeker" | "expert" =
+    activeMockProfile?.role === "expert" ? "expert" : "seeker";
 
   const appealChoices = useMemo(
     () =>
       reviewedSessions.map<Dispute>((session) => ({
         id: `disputable-${session.id}`,
         sessionId: session.id,
-        raisedBy: "seeker",
+        raisedBy: claimantRole,
         reason:
           session.expertName
             ? `Dispute claim for the reviewed session "${session.title}" with ${session.expertName}.`
             : `Dispute claim for the reviewed session "${session.title}".`,
         status: "resolved",
         evidence: [],
-        createdAt: new Date(`${session.date}T00:00:00`).toISOString(),
+        createdAt: new Date(`${session.date}T00:00:00Z`).toISOString(),
       })),
-    []
+    [claimantRole]
   );
 
   return (
@@ -139,7 +148,7 @@ export default function SupportPage() {
                     {session.title}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-500">
-                    {formatDate(`${session.date}T00:00:00`)} · {session.duration} · with {session.expertName}
+                    {formatDate(`${session.date}T00:00:00Z`)} Â· {session.duration} Â· with {session.expertName}
                   </p>
                 </div>
                 <button

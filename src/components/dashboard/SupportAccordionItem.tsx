@@ -15,6 +15,7 @@ interface SupportAccordionItemProps {
     onToggle: () => void
 }
 
+/** One expandable FAQ row with an animated height transition and Expand/Close pill. */
 export const SupportAccordionItem: React.FC<SupportAccordionItemProps> = ({
     title,
     subtitle,

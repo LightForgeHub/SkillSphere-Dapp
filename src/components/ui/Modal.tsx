@@ -12,6 +12,7 @@ interface ModalProps {
   className?: string;
 }
 
+/** Accessible overlay dialog with focus trapping and a scrollable body region. */
 export function Modal({ isOpen, onClose, title, children, className }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<Element | null>(null);

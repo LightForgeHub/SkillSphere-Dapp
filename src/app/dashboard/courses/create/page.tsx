@@ -28,6 +28,7 @@ interface TouchedFields {
   description: boolean;
 }
 
+/** Computes required-field validation messages for the course basics. */
 function getErrors(fields: FormFields) {
   return {
     title: fields.title.trim() === "" ? "Course title is required." : "",
@@ -35,6 +36,7 @@ function getErrors(fields: FormFields) {
   };
 }
 
+/** Course creation workspace combining basics, pricing panel, and content sections. */
 export default function CreateCoursePage() {
   const [courseAmount, setCourseAmount] = useState("24");
   const [access, setAccess] = useState("paid");
@@ -47,10 +49,12 @@ export default function CreateCoursePage() {
   const isFormValid =
     !errors.title && !errors.description && !!courseAmount && !!access;
 
+  /** Marks a course-basic field as touched so its validation error can display. */
   const touch = (field: keyof TouchedFields) =>
     setTouched((prev) => ({ ...prev, [field]: true }));
 
   const addSection = () => setSections((prev) => [...prev, { id: nextId++ }]);
+  /** Removes a content section by id when more than one remains. */
   const removeSection = (id: number) =>
     setSections((prev) => prev.filter((s) => s.id !== id));
 
@@ -74,7 +78,7 @@ export default function CreateCoursePage() {
                 className={cn(baseInput, touched.title && errors.title && errorInput)}
               />
               <p className={cn("mt-1.5 text-xs min-h-[18px]", touched.title && errors.title ? "text-red-400" : "text-transparent")}>
-                {errors.title || "‎"}
+                {errors.title || "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â½"}
               </p>
             </div>
 
@@ -90,7 +94,7 @@ export default function CreateCoursePage() {
                 className={cn(baseTextarea, touched.description && errors.description && errorTextarea)}
               />
               <p className={cn("mt-1.5 text-xs min-h-[18px]", touched.description && errors.description ? "text-red-400" : "text-transparent")}>
-                {errors.description || "‎"}
+                {errors.description || "ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â½"}
               </p>
             </div>
           </div>

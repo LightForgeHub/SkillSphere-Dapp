@@ -43,9 +43,10 @@ const MONTHS = [
 ] as const;
 
 /**
- * Formats a date as a deterministic "Jun 5, 2025" string.
+ * Formats a date as a deterministic UTC "Jun 5, 2025" string.
  * Avoids toLocaleDateString(), which differs between server and client
- * locales and causes React hydration mismatches.
+ * locales and causes React hydration mismatches. UTC components are used so
+ * the output is also independent of the host timezone.
  *
  * @param date - ISO date string, timestamp, or Date
  * @returns Formatted date, or an em dash when the input is invalid
@@ -53,13 +54,15 @@ const MONTHS = [
 export function formatDate(date: string | number | Date): string {
   const d = new Date(date);
   if (isNaN(d.getTime())) return '—';
-  return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
 }
 
 /**
- * Formats a date's time-of-day as a deterministic zero-padded "HH:MM" string.
+ * Formats a date's time-of-day as a deterministic zero-padded UTC "HH:MM"
+ * string.
  * Avoids toLocaleTimeString(), which differs between server and client
- * locales and causes React hydration mismatches.
+ * locales and causes React hydration mismatches. UTC components are used so
+ * the output is also independent of the host timezone.
  *
  * @param date - ISO date string, timestamp, or Date
  * @returns Formatted time, or an em dash when the input is invalid
@@ -67,7 +70,7 @@ export function formatDate(date: string | number | Date): string {
 export function formatTime(date: string | number | Date): string {
   const d = new Date(date);
   if (isNaN(d.getTime())) return '—';
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
   return `${hh}:${mm}`;
 }

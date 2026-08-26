@@ -14,6 +14,7 @@ interface SupportAccordionProps {
     defaultOpenId?: string
 }
 
+/** Single-open FAQ accordion container rendering {@link SupportAccordionItem} entries. */
 export const SupportAccordion: React.FC<SupportAccordionProps> = ({
     items,
     defaultOpenId,

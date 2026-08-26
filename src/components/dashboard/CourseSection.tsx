@@ -20,6 +20,7 @@ interface CourseSectionProps {
   canRemove: boolean;
 }
 
+/** Collapsible course-content section containing video, lecture fields, quiz, and assignment inputs. */
 export default function CourseSection({ index, onRemove, canRemove }: CourseSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [lectureTitle, setLectureTitle] = useState("");
@@ -36,6 +37,7 @@ export default function CourseSection({ index, onRemove, canRemove }: CourseSect
     duration: duration.trim() === "" ? "Duration is required." : "",
   };
 
+  /** Marks a lecture field as touched so its validation error can display. */
   const touch = (field: "lectureTitle" | "duration") =>
     setTouched((prev) => ({ ...prev, [field]: true }));
 

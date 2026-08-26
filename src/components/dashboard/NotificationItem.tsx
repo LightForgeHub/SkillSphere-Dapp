@@ -11,6 +11,7 @@ export interface NotificationItemProps {
   className?: string
 }
 
+/** Single notification row: avatar icon, title/subtitle, and timestamp. */
 export default function NotificationItem({
   title,
   subtitle,

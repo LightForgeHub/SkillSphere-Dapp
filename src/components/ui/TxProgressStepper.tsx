@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, Check, Loader2, XCircle } from 'lucide-react';
 import { TxStep } from '@/hooks/useSorobanTx';
 import { cn } from './utils';
@@ -16,8 +17,17 @@ const STEPS = [
   'Confirming on ledger',
 ] as const;
 
+/**
+ * Portal-rendered transaction progress dialog mirroring the shared TxStep
+ * state machine, including error and success variants.
+ */
 export const TxProgressStepper: React.FC<TxProgressStepperProps> = ({ step, error, onClose }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (step !== TxStep.IDLE) {
@@ -34,20 +44,23 @@ export const TxProgressStepper: React.FC<TxProgressStepperProps> = ({ step, erro
     }
   }, [step, onClose]);
 
-  if (!isOpen) return null;
+  // Render through a portal so the fixed overlay escapes any transformed
+  // ancestor (e.g. the Modal's animate-in zoom), which would otherwise turn
+  // `fixed inset-0` into a clipped containing block.
+  if (!mounted || !isOpen) return null;
 
   const isErrored = !!error || step === TxStep.ERROR;
   const isSuccess = step === TxStep.SUCCESS;
   const currentIndex = isErrored ? -1 : isSuccess ? STEPS.length : step - 1;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-label="Transaction progress"
     >
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl">
-        {/* ── Header ── */}
+        {/* â”€â”€ Header â”€â”€ */}
         <div className="mb-5 flex items-center gap-3">
           <div
             className={cn(
@@ -78,12 +91,12 @@ export const TxProgressStepper: React.FC<TxProgressStepperProps> = ({ step, erro
                 ? 'Nothing was submitted on-chain'
                 : isSuccess
                   ? 'Submitted successfully'
-                  : 'Stellar · Soroban'}
+                  : 'Stellar Â· Soroban'}
             </p>
           </div>
         </div>
 
-        {/* ── Error body ── */}
+        {/* â”€â”€ Error body â”€â”€ */}
         {isErrored ? (
           <div className="space-y-4">
             <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3">
@@ -101,7 +114,7 @@ export const TxProgressStepper: React.FC<TxProgressStepperProps> = ({ step, erro
             </button>
           </div>
         ) : (
-          /* ── Step list ── */
+          /* â”€â”€ Step list â”€â”€ */
           <>
             <ol>
               {STEPS.map((label, idx) => {
@@ -157,7 +170,7 @@ export const TxProgressStepper: React.FC<TxProgressStepperProps> = ({ step, erro
                           isCurrent ? 'text-violet-400' : isCompleted ? 'text-emerald-400/70' : 'text-transparent'
                         )}
                       >
-                        {isCurrent ? 'In progress…' : isCompleted ? 'Done' : '.'}
+                        {isCurrent ? 'In progressâ€¦' : isCompleted ? 'Done' : '.'}
                       </p>
                     </div>
                   </li>
@@ -165,7 +178,7 @@ export const TxProgressStepper: React.FC<TxProgressStepperProps> = ({ step, erro
               })}
             </ol>
 
-            {/* ── Success banner ── */}
+            {/* â”€â”€ Success banner â”€â”€ */}
             {isSuccess && (
               <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-center text-xs font-medium text-emerald-400">
                 Transaction confirmed
@@ -174,6 +187,7 @@ export const TxProgressStepper: React.FC<TxProgressStepperProps> = ({ step, erro
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

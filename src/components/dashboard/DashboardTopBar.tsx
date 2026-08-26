@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/Avatar"
 import { useRouter, usePathname } from "next/navigation"
 
+/** Sticky dashboard header with breadcrumbs, search, creation shortcut, and wallet chip. */
 export default function DashboardTopBar({ onToggleMenu }: { onToggleMenu?: () => void }) {
   const router = useRouter()
   const pathname = usePathname()

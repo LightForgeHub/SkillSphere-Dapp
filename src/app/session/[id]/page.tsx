@@ -51,7 +51,7 @@ const MOCK_SESSION: SessionData = {
 };
 
 /**
- * Mock dispute — represents a settled dispute on this session that the seeker
+ * Mock dispute Ã¢â‚¬â€ represents a settled dispute on this session that the seeker
  * may wish to appeal. In production this would come from the contract / API.
  */
 const MOCK_DISPUTE: Dispute = {
@@ -67,6 +67,7 @@ const MOCK_DISPUTE: Dispute = {
   resolvedAt: "2025-06-22T14:30:00Z",
 };
 
+/** Live session workspace hosting chat, notes, settlement, and the appeal entry point. */
 export default function SessionPage() {
   const params = useParams();
   const router = useRouter();
@@ -126,6 +127,7 @@ export default function SessionPage() {
     [sessionId],
   );
 
+  /** Formats elapsed seconds into a zero-padded M:SS countdown label. */
   const formatTime = (seconds: number): string => {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
@@ -348,7 +350,7 @@ export default function SessionPage() {
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-foreground/50">Balance</span>
                         <span className="text-foreground font-mono">
-                          {wallet.balance ?? "—"} XLM
+                          {wallet.balance ?? "Ã¢â‚¬â€"} XLM
                         </span>
                       </div>
                     </div>
@@ -381,7 +383,7 @@ export default function SessionPage() {
                 </CardContent>
               </Card>
 
-              {/* Appeal button — only visible when there is a resolved dispute */}
+              {/* Appeal button Ã¢â‚¬â€ only visible when there is a resolved dispute */}
               {sessionDispute?.status === "resolved" && (
                 <Button
                   variant="outline"
@@ -441,7 +443,7 @@ export default function SessionPage() {
         </div>
       </Modal>
 
-      {/* Appeal Form Modal — only mounted when a resolved dispute exists */}
+      {/* Appeal Form Modal Ã¢â‚¬â€ only mounted when a resolved dispute exists */}
       {sessionDispute?.status === "resolved" && (
         <AppealFormModal
           isOpen={showAppealModal}
