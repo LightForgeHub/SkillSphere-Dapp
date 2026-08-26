@@ -1,6 +1,14 @@
 "use client"
-import React from "react"
+import React, { useMemo, useState } from "react"
+import { ShieldAlert } from "lucide-react"
 import { SupportAccordion, FAQItem } from "@/components/dashboard/SupportAccordion"
+import { AppealFormModal } from "@/components/session/AppealForm"
+import { mockSessions } from "@/utils/data/mock-data"
+import { formatDate } from "@/utils/time"
+import { useSandboxWallet } from "@/providers/WalletProvider"
+import type { Dispute } from "../../../../utils/types/types"
+
+const reviewedSessions = mockSessions.filter((s) => s.status === "completed")
 
 const FAQ_ITEMS: FAQItem[] = [
   {
@@ -85,7 +93,34 @@ const FAQ_ITEMS: FAQItem[] = [
   },
 ]
 
+/** Support & FAQ page with reviewed-session appeal entry points. */
 export default function SupportPage() {
+  const [appealDispute, setAppealDispute] = useState<Dispute | null>(null);
+  const { activeMockProfile } = useSandboxWallet();
+
+  // The dApp has no production role context yet; the dev-only mock profile is
+  // the sole role source. Defaults to "seeker" for real wallets until an auth
+  // role lands â€” ArbitrationPanel maps the claimant slot correctly either way.
+  const claimantRole: "seeker" | "expert" =
+    activeMockProfile?.role === "expert" ? "expert" : "seeker";
+
+  const appealChoices = useMemo(
+    () =>
+      reviewedSessions.map<Dispute>((session) => ({
+        id: `disputable-${session.id}`,
+        sessionId: session.id,
+        raisedBy: claimantRole,
+        reason:
+          session.expertName
+            ? `Dispute claim for the reviewed session "${session.title}" with ${session.expertName}.`
+            : `Dispute claim for the reviewed session "${session.title}".`,
+        status: "resolved",
+        evidence: [],
+        createdAt: new Date(`${session.date}T00:00:00Z`).toISOString(),
+      })),
+    [claimantRole]
+  );
+
   return (
     <div className="space-y-8">
       <div>
@@ -95,7 +130,45 @@ export default function SupportPage() {
         </p>
       </div>
 
-      <div className="max-w-[1030px]">
+      {/* Dispute an appeal for reviewed sessions */}
+      {appealChoices.length > 0 && (
+        <div>
+          <h2 className="text-lg font-medium text-foreground">Your Reviewed Sessions</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Submit a dispute claim for a session that was reviewed but did not meet expectations.
+          </p>
+          <div className="mt-4 grid gap-3">
+            {reviewedSessions.map((session) => (
+              <div
+                key={session.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {session.title}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {formatDate(`${session.date}T00:00:00Z`)} Â· {session.duration} Â· with {session.expertName}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const match = appealChoices.find((d) => d.sessionId === session.id);
+                    if (match) setAppealDispute(match);
+                  }}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-amber-500/40 text-amber-300 text-sm font-medium hover:bg-amber-500/10 transition-colors"
+                >
+                  <ShieldAlert className="h-4 w-4" />
+                  Appeal
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="w-full">
         <SupportAccordion items={FAQ_ITEMS} />
       </div>
 
@@ -108,6 +181,18 @@ export default function SupportPage() {
           Contact Support
         </button>
       </div>
+
+      {appealDispute && (
+        <AppealFormModal
+          isOpen={true}
+          onClose={() => setAppealDispute(null)}
+          dispute={appealDispute}
+          sessionTitle={
+            reviewedSessions.find((s) => s.id === appealDispute.sessionId)?.title ?? "Session"
+          }
+          onAppealSubmitted={() => undefined}
+        />
+      )}
     </div>
   )
 }

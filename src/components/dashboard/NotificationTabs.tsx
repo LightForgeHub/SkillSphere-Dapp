@@ -10,6 +10,7 @@ interface NotificationTabsProps {
   className?: string
 }
 
+/** Horizontal pill tab switcher for the notification categories. */
 export default function NotificationTabs({
   tabs,
   activeTab,
@@ -32,8 +33,8 @@ export default function NotificationTabs({
             className={cn(
               "flex-shrink-0 px-4 py-1.5 rounded-full text-sm transition-colors",
               isActive
-                ? "bg-white/10 text-white font-medium"
-                : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-white"
+                ? "bg-foreground text-background font-medium"
+                : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             aria-pressed={isActive}
           >

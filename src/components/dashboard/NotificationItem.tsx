@@ -11,6 +11,7 @@ export interface NotificationItemProps {
   className?: string
 }
 
+/** Single notification row: avatar icon, title/subtitle, and timestamp. */
 export default function NotificationItem({
   title,
   subtitle,
@@ -21,7 +22,7 @@ export default function NotificationItem({
   return (
     <div className={cn("flex flex-wrap sm:flex-nowrap items-start gap-3 md:gap-4 py-4", className)}>
       {/* Icon/Avatar Container */}
-      <div className="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+      <div className="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-muted flex items-center justify-center border border-border">
         {icon || <Image src={"/icons/learner.svg"} alt="Learner" width={20} height={20} className="md:w-6 md:h-6" />}
       </div>
 

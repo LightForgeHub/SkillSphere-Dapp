@@ -6,7 +6,7 @@ import { cn } from "@/components/ui/utils";
 import { Input } from "@/components/ui/Input";
 import { FileUpload } from "@/components/ui/FileUpload";
 
-const lbl = "block text-[#FCFCFC] text-sm font-normal leading-6 mb-2";
+const lbl = "block text-foreground text-sm font-normal leading-6 mb-2";
 const inputCls =
   "bg-card border border-white/[0.06] text-foreground placeholder:text-foreground/20 h-12 rounded-xl focus:ring-[#9B59FF]/20 focus:border-[#9B59FF]/50";
 const errorCls =
@@ -20,6 +20,7 @@ interface CourseSectionProps {
   canRemove: boolean;
 }
 
+/** Collapsible course-content section containing video, lecture fields, quiz, and assignment inputs. */
 export default function CourseSection({ index, onRemove, canRemove }: CourseSectionProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [lectureTitle, setLectureTitle] = useState("");
@@ -36,6 +37,7 @@ export default function CourseSection({ index, onRemove, canRemove }: CourseSect
     duration: duration.trim() === "" ? "Duration is required." : "",
   };
 
+  /** Marks a lecture field as touched so its validation error can display. */
   const touch = (field: "lectureTitle" | "duration") =>
     setTouched((prev) => ({ ...prev, [field]: true }));
 

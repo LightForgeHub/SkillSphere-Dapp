@@ -14,6 +14,7 @@ interface SupportAccordionProps {
     defaultOpenId?: string
 }
 
+/** Single-open FAQ accordion container rendering {@link SupportAccordionItem} entries. */
 export const SupportAccordion: React.FC<SupportAccordionProps> = ({
     items,
     defaultOpenId,
@@ -25,7 +26,7 @@ export const SupportAccordion: React.FC<SupportAccordionProps> = ({
     }
 
     return (
-        <div className="flex flex-col w-full bg-[#110719]/40 rounded-xl border border-[#2D2E2D] overflow-hidden">
+        <div className="flex flex-col w-full bg-background rounded-xl border border-border overflow-hidden">
             {items.map((item) => (
                 <SupportAccordionItem
                     key={item.id}
